@@ -252,7 +252,7 @@ function TelaContagem() {
 
   // Sincroniza refs com state/handlers a cada render — evita closures obsoletos
   etapaRef.current = etapa;
-  modalAbertoRef.current = !!modalDup;
+  modalAbertoRef.current = !!modalDup || !!confirmacao;
   confirmarPosicaoRef.current = confirmarPosicao;
   confirmarProdutoRef.current = confirmarProduto;
 

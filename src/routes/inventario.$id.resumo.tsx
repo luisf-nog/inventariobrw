@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Download, Lock } from "lucide-react";
 import { toast } from "sonner";
+import { buscarDescricoesPorSku, traduzirEansParaSkus } from "@/lib/produtos";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -16,9 +17,11 @@ export const Route = createFileRoute("/inventario/$id/resumo")({
 });
 
 type Linha = {
+  id: string;
   codigo_posicao: string;
   codigo_produto: string;
   sku: string;
+  descricao: string;
   numero_contagem: number;
   quantidade: number;
   operador_id: string | null;
@@ -31,7 +34,6 @@ function TelaResumo() {
   const navigate = useNavigate();
   const [inv, setInv] = useState<{ nome: string; status: string } | null>(null);
   const [linhas, setLinhas] = useState<Linha[]>([]);
-  const [descricoes, setDescricoes] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [filtroPos, setFiltroPos] = useState("");
   const [filtroProd, setFiltroProd] = useState("");
@@ -47,21 +49,21 @@ function TelaResumo() {
       setInv(invData);
       const { data, error } = await supabase
         .from("leituras")
-        .select("codigo_posicao, codigo_produto, numero_contagem, quantidade, operador_id, lido_em, operadores(nome)")
+        .select("id, codigo_posicao, codigo_produto, numero_contagem, quantidade, operador_id, lido_em, operadores(nome)")
         .eq("inventario_id", id)
-        .order("codigo_posicao");
+        .order("codigo_posicao")
+        .order("lido_em", { ascending: true });
       if (error) { toast.error(error.message); setLoading(false); return; }
       const codigosLidos = Array.from(new Set((data ?? []).map((d: any) => d.codigo_produto)));
-      // Traduz EAN -> SKU
-      const eanToSku: Record<string, string> = {};
-      if (codigosLidos.length > 0) {
-        const { data: eans } = await supabase.from("produto_eans").select("ean, sku").in("ean", codigosLidos);
-        for (const e of eans ?? []) eanToSku[e.ean] = e.sku;
-      }
+      const eanToSku = await traduzirEansParaSkus(codigosLidos);
+      const skuPorCodigo = (codigo: string) => eanToSku[codigo.replace(/\D/g, "")] ?? codigo;
+      const descricoes = await buscarDescricoesPorSku(codigosLidos.map(skuPorCodigo));
       const ls: Linha[] = (data ?? []).map((d: any) => ({
+        id: d.id,
         codigo_posicao: d.codigo_posicao,
         codigo_produto: d.codigo_produto,
-        sku: eanToSku[d.codigo_produto] ?? d.codigo_produto,
+        sku: skuPorCodigo(d.codigo_produto),
+        descricao: descricoes[skuPorCodigo(d.codigo_produto)] ?? "",
         numero_contagem: d.numero_contagem,
         quantidade: Number(d.quantidade),
         operador_id: d.operador_id,
@@ -69,14 +71,6 @@ function TelaResumo() {
         lido_em: d.lido_em,
       }));
       setLinhas(ls);
-      // Busca descrições dos produtos pelos SKUs traduzidos
-      const skus = Array.from(new Set(ls.map((l) => l.sku)));
-      if (skus.length > 0) {
-        const { data: prods } = await supabase.from("produtos").select("sku, descricao").in("sku", skus);
-        const map: Record<string, string> = {};
-        for (const p of prods ?? []) map[p.sku] = p.descricao;
-        setDescricoes(map);
-      }
       setLoading(false);
     })();
   }, [id]);

@@ -183,6 +183,7 @@ function TelaContagem() {
           quantidade: qtd,
           numero_contagem: numeroContagem,
           operador_id: op.id,
+          lido_em: lidoEm,
         });
       if (error) {
         enqueueLeitura({
@@ -199,6 +200,16 @@ function TelaContagem() {
       }
     }
     setSalvando(false);
+    if (!offline) {
+      setLeiturasCache((atuais) => [{
+        codigo_posicao: posicao,
+        codigo_produto: produtoSku,
+        quantidade: qtd,
+        numero_contagem: numeroContagem,
+        operador_nome: op.nome,
+        lido_em: lidoEm,
+      }, ...atuais]);
+    }
     beepSuccess();
     setUltima({ posicao, sku: produtoSku, desc: produtoDesc, qtd, contagem: numeroContagem });
     if (offline) toast.warning("Salvo offline — será sincronizado");

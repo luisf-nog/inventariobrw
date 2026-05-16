@@ -47,7 +47,7 @@ function AdminLayout() {
       if (error) toast.error(error.message);
       else if (data.user) {
         // Tenta criar role admin (vai falhar se já houver políticas restritivas, mas no primeiro usuário funciona via service via SQL manual)
-        await supabase.from("user_roles").insert({ user_id: data.user.id, role: "admin" }).catch(() => {});
+        try { await supabase.from("user_roles").insert({ user_id: data.user.id, role: "admin" }); } catch {}
         toast.success("Conta criada — você pode entrar");
       }
     }

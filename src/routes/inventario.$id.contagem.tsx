@@ -18,8 +18,10 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { LogOut, Trash2, FileText, MapPin, Barcode, Hash } from "lucide-react";
+import { LogOut, Trash2, FileText, MapPin, Barcode, Hash, Wifi, WifiOff } from "lucide-react";
 import { PosicaoJaContadaModal, type AcaoPosicao, type LeituraExistente } from "@/components/PosicaoJaContadaModal";
+import { enqueueLeitura, getQueueForInventario, removeFromQueue } from "@/lib/offline-queue";
+import { useOfflineSync } from "@/hooks/use-offline-sync";
 
 export const Route = createFileRoute("/inventario/$id/contagem")({
   component: TelaContagem,
@@ -41,6 +43,7 @@ function TelaContagem() {
   const navigate = useNavigate();
   const [op, setOp] = useState<{ id: string; nome: string } | null>(null);
   const [inv, setInv] = useState<{ nome: string; status: string } | null>(null);
+  const { online, pending } = useOfflineSync();
 
   const [etapa, setEtapa] = useState<Etapa>("posicao");
   const [posicao, setPosicao] = useState("");
@@ -76,22 +79,35 @@ function TelaContagem() {
     else if (etapa === "quantidade") refQtd.current?.focus();
   }, [etapa]);
 
-  const checarPosicao = useCallback(async (codPos: string) => {
+  const checarPosicao = useCallback(async (codPos: string): Promise<LeituraExistente[] | null> => {
+    const locais: LeituraExistente[] = getQueueForInventario(inventarioId)
+      .filter((q) => q.codigo_posicao === codPos)
+      .map((q) => ({
+        codigo_produto: q.codigo_produto,
+        quantidade: q.quantidade,
+        numero_contagem: q.numero_contagem,
+        lido_em: q.lido_em,
+        operador_nome: q.operador_nome ?? null,
+      }));
+    if (!navigator.onLine) return locais;
     const { data, error } = await supabase
       .from("leituras")
       .select("codigo_produto, quantidade, numero_contagem, lido_em, operador_id, operadores(nome)")
       .eq("inventario_id", inventarioId)
       .eq("codigo_posicao", codPos)
       .order("lido_em", { ascending: false });
-    if (error) { toast.error("Erro: " + error.message); return null; }
-    if (!data || data.length === 0) return [] as LeituraExistente[];
-    return data.map((d: any) => ({
+    if (error) {
+      // se rede falhar, usa só locais
+      return locais;
+    }
+    const remotas: LeituraExistente[] = (data ?? []).map((d: any) => ({
       codigo_produto: d.codigo_produto,
       quantidade: Number(d.quantidade),
       numero_contagem: d.numero_contagem,
       lido_em: d.lido_em,
       operador_nome: d.operadores?.nome ?? null,
-    })) as LeituraExistente[];
+    }));
+    return [...locais, ...remotas].sort((a, b) => b.lido_em.localeCompare(a.lido_em));
   }, [inventarioId]);
 
   async function confirmarPosicao() {
@@ -136,26 +152,57 @@ function TelaContagem() {
     if (qtd === null) { beepError(); toast.error("Quantidade inválida"); return; }
     if (!op) return;
     setSalvando(true);
-    const { data, error } = await supabase
-      .from("leituras")
-      .insert({
+    const lidoEm = new Date().toISOString();
+    let id: string;
+    if (!navigator.onLine) {
+      const item = enqueueLeitura({
         inventario_id: inventarioId,
         codigo_posicao: posicao,
         codigo_produto: produto,
         quantidade: qtd,
         numero_contagem: numeroContagem,
         operador_id: op.id,
-      })
-      .select("id, lido_em")
-      .single();
+        operador_nome: op.nome,
+        lido_em: lidoEm,
+      });
+      id = item.id;
+    } else {
+      const { data, error } = await supabase
+        .from("leituras")
+        .insert({
+          inventario_id: inventarioId,
+          codigo_posicao: posicao,
+          codigo_produto: produto,
+          quantidade: qtd,
+          numero_contagem: numeroContagem,
+          operador_id: op.id,
+        })
+        .select("id, lido_em")
+        .single();
+      if (error || !data) {
+        // fallback: enfileira offline
+        const item = enqueueLeitura({
+          inventario_id: inventarioId,
+          codigo_posicao: posicao,
+          codigo_produto: produto,
+          quantidade: qtd,
+          numero_contagem: numeroContagem,
+          operador_id: op.id,
+          operador_nome: op.nome,
+          lido_em: lidoEm,
+        });
+        id = item.id;
+        toast.warning("Salvo offline (sem conexão)");
+      } else {
+        id = data.id;
+      }
+    }
     setSalvando(false);
-    if (error || !data) { beepError(); toast.error("Erro: " + (error?.message ?? "?")); return; }
     beepSuccess();
     setLeiturasSessao((prev) => [
-      { id: data.id, codigo_posicao: posicao, codigo_produto: produto, quantidade: qtd, numero_contagem: numeroContagem, lido_em: data.lido_em },
+      { id, codigo_posicao: posicao, codigo_produto: produto, quantidade: qtd, numero_contagem: numeroContagem, lido_em: lidoEm },
       ...prev,
     ].slice(0, 50));
-    // mantém posição e numeroContagem, limpa produto/qtd
     setProduto("");
     setQuantidade("");
     setEtapa("produto");
@@ -165,8 +212,12 @@ function TelaContagem() {
     if (!confirmDelete) return;
     const id = confirmDelete.id;
     setConfirmDelete(null);
-    const { error } = await supabase.from("leituras").delete().eq("id", id);
-    if (error) { toast.error("Erro: " + error.message); return; }
+    if (id.startsWith("local-")) {
+      removeFromQueue(id);
+    } else {
+      const { error } = await supabase.from("leituras").delete().eq("id", id);
+      if (error) { toast.error("Erro: " + error.message); return; }
+    }
     setLeiturasSessao((prev) => prev.filter((l) => l.id !== id));
     toast.success("Leitura removida");
   }
@@ -192,7 +243,15 @@ function TelaContagem() {
           <p className="text-sm font-semibold truncate">{op?.nome}</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <Badge variant="secondary" className="text-xs">{leiturasSessao.length} nesta sessão</Badge>
+          <Badge
+            variant={online ? "secondary" : "destructive"}
+            className="text-xs gap-1"
+            title={online ? "Online" : "Offline"}
+          >
+            {online ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
+            {pending > 0 ? `${pending} pend.` : online ? "online" : "offline"}
+          </Badge>
+          <Badge variant="secondary" className="text-xs">{leiturasSessao.length} sessão</Badge>
           <Link to="/inventario/$id/resumo" params={{ id: inventarioId }}>
             <Button variant="ghost" size="icon" aria-label="Resumo"><FileText className="h-4 w-4" /></Button>
           </Link>

@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, type KeyboardEvent } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { getOperador, clearOperador } from "@/lib/operador-session";
 import { beepSuccess, beepWarn, beepError } from "@/lib/feedback";
@@ -42,6 +42,7 @@ function TelaContagem() {
   const refPos = useRef<HTMLInputElement>(null);
   const refProd = useRef<HTMLInputElement>(null);
   const refQtd = useRef<HTMLInputElement>(null);
+  const scanBufferRef = useRef("");
 
   useEffect(() => {
     const o = getOperador();
@@ -91,7 +92,8 @@ function TelaContagem() {
 
   async function confirmarPosicao(valor?: string) {
     const cod = normalizeCode(valor ?? posicao);
-    if (!isValidCode(cod)) { beepError(); toast.error("Posição inválida (mínimo 3 caracteres)"); return; }
+    scanBufferRef.current = "";
+    if (!cod) { beepError(); toast.error("Bipe a posição"); return; }
     setPosicao(cod);
     const existentes = await checarPosicao(cod);
     if (existentes === null) return;
@@ -120,6 +122,7 @@ function TelaContagem() {
 
   async function confirmarProduto(valor?: string) {
     const codRaw = (valor ?? produtoInput).trim();
+    scanBufferRef.current = "";
     if (!isValidCode(codRaw)) { beepError(); toast.error("Produto inválido"); return; }
     // Tenta traduzir EAN -> SKU
     let sku = normalizeCode(codRaw);
@@ -215,9 +218,23 @@ function TelaContagem() {
   }
 
   function trocarPosicao() {
+    scanBufferRef.current = "";
     setPosicao(""); setProdutoInput(""); setProdutoSku(""); setProdutoDesc(null); setQuantidade("");
     setNumeroContagem(1);
     setEtapa("posicao");
+  }
+
+  function handleScanKey(e: KeyboardEvent<HTMLInputElement>, tipo: "posicao" | "produto") {
+    if (e.key === "Enter" || e.key === "Tab") {
+      e.preventDefault();
+      const valor = e.currentTarget.value || scanBufferRef.current;
+      if (tipo === "posicao") void confirmarPosicao(valor);
+      else void confirmarProduto(valor);
+      return;
+    }
+    if (e.key.length === 1) {
+      scanBufferRef.current += e.key;
+    }
   }
 
   function sair() {
@@ -276,8 +293,8 @@ function TelaContagem() {
               ref={refPos}
               autoFocus
               value={posicao}
-              onChange={(e) => setPosicao(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); confirmarPosicao(e.currentTarget.value); } }}
+              onChange={(e) => { scanBufferRef.current = e.target.value; setPosicao(e.target.value); }}
+              onKeyDown={(e) => handleScanKey(e, "posicao")}
               placeholder="Bipe o endereço"
               className="h-12 text-xl font-mono tracking-wider"
               autoComplete="off"
@@ -303,8 +320,8 @@ function TelaContagem() {
                 ref={refProd}
                 autoFocus
                 value={produtoInput}
-                onChange={(e) => setProdutoInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); confirmarProduto(e.currentTarget.value); } }}
+                onChange={(e) => { scanBufferRef.current = e.target.value; setProdutoInput(e.target.value); }}
+                onKeyDown={(e) => handleScanKey(e, "produto")}
                 placeholder="Bipe o código"
                 className="h-12 text-xl font-mono tracking-wider"
                 autoComplete="off"

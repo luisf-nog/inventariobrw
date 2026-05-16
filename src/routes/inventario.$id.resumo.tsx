@@ -51,9 +51,17 @@ function TelaResumo() {
         .eq("inventario_id", id)
         .order("codigo_posicao");
       if (error) { toast.error(error.message); setLoading(false); return; }
+      const codigosLidos = Array.from(new Set((data ?? []).map((d: any) => d.codigo_produto)));
+      // Traduz EAN -> SKU
+      const eanToSku: Record<string, string> = {};
+      if (codigosLidos.length > 0) {
+        const { data: eans } = await supabase.from("produto_eans").select("ean, sku").in("ean", codigosLidos);
+        for (const e of eans ?? []) eanToSku[e.ean] = e.sku;
+      }
       const ls: Linha[] = (data ?? []).map((d: any) => ({
         codigo_posicao: d.codigo_posicao,
         codigo_produto: d.codigo_produto,
+        sku: eanToSku[d.codigo_produto] ?? d.codigo_produto,
         numero_contagem: d.numero_contagem,
         quantidade: Number(d.quantidade),
         operador_id: d.operador_id,
@@ -61,8 +69,8 @@ function TelaResumo() {
         lido_em: d.lido_em,
       }));
       setLinhas(ls);
-      // Busca descrições dos produtos
-      const skus = Array.from(new Set(ls.map((l) => l.codigo_produto)));
+      // Busca descrições dos produtos pelos SKUs traduzidos
+      const skus = Array.from(new Set(ls.map((l) => l.sku)));
       if (skus.length > 0) {
         const { data: prods } = await supabase.from("produtos").select("sku, descricao").in("sku", skus);
         const map: Record<string, string> = {};

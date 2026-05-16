@@ -243,7 +243,15 @@ function TelaContagem() {
           <p className="text-sm font-semibold truncate">{op?.nome}</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <Badge variant="secondary" className="text-xs">{leiturasSessao.length} nesta sessão</Badge>
+          <Badge
+            variant={online ? "secondary" : "destructive"}
+            className="text-xs gap-1"
+            title={online ? "Online" : "Offline"}
+          >
+            {online ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
+            {pending > 0 ? `${pending} pend.` : online ? "online" : "offline"}
+          </Badge>
+          <Badge variant="secondary" className="text-xs">{leiturasSessao.length} sessão</Badge>
           <Link to="/inventario/$id/resumo" params={{ id: inventarioId }}>
             <Button variant="ghost" size="icon" aria-label="Resumo"><FileText className="h-4 w-4" /></Button>
           </Link>

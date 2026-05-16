@@ -18,6 +18,7 @@ export const Route = createFileRoute("/inventario/$id/resumo")({
 type Linha = {
   codigo_posicao: string;
   codigo_produto: string;
+  sku: string;
   numero_contagem: number;
   quantidade: number;
   operador_id: string | null;

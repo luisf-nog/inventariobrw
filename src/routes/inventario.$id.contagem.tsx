@@ -89,8 +89,8 @@ function TelaContagem() {
     return [...locais, ...remotas].sort((a, b) => b.lido_em.localeCompare(a.lido_em));
   }, [inventarioId]);
 
-  async function confirmarPosicao() {
-    const cod = normalizeCode(posicao);
+  async function confirmarPosicao(valor?: string) {
+    const cod = normalizeCode(valor ?? posicao);
     if (!isValidCode(cod)) { beepError(); toast.error("Posição inválida (mínimo 3 caracteres)"); return; }
     setPosicao(cod);
     const existentes = await checarPosicao(cod);
@@ -118,8 +118,8 @@ function TelaContagem() {
     setEtapa("produto");
   }
 
-  async function confirmarProduto() {
-    const codRaw = produtoInput.trim();
+  async function confirmarProduto(valor?: string) {
+    const codRaw = (valor ?? produtoInput).trim();
     if (!isValidCode(codRaw)) { beepError(); toast.error("Produto inválido"); return; }
     // Tenta traduzir EAN -> SKU
     let sku = normalizeCode(codRaw);

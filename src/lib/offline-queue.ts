@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { resolverProdutoPorCodigo } from "@/lib/produtos";
 
 export type LeituraQueueItem = {
   id: string; // local uuid
@@ -64,10 +65,16 @@ export async function syncQueue(): Promise<{ ok: number; fail: number }> {
   try {
     const items = getQueue();
     for (const it of items) {
+      let codigoProduto = it.codigo_produto;
+      try {
+        codigoProduto = (await resolverProdutoPorCodigo(it.codigo_produto)).sku;
+      } catch {
+        codigoProduto = it.codigo_produto;
+      }
       const { error } = await supabase.from("leituras").insert({
         inventario_id: it.inventario_id,
         codigo_posicao: it.codigo_posicao,
-        codigo_produto: it.codigo_produto,
+        codigo_produto: codigoProduto,
         quantidade: it.quantidade,
         numero_contagem: it.numero_contagem,
         operador_id: it.operador_id,

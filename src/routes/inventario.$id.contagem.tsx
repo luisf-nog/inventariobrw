@@ -277,7 +277,7 @@ function TelaContagem() {
               autoFocus
               value={posicao}
               onChange={(e) => setPosicao(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); confirmarPosicao(); } }}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); confirmarPosicao(e.currentTarget.value); } }}
               placeholder="Bipe o endereço"
               className="h-12 text-xl font-mono tracking-wider"
               autoComplete="off"

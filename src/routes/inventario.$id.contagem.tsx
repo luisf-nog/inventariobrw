@@ -378,7 +378,7 @@ function TelaContagem() {
               ref={refQtd}
               type="text"
               autoFocus
-              inputMode="none"
+              inputMode="decimal"
               value={quantidade}
               onChange={(e) => setQuantidade(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); gravar(); } }}

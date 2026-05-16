@@ -18,6 +18,7 @@ export const Route = createFileRoute("/inventario/$id/resumo")({
 type Linha = {
   codigo_posicao: string;
   codigo_produto: string;
+  sku: string;
   numero_contagem: number;
   quantidade: number;
   operador_id: string | null;
@@ -50,9 +51,17 @@ function TelaResumo() {
         .eq("inventario_id", id)
         .order("codigo_posicao");
       if (error) { toast.error(error.message); setLoading(false); return; }
+      const codigosLidos = Array.from(new Set((data ?? []).map((d: any) => d.codigo_produto)));
+      // Traduz EAN -> SKU
+      const eanToSku: Record<string, string> = {};
+      if (codigosLidos.length > 0) {
+        const { data: eans } = await supabase.from("produto_eans").select("ean, sku").in("ean", codigosLidos);
+        for (const e of eans ?? []) eanToSku[e.ean] = e.sku;
+      }
       const ls: Linha[] = (data ?? []).map((d: any) => ({
         codigo_posicao: d.codigo_posicao,
         codigo_produto: d.codigo_produto,
+        sku: eanToSku[d.codigo_produto] ?? d.codigo_produto,
         numero_contagem: d.numero_contagem,
         quantidade: Number(d.quantidade),
         operador_id: d.operador_id,
@@ -60,8 +69,8 @@ function TelaResumo() {
         lido_em: d.lido_em,
       }));
       setLinhas(ls);
-      // Busca descrições dos produtos
-      const skus = Array.from(new Set(ls.map((l) => l.codigo_produto)));
+      // Busca descrições dos produtos pelos SKUs traduzidos
+      const skus = Array.from(new Set(ls.map((l) => l.sku)));
       if (skus.length > 0) {
         const { data: prods } = await supabase.from("produtos").select("sku, descricao").in("sku", skus);
         const map: Record<string, string> = {};
@@ -72,12 +81,12 @@ function TelaResumo() {
     })();
   }, [id]);
 
-  // Agrupa por posição+produto+contagem
+  // Agrupa por posição+sku+contagem
   const grupos = useMemo(() => {
     const map = new Map<string, { posicao: string; produto: string; descricao: string; contagem: number; total: number; operadores: Set<string> }>();
     for (const l of linhas) {
-      const k = `${l.codigo_posicao}|${l.codigo_produto}|${l.numero_contagem}`;
-      const g = map.get(k) ?? { posicao: l.codigo_posicao, produto: l.codigo_produto, descricao: descricoes[l.codigo_produto] ?? "", contagem: l.numero_contagem, total: 0, operadores: new Set<string>() };
+      const k = `${l.codigo_posicao}|${l.sku}|${l.numero_contagem}`;
+      const g = map.get(k) ?? { posicao: l.codigo_posicao, produto: l.sku, descricao: descricoes[l.sku] ?? "", contagem: l.numero_contagem, total: 0, operadores: new Set<string>() };
       g.total += l.quantidade;
       if (l.operador_nome) g.operadores.add(l.operador_nome);
       map.set(k, g);

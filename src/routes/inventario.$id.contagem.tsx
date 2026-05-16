@@ -48,6 +48,10 @@ function TelaContagem() {
   const scanBufferRef = useRef("");
   const lastKeyTimeRef = useRef(0);
   const [scanDisplay, setScanDisplay] = useState("");
+  const etapaRef = useRef<Etapa>("posicao");
+  const modalAbertoRef = useRef(false);
+  const confirmarPosicaoRef = useRef<(v?: string) => void>(() => {});
+  const confirmarProdutoRef = useRef<(v?: string) => void>(() => {});
 
   const carregarLeiturasExistentes = useCallback(async () => {
     if (!navigator.onLine) return;

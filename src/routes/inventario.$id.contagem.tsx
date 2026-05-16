@@ -12,12 +12,14 @@ import { LogOut, MapPin, Barcode, Hash, Wifi, WifiOff, CheckCircle2 } from "luci
 import { PosicaoJaContadaModal, type AcaoPosicao, type LeituraExistente } from "@/components/PosicaoJaContadaModal";
 import { enqueueLeitura, getQueueForInventario } from "@/lib/offline-queue";
 import { useOfflineSync } from "@/hooks/use-offline-sync";
+import { resolverProdutoPorCodigo } from "@/lib/produtos";
 
 export const Route = createFileRoute("/inventario/$id/contagem")({
   component: TelaContagem,
 });
 
 type Etapa = "posicao" | "produto" | "quantidade";
+type LeituraCache = LeituraExistente & { codigo_posicao: string };
 
 function TelaContagem() {
   const { id: inventarioId } = Route.useParams();
@@ -38,11 +40,30 @@ function TelaContagem() {
   const [ultima, setUltima] = useState<{ posicao: string; sku: string; desc: string | null; qtd: number; contagem: number } | null>(null);
 
   const [modalDup, setModalDup] = useState<{ leituras: LeituraExistente[]; contagemAtual: number } | null>(null);
+  const [leiturasCache, setLeiturasCache] = useState<LeituraCache[]>([]);
 
   const refPos = useRef<HTMLInputElement>(null);
   const refProd = useRef<HTMLInputElement>(null);
   const refQtd = useRef<HTMLInputElement>(null);
   const scanBufferRef = useRef("");
+
+  const carregarLeiturasExistentes = useCallback(async () => {
+    if (!navigator.onLine) return;
+    const { data, error } = await supabase
+      .from("leituras")
+      .select("codigo_posicao, codigo_produto, quantidade, numero_contagem, lido_em, operador_id, operadores(nome)")
+      .eq("inventario_id", inventarioId)
+      .order("lido_em", { ascending: false });
+    if (error) return;
+    setLeiturasCache((data ?? []).map((d: any) => ({
+      codigo_posicao: d.codigo_posicao,
+      codigo_produto: d.codigo_produto,
+      quantidade: Number(d.quantidade),
+      numero_contagem: d.numero_contagem,
+      lido_em: d.lido_em,
+      operador_nome: d.operadores?.nome ?? null,
+    })));
+  }, [inventarioId]);
 
   useEffect(() => {
     const o = getOperador();

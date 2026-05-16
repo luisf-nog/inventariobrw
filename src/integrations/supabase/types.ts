@@ -14,16 +14,155 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      inventarios: {
+        Row: {
+          criado_em: string
+          criado_por: string | null
+          descricao: string | null
+          encerrado_em: string | null
+          id: string
+          nome: string
+          status: string
+        }
+        Insert: {
+          criado_em?: string
+          criado_por?: string | null
+          descricao?: string | null
+          encerrado_em?: string | null
+          id?: string
+          nome: string
+          status?: string
+        }
+        Update: {
+          criado_em?: string
+          criado_por?: string | null
+          descricao?: string | null
+          encerrado_em?: string | null
+          id?: string
+          nome?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventarios_criado_por_fkey"
+            columns: ["criado_por"]
+            isOneToOne: false
+            referencedRelation: "operadores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      leituras: {
+        Row: {
+          codigo_posicao: string
+          codigo_produto: string
+          id: string
+          inventario_id: string
+          lido_em: string
+          numero_contagem: number
+          observacao: string | null
+          operador_id: string | null
+          quantidade: number
+        }
+        Insert: {
+          codigo_posicao: string
+          codigo_produto: string
+          id?: string
+          inventario_id: string
+          lido_em?: string
+          numero_contagem?: number
+          observacao?: string | null
+          operador_id?: string | null
+          quantidade: number
+        }
+        Update: {
+          codigo_posicao?: string
+          codigo_produto?: string
+          id?: string
+          inventario_id?: string
+          lido_em?: string
+          numero_contagem?: number
+          observacao?: string | null
+          operador_id?: string | null
+          quantidade?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leituras_inventario_id_fkey"
+            columns: ["inventario_id"]
+            isOneToOne: false
+            referencedRelation: "inventarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leituras_operador_id_fkey"
+            columns: ["operador_id"]
+            isOneToOne: false
+            referencedRelation: "operadores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      operadores: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          id: string
+          nome: string
+          pin: string | null
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          nome: string
+          pin?: string | null
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          nome?: string
+          pin?: string | null
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "user"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +289,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "user"],
+    },
   },
 } as const

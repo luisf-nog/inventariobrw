@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as InventariosRouteImport } from './routes/inventarios'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as InventarioIdContagemRouteImport } from './routes/inventario.$id.contagem'
 
 const InventariosRoute = InventariosRouteImport.update({
   id: '/inventarios',
@@ -22,31 +23,40 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const InventarioIdContagemRoute = InventarioIdContagemRouteImport.update({
+  id: '/inventario/$id/contagem',
+  path: '/inventario/$id/contagem',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/inventarios': typeof InventariosRoute
+  '/inventario/$id/contagem': typeof InventarioIdContagemRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/inventarios': typeof InventariosRoute
+  '/inventario/$id/contagem': typeof InventarioIdContagemRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/inventarios': typeof InventariosRoute
+  '/inventario/$id/contagem': typeof InventarioIdContagemRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/inventarios'
+  fullPaths: '/' | '/inventarios' | '/inventario/$id/contagem'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/inventarios'
-  id: '__root__' | '/' | '/inventarios'
+  to: '/' | '/inventarios' | '/inventario/$id/contagem'
+  id: '__root__' | '/' | '/inventarios' | '/inventario/$id/contagem'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   InventariosRoute: typeof InventariosRoute
+  InventarioIdContagemRoute: typeof InventarioIdContagemRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -65,12 +75,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/inventario/$id/contagem': {
+      id: '/inventario/$id/contagem'
+      path: '/inventario/$id/contagem'
+      fullPath: '/inventario/$id/contagem'
+      preLoaderRoute: typeof InventarioIdContagemRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   InventariosRoute: InventariosRoute,
+  InventarioIdContagemRoute: InventarioIdContagemRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

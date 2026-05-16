@@ -48,6 +48,10 @@ function TelaContagem() {
   const scanBufferRef = useRef("");
   const lastKeyTimeRef = useRef(0);
   const [scanDisplay, setScanDisplay] = useState("");
+  const etapaRef = useRef<Etapa>("posicao");
+  const modalAbertoRef = useRef(false);
+  const confirmarPosicaoRef = useRef<(v?: string) => void>(() => {});
+  const confirmarProdutoRef = useRef<(v?: string) => void>(() => {});
 
   const carregarLeiturasExistentes = useCallback(async () => {
     if (!navigator.onLine) return;
@@ -233,16 +237,23 @@ function TelaContagem() {
     setEtapa("posicao");
   }
 
-  useEffect(() => {
-    if (modalDup || (etapa !== "posicao" && etapa !== "produto")) return;
+  // Sincroniza refs com state/handlers a cada render — evita closures obsoletos
+  etapaRef.current = etapa;
+  modalAbertoRef.current = !!modalDup;
+  confirmarPosicaoRef.current = confirmarPosicao;
+  confirmarProdutoRef.current = confirmarProduto;
 
-    const SCANNER_GAP_MS = 50; // intervalo máximo entre teclas pra considerar scanner
+  // Listener global de teclado — anexado UMA vez, lê estado via refs
+  useEffect(() => {
+    const SCANNER_GAP_MS = 50;
     const MIN_SCAN_LEN = 2;
 
     const onScannerKey = (e: globalThis.KeyboardEvent) => {
       if (e.ctrlKey || e.altKey || e.metaKey) return;
+      const etapaAtual = etapaRef.current;
+      if (modalAbertoRef.current) return;
+      if (etapaAtual !== "posicao" && etapaAtual !== "produto") return;
 
-      // Ignora se foco está num campo de quantidade ou em outro input editável
       const ae = document.activeElement as HTMLElement | null;
       if (ae && (ae.tagName === "TEXTAREA" || (ae.tagName === "INPUT" && ae !== refPos.current && ae !== refProd.current))) {
         return;
@@ -259,14 +270,13 @@ function TelaContagem() {
           scanBufferRef.current = "";
           setScanDisplay("");
           lastKeyTimeRef.current = 0;
-          if (etapa === "posicao") void confirmarPosicao(buffer);
-          else void confirmarProduto(buffer);
+          if (etapaAtual === "posicao") confirmarPosicaoRef.current(buffer);
+          else confirmarProdutoRef.current(buffer);
         }
         return;
       }
 
       if (e.key.length === 1) {
-        // Reseta buffer se intervalo grande (digitação humana ou nova leitura)
         if (delta > SCANNER_GAP_MS && scanBufferRef.current.length > 0) {
           scanBufferRef.current = "";
         }
@@ -282,7 +292,7 @@ function TelaContagem() {
 
     window.addEventListener("keydown", onScannerKey, true);
     return () => window.removeEventListener("keydown", onScannerKey, true);
-  }, [etapa, modalDup, confirmarPosicao, confirmarProduto]);
+  }, []);
 
   function sair() {
     clearOperador();

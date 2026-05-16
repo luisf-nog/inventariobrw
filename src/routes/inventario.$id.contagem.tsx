@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { getOperador, clearOperador } from "@/lib/operador-session";
@@ -7,20 +7,10 @@ import { normalizeCode, isValidCode, parseQuantidade } from "@/lib/validation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { LogOut, Trash2, FileText, MapPin, Barcode, Hash, Wifi, WifiOff } from "lucide-react";
+import { LogOut, MapPin, Barcode, Hash, Wifi, WifiOff, CheckCircle2 } from "lucide-react";
 import { PosicaoJaContadaModal, type AcaoPosicao, type LeituraExistente } from "@/components/PosicaoJaContadaModal";
-import { enqueueLeitura, getQueueForInventario, removeFromQueue } from "@/lib/offline-queue";
+import { enqueueLeitura, getQueueForInventario } from "@/lib/offline-queue";
 import { useOfflineSync } from "@/hooks/use-offline-sync";
 
 export const Route = createFileRoute("/inventario/$id/contagem")({
@@ -28,15 +18,6 @@ export const Route = createFileRoute("/inventario/$id/contagem")({
 });
 
 type Etapa = "posicao" | "produto" | "quantidade";
-
-type LeituraSessao = {
-  id: string;
-  codigo_posicao: string;
-  codigo_produto: string;
-  quantidade: number;
-  numero_contagem: number;
-  lido_em: string;
-};
 
 function TelaContagem() {
   const { id: inventarioId } = Route.useParams();
@@ -47,13 +28,14 @@ function TelaContagem() {
 
   const [etapa, setEtapa] = useState<Etapa>("posicao");
   const [posicao, setPosicao] = useState("");
-  const [produto, setProduto] = useState("");
+  const [produtoInput, setProdutoInput] = useState("");
+  const [produtoSku, setProdutoSku] = useState("");
+  const [produtoDesc, setProdutoDesc] = useState<string | null>(null);
   const [quantidade, setQuantidade] = useState("");
   const [numeroContagem, setNumeroContagem] = useState(1);
 
-  const [leiturasSessao, setLeiturasSessao] = useState<LeituraSessao[]>([]);
   const [salvando, setSalvando] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState<LeituraSessao | null>(null);
+  const [ultima, setUltima] = useState<{ posicao: string; sku: string; desc: string | null; qtd: number; contagem: number } | null>(null);
 
   const [modalDup, setModalDup] = useState<{ leituras: LeituraExistente[]; contagemAtual: number } | null>(null);
 
@@ -96,10 +78,7 @@ function TelaContagem() {
       .eq("inventario_id", inventarioId)
       .eq("codigo_posicao", codPos)
       .order("lido_em", { ascending: false });
-    if (error) {
-      // se rede falhar, usa só locais
-      return locais;
-    }
+    if (error) return locais;
     const remotas: LeituraExistente[] = (data ?? []).map((d: any) => ({
       codigo_produto: d.codigo_produto,
       quantidade: Number(d.quantidade),
@@ -139,10 +118,42 @@ function TelaContagem() {
     setEtapa("produto");
   }
 
-  function confirmarProduto() {
-    const cod = normalizeCode(produto);
-    if (!isValidCode(cod)) { beepError(); toast.error("Produto inválido (mínimo 3 caracteres)"); return; }
-    setProduto(cod);
+  async function confirmarProduto() {
+    const codRaw = produtoInput.trim();
+    if (!isValidCode(codRaw)) { beepError(); toast.error("Produto inválido"); return; }
+    // Tenta traduzir EAN -> SKU
+    let sku = normalizeCode(codRaw);
+    let desc: string | null = null;
+    if (navigator.onLine) {
+      // Busca por EAN (apenas dígitos)
+      const eanDigits = codRaw.replace(/\D/g, "");
+      if (eanDigits.length >= 6) {
+        const { data } = await supabase
+          .from("produto_eans")
+          .select("sku, produtos(descricao)")
+          .eq("ean", eanDigits)
+          .maybeSingle();
+        if (data) {
+          sku = data.sku;
+          desc = (data as any).produtos?.descricao ?? null;
+        }
+      }
+      if (!desc) {
+        // Tenta como SKU direto
+        const { data } = await supabase
+          .from("produtos")
+          .select("descricao")
+          .eq("sku", sku)
+          .maybeSingle();
+        if (data) desc = data.descricao;
+      }
+    }
+    if (!desc) {
+      beepWarn();
+      toast.warning(`Produto ${sku} não cadastrado — será gravado mesmo assim`);
+    }
+    setProdutoSku(sku);
+    setProdutoDesc(desc);
     setQuantidade("");
     setEtapa("quantidade");
   }
@@ -153,77 +164,58 @@ function TelaContagem() {
     if (!op) return;
     setSalvando(true);
     const lidoEm = new Date().toISOString();
-    let id: string;
+    let offline = false;
     if (!navigator.onLine) {
-      const item = enqueueLeitura({
+      enqueueLeitura({
         inventario_id: inventarioId,
         codigo_posicao: posicao,
-        codigo_produto: produto,
+        codigo_produto: produtoSku,
         quantidade: qtd,
         numero_contagem: numeroContagem,
         operador_id: op.id,
         operador_nome: op.nome,
         lido_em: lidoEm,
       });
-      id = item.id;
+      offline = true;
     } else {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from("leituras")
         .insert({
           inventario_id: inventarioId,
           codigo_posicao: posicao,
-          codigo_produto: produto,
+          codigo_produto: produtoSku,
           quantidade: qtd,
           numero_contagem: numeroContagem,
           operador_id: op.id,
-        })
-        .select("id, lido_em")
-        .single();
-      if (error || !data) {
-        // fallback: enfileira offline
-        const item = enqueueLeitura({
+        });
+      if (error) {
+        enqueueLeitura({
           inventario_id: inventarioId,
           codigo_posicao: posicao,
-          codigo_produto: produto,
+          codigo_produto: produtoSku,
           quantidade: qtd,
           numero_contagem: numeroContagem,
           operador_id: op.id,
           operador_nome: op.nome,
           lido_em: lidoEm,
         });
-        id = item.id;
-        toast.warning("Salvo offline (sem conexão)");
-      } else {
-        id = data.id;
+        offline = true;
       }
     }
     setSalvando(false);
     beepSuccess();
-    setLeiturasSessao((prev) => [
-      { id, codigo_posicao: posicao, codigo_produto: produto, quantidade: qtd, numero_contagem: numeroContagem, lido_em: lidoEm },
-      ...prev,
-    ].slice(0, 50));
-    setProduto("");
+    setUltima({ posicao, sku: produtoSku, desc: produtoDesc, qtd, contagem: numeroContagem });
+    if (offline) toast.warning("Salvo offline — será sincronizado");
+    // Continua na mesma posição, volta pra etapa de produto
+    setProdutoInput("");
+    setProdutoSku("");
+    setProdutoDesc(null);
     setQuantidade("");
     setEtapa("produto");
   }
 
-  async function excluirUltima() {
-    if (!confirmDelete) return;
-    const id = confirmDelete.id;
-    setConfirmDelete(null);
-    if (id.startsWith("local-")) {
-      removeFromQueue(id);
-    } else {
-      const { error } = await supabase.from("leituras").delete().eq("id", id);
-      if (error) { toast.error("Erro: " + error.message); return; }
-    }
-    setLeiturasSessao((prev) => prev.filter((l) => l.id !== id));
-    toast.success("Leitura removida");
-  }
-
   function trocarPosicao() {
-    setPosicao(""); setProduto(""); setQuantidade("");
+    setPosicao(""); setProdutoInput(""); setProdutoSku(""); setProdutoDesc(null); setQuantidade("");
     setNumeroContagem(1);
     setEtapa("posicao");
   }
@@ -232,8 +224,6 @@ function TelaContagem() {
     clearOperador();
     navigate({ to: "/" });
   }
-
-  const ultimaId = leiturasSessao[0]?.id;
 
   return (
     <div className="min-h-screen pb-4">
@@ -251,19 +241,33 @@ function TelaContagem() {
             {online ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
             {pending > 0 ? `${pending} pend.` : online ? "online" : "offline"}
           </Badge>
-          <Badge variant="secondary" className="text-xs">{leiturasSessao.length} sessão</Badge>
-          <Link to="/inventario/$id/resumo" params={{ id: inventarioId }}>
-            <Button variant="ghost" size="icon" aria-label="Resumo"><FileText className="h-4 w-4" /></Button>
-          </Link>
           <Button variant="ghost" size="icon" onClick={sair} aria-label="Sair"><LogOut className="h-4 w-4" /></Button>
         </div>
       </header>
 
       <main className="px-4 py-4 max-w-2xl mx-auto space-y-3">
+        {/* Toast persistente de confirmação da última leitura */}
+        {ultima && (
+          <div className="rounded-xl border-2 border-success bg-success/10 p-3 flex items-start gap-3">
+            <CheckCircle2 className="h-6 w-6 text-success shrink-0 mt-0.5" />
+            <div className="min-w-0 flex-1">
+              <p className="text-xs text-success font-semibold uppercase tracking-wide">Última leitura confirmada</p>
+              <p className="font-mono text-sm">
+                <span className="text-muted-foreground">{ultima.posicao}</span>
+                <span className="mx-1.5 text-muted-foreground/50">›</span>
+                <span className="font-bold">{ultima.sku}</span>
+                <span className="ml-2 font-bold text-success">{ultima.qtd}</span>
+                {ultima.contagem > 1 && <span className="ml-1 text-xs text-muted-foreground">(c{ultima.contagem})</span>}
+              </p>
+              {ultima.desc && <p className="text-xs text-muted-foreground truncate mt-0.5">{ultima.desc}</p>}
+            </div>
+          </div>
+        )}
+
         {/* POSIÇÃO */}
         <div className={`rounded-xl border p-4 ${etapa === "posicao" ? "bg-card border-primary" : "bg-card/50 border-border"}`}>
           <label className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
-            <MapPin className="h-4 w-4" /> Posição
+            <MapPin className="h-4 w-4" /> Endereço
             {numeroContagem > 1 && etapa !== "posicao" && (
               <Badge className="bg-warning text-warning-foreground">{numeroContagem}ª contagem</Badge>
             )}
@@ -275,7 +279,7 @@ function TelaContagem() {
               value={posicao}
               onChange={(e) => setPosicao(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); confirmarPosicao(); } }}
-              placeholder="Bipe a posição"
+              placeholder="Bipe o endereço"
               className="h-16 text-2xl font-mono tracking-wider"
               autoComplete="off"
               autoCapitalize="characters"
@@ -298,16 +302,19 @@ function TelaContagem() {
               <Input
                 ref={refProd}
                 autoFocus
-                value={produto}
-                onChange={(e) => setProduto(e.target.value)}
+                value={produtoInput}
+                onChange={(e) => setProdutoInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); confirmarProduto(); } }}
-                placeholder="Bipe o produto"
+                placeholder="Bipe o código de barras"
                 className="h-16 text-2xl font-mono tracking-wider"
                 autoComplete="off"
                 autoCapitalize="characters"
               />
             ) : (
-              <p className="text-2xl font-mono font-bold py-2">{produto}</p>
+              <div className="py-1">
+                <p className="text-2xl font-mono font-bold">{produtoSku}</p>
+                {produtoDesc && <p className="text-sm text-muted-foreground mt-1">{produtoDesc}</p>}
+              </div>
             )}
           </div>
         )}
@@ -348,30 +355,6 @@ function TelaContagem() {
             </Button>
           </div>
         )}
-
-        {/* Últimas leituras */}
-        {leiturasSessao.length > 0 && (
-          <div className="rounded-xl border border-border bg-card/50 p-4 mt-6">
-            <p className="text-sm text-muted-foreground mb-2">Últimas leituras</p>
-            <div className="space-y-1.5 font-mono text-sm">
-              {leiturasSessao.slice(0, 5).map((l) => (
-                <div key={l.id} className="flex items-center justify-between gap-2 py-1 border-b border-border/40 last:border-0">
-                  <div className="min-w-0 flex-1">
-                    <span className="text-muted-foreground">{l.codigo_posicao}</span>
-                    <span className="mx-1.5 text-muted-foreground/50">›</span>
-                    <span className="truncate">{l.codigo_produto}</span>
-                  </div>
-                  <span className="shrink-0">{l.quantidade} <span className="text-xs text-muted-foreground">(c{l.numero_contagem})</span></span>
-                  {l.id === ultimaId && (
-                    <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => setConfirmDelete(l)}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </main>
 
       {modalDup && (
@@ -384,21 +367,6 @@ function TelaContagem() {
           onEscolher={escolherAcaoDup}
         />
       )}
-
-      <AlertDialog open={!!confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Excluir esta leitura?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {confirmDelete?.codigo_posicao} › {confirmDelete?.codigo_produto} — {confirmDelete?.quantidade}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={excluirUltima} className="bg-destructive">Excluir</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

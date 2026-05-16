@@ -320,6 +320,7 @@ function TelaContagem() {
           {etapa === "posicao" ? (
             <Input
               ref={refPos}
+              type="text"
               autoFocus
               value={posicao}
               onChange={(e) => { scanBufferRef.current = e.target.value; setPosicao(e.target.value); }}
@@ -347,6 +348,7 @@ function TelaContagem() {
             {etapa === "produto" ? (
               <Input
                 ref={refProd}
+                type="text"
                 autoFocus
                 value={produtoInput}
                 onChange={(e) => { scanBufferRef.current = e.target.value; setProdutoInput(e.target.value); }}
@@ -374,8 +376,9 @@ function TelaContagem() {
             </label>
             <Input
               ref={refQtd}
+              type="text"
               autoFocus
-              inputMode="decimal"
+              inputMode="none"
               value={quantidade}
               onChange={(e) => setQuantidade(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); gravar(); } }}

@@ -82,18 +82,15 @@ function TelaContagem() {
 
   useEffect(() => {
     scanBufferRef.current = "";
-    window.requestAnimationFrame(() => {
-      if (etapa === "posicao") {
-        if (refPos.current) refPos.current.value = posicao;
-        refPos.current?.focus({ preventScroll: true });
-      } else if (etapa === "produto") {
-        if (refProd.current) refProd.current.value = produtoInput;
-        refProd.current?.focus({ preventScroll: true });
-      } else if (etapa === "quantidade") {
-        refQtd.current?.focus({ preventScroll: true });
-      }
-    });
-  }, [etapa, posicao, produtoInput]);
+    setScanDisplay("");
+    lastKeyTimeRef.current = 0;
+    if (etapa === "quantidade") {
+      window.requestAnimationFrame(() => refQtd.current?.focus({ preventScroll: true }));
+    } else if (document.activeElement instanceof HTMLElement) {
+      // tira o foco para não abrir teclado virtual no celular
+      document.activeElement.blur();
+    }
+  }, [etapa]);
 
   const checarPosicao = useCallback(async (codPos: string): Promise<LeituraExistente[] | null> => {
     const locais: LeituraExistente[] = getQueueForInventario(inventarioId)

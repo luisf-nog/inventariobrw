@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, useState, useCallback, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { getOperador, clearOperador } from "@/lib/operador-session";
 import { beepSuccess, beepWarn, beepError } from "@/lib/feedback";
@@ -46,6 +46,8 @@ function TelaContagem() {
   const refProd = useRef<HTMLInputElement>(null);
   const refQtd = useRef<HTMLInputElement>(null);
   const scanBufferRef = useRef("");
+  const lastKeyTimeRef = useRef(0);
+  const [scanDisplay, setScanDisplay] = useState("");
 
   const carregarLeiturasExistentes = useCallback(async () => {
     if (!navigator.onLine) return;
@@ -80,18 +82,15 @@ function TelaContagem() {
 
   useEffect(() => {
     scanBufferRef.current = "";
-    window.requestAnimationFrame(() => {
-      if (etapa === "posicao") {
-        if (refPos.current) refPos.current.value = posicao;
-        refPos.current?.focus({ preventScroll: true });
-      } else if (etapa === "produto") {
-        if (refProd.current) refProd.current.value = produtoInput;
-        refProd.current?.focus({ preventScroll: true });
-      } else if (etapa === "quantidade") {
-        refQtd.current?.focus({ preventScroll: true });
-      }
-    });
-  }, [etapa, posicao, produtoInput]);
+    setScanDisplay("");
+    lastKeyTimeRef.current = 0;
+    if (etapa === "quantidade") {
+      window.requestAnimationFrame(() => refQtd.current?.focus({ preventScroll: true }));
+    } else if (document.activeElement instanceof HTMLElement) {
+      // tira o foco para não abrir teclado virtual no celular
+      document.activeElement.blur();
+    }
+  }, [etapa]);
 
   const checarPosicao = useCallback(async (codPos: string): Promise<LeituraExistente[] | null> => {
     const locais: LeituraExistente[] = getQueueForInventario(inventarioId)
@@ -234,41 +233,56 @@ function TelaContagem() {
     setEtapa("posicao");
   }
 
-  function handleScanKey(e: KeyboardEvent<HTMLInputElement>, tipo: "posicao" | "produto") {
-    if (e.key === "Enter" || e.key === "Tab") {
-      e.preventDefault();
-      const valor = e.currentTarget.value || scanBufferRef.current;
-      if (tipo === "posicao") void confirmarPosicao(valor);
-      else void confirmarProduto(valor);
-      return;
-    }
-  }
-
   useEffect(() => {
     if (modalDup || (etapa !== "posicao" && etapa !== "produto")) return;
 
+    const SCANNER_GAP_MS = 50; // intervalo máximo entre teclas pra considerar scanner
+    const MIN_SCAN_LEN = 2;
+
     const onScannerKey = (e: globalThis.KeyboardEvent) => {
       if (e.ctrlKey || e.altKey || e.metaKey) return;
-      const input = etapa === "posicao" ? refPos.current : refProd.current;
-      const valorAtual = input?.value ?? "";
+
+      // Ignora se foco está num campo de quantidade ou em outro input editável
+      const ae = document.activeElement as HTMLElement | null;
+      if (ae && (ae.tagName === "TEXTAREA" || (ae.tagName === "INPUT" && ae !== refPos.current && ae !== refProd.current))) {
+        return;
+      }
+
+      const now = performance.now();
+      const delta = now - lastKeyTimeRef.current;
 
       if (e.key === "Enter" || e.key === "Tab") {
-        e.preventDefault();
-        e.stopPropagation();
-        const valor = valorAtual || scanBufferRef.current;
-        if (etapa === "posicao") void confirmarPosicao(valor);
-        else void confirmarProduto(valor);
+        const buffer = scanBufferRef.current;
+        if (buffer.length >= MIN_SCAN_LEN) {
+          e.preventDefault();
+          e.stopPropagation();
+          scanBufferRef.current = "";
+          setScanDisplay("");
+          lastKeyTimeRef.current = 0;
+          if (etapa === "posicao") void confirmarPosicao(buffer);
+          else void confirmarProduto(buffer);
+        }
         return;
       }
 
       if (e.key.length === 1) {
+        // Reseta buffer se intervalo grande (digitação humana ou nova leitura)
+        if (delta > SCANNER_GAP_MS && scanBufferRef.current.length > 0) {
+          scanBufferRef.current = "";
+        }
         scanBufferRef.current += e.key;
+        setScanDisplay(scanBufferRef.current);
+        lastKeyTimeRef.current = now;
+        e.preventDefault();
+      } else if (e.key === "Backspace") {
+        scanBufferRef.current = scanBufferRef.current.slice(0, -1);
+        setScanDisplay(scanBufferRef.current);
       }
     };
 
     window.addEventListener("keydown", onScannerKey, true);
     return () => window.removeEventListener("keydown", onScannerKey, true);
-  }, [etapa, modalDup]);
+  }, [etapa, modalDup, confirmarPosicao, confirmarProduto]);
 
   function sair() {
     clearOperador();
@@ -322,19 +336,15 @@ function TelaContagem() {
             )}
           </label>
           {etapa === "posicao" ? (
-            <Input
-              ref={refPos}
-              type="text"
-              autoFocus
-              defaultValue={posicao}
-              onInput={(e) => { scanBufferRef.current = e.currentTarget.value; }}
-              onKeyDown={(e) => handleScanKey(e, "posicao")}
-              placeholder="Bipe o endereço"
-              className="h-12 text-xl font-mono tracking-wider"
-              autoComplete="off"
-              autoCapitalize="characters"
-              inputMode="text"
-            />
+            <div
+              ref={(el) => { /* visual only */ }}
+              className="h-12 px-3 rounded-md border border-input bg-background flex items-center text-xl font-mono tracking-wider"
+              aria-label="Aguardando leitura da posição"
+            >
+              <input ref={refPos} type="hidden" defaultValue="" />
+              {scanDisplay || <span className="text-muted-foreground/60 text-base">Bipe o endereço…</span>}
+              {scanDisplay && <span className="ml-1 animate-pulse">|</span>}
+            </div>
           ) : (
             <button onClick={trocarPosicao} className="w-full text-left text-lg font-mono font-bold leading-tight hover:text-primary">
               {posicao}
@@ -350,19 +360,14 @@ function TelaContagem() {
               <Barcode className="h-3 w-3" /> Produto
             </label>
             {etapa === "produto" ? (
-              <Input
-                ref={refProd}
-                type="text"
-                autoFocus
-                defaultValue={produtoInput}
-                onInput={(e) => { scanBufferRef.current = e.currentTarget.value; }}
-                onKeyDown={(e) => handleScanKey(e, "produto")}
-                placeholder="Bipe o código"
-                className="h-12 text-xl font-mono tracking-wider"
-                autoComplete="off"
-                autoCapitalize="characters"
-                inputMode="text"
-              />
+              <div
+                className="h-12 px-3 rounded-md border border-input bg-background flex items-center text-xl font-mono tracking-wider"
+                aria-label="Aguardando leitura do produto"
+              >
+                <input ref={refProd} type="hidden" defaultValue="" />
+                {scanDisplay || <span className="text-muted-foreground/60 text-base">Bipe o código…</span>}
+                {scanDisplay && <span className="ml-1 animate-pulse">|</span>}
+              </div>
             ) : (
               <div>
                 <p className="text-lg font-mono font-bold leading-tight">{produtoSku}</p>

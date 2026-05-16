@@ -57,9 +57,12 @@ function TelaContagem() {
   }, [inventarioId, navigate]);
 
   useEffect(() => {
-    if (etapa === "posicao") refPos.current?.focus();
-    else if (etapa === "produto") refProd.current?.focus();
-    else if (etapa === "quantidade") refQtd.current?.focus();
+    scanBufferRef.current = "";
+    window.requestAnimationFrame(() => {
+      if (etapa === "posicao") refPos.current?.focus({ preventScroll: true });
+      else if (etapa === "produto") refProd.current?.focus({ preventScroll: true });
+      else if (etapa === "quantidade") refQtd.current?.focus({ preventScroll: true });
+    });
   }, [etapa]);
 
   const checarPosicao = useCallback(async (codPos: string): Promise<LeituraExistente[] | null> => {
@@ -237,6 +240,32 @@ function TelaContagem() {
     }
   }
 
+  useEffect(() => {
+    if (modalDup || (etapa !== "posicao" && etapa !== "produto")) return;
+
+    const onScannerKey = (e: globalThis.KeyboardEvent) => {
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
+      const input = etapa === "posicao" ? refPos.current : refProd.current;
+      const valorAtual = input?.value ?? "";
+
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        e.stopPropagation();
+        const valor = valorAtual || scanBufferRef.current;
+        if (etapa === "posicao") void confirmarPosicao(valor);
+        else void confirmarProduto(valor);
+        return;
+      }
+
+      if (e.key.length === 1) {
+        scanBufferRef.current += e.key;
+      }
+    };
+
+    window.addEventListener("keydown", onScannerKey, true);
+    return () => window.removeEventListener("keydown", onScannerKey, true);
+  }, [etapa, modalDup]);
+
   function sair() {
     clearOperador();
     navigate({ to: "/" });
@@ -291,6 +320,7 @@ function TelaContagem() {
           {etapa === "posicao" ? (
             <Input
               ref={refPos}
+              type="text"
               autoFocus
               value={posicao}
               onChange={(e) => { scanBufferRef.current = e.target.value; setPosicao(e.target.value); }}
@@ -318,6 +348,7 @@ function TelaContagem() {
             {etapa === "produto" ? (
               <Input
                 ref={refProd}
+                type="text"
                 autoFocus
                 value={produtoInput}
                 onChange={(e) => { scanBufferRef.current = e.target.value; setProdutoInput(e.target.value); }}
@@ -345,8 +376,9 @@ function TelaContagem() {
             </label>
             <Input
               ref={refQtd}
+              type="text"
               autoFocus
-              inputMode="decimal"
+              inputMode="none"
               value={quantidade}
               onChange={(e) => setQuantidade(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); gravar(); } }}

@@ -43,6 +43,7 @@ function TelaContagem() {
   const navigate = useNavigate();
   const [op, setOp] = useState<{ id: string; nome: string } | null>(null);
   const [inv, setInv] = useState<{ nome: string; status: string } | null>(null);
+  const { online, pending } = useOfflineSync();
 
   const [etapa, setEtapa] = useState<Etapa>("posicao");
   const [posicao, setPosicao] = useState("");

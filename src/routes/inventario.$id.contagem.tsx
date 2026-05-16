@@ -360,19 +360,14 @@ function TelaContagem() {
               <Barcode className="h-3 w-3" /> Produto
             </label>
             {etapa === "produto" ? (
-              <Input
-                ref={refProd}
-                type="text"
-                autoFocus
-                defaultValue={produtoInput}
-                onInput={(e) => { scanBufferRef.current = e.currentTarget.value; }}
-                onKeyDown={(e) => handleScanKey(e, "produto")}
-                placeholder="Bipe o código"
-                className="h-12 text-xl font-mono tracking-wider"
-                autoComplete="off"
-                autoCapitalize="characters"
-                inputMode="text"
-              />
+              <div
+                className="h-12 px-3 rounded-md border border-input bg-background flex items-center text-xl font-mono tracking-wider"
+                aria-label="Aguardando leitura do produto"
+              >
+                <input ref={refProd} type="hidden" defaultValue="" />
+                {scanDisplay || <span className="text-muted-foreground/60 text-base">Bipe o código…</span>}
+                {scanDisplay && <span className="ml-1 animate-pulse">|</span>}
+              </div>
             ) : (
               <div>
                 <p className="text-lg font-mono font-bold leading-tight">{produtoSku}</p>

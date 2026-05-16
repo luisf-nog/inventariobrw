@@ -339,7 +339,7 @@ function TelaContagem() {
             <CheckCircle2 className="h-4 w-4 text-success shrink-0 mt-0.5" />
             <div className="min-w-0 flex-1">
               <p className="font-mono text-xs leading-tight">
-                <span className="text-muted-foreground">{ultima.posicao}</span>
+                <span className="text-muted-foreground">{formatPosicaoDisplay(ultima.posicao)}</span>
                 <span className="mx-1 text-muted-foreground/50">›</span>
                 <span className="font-bold">{ultima.sku}</span>
                 <span className="ml-1.5 font-bold text-success">{ultima.qtd}</span>

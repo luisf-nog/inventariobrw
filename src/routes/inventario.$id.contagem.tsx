@@ -449,12 +449,12 @@ function TelaContagem() {
         />
       )}
 
-      <Dialog open={!!confirmacao} onOpenChange={(o) => { if (!o && !salvando) setConfirmacao(null); }}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Confirmar leitura</DialogTitle>
-          </DialogHeader>
-          {confirmacao && (
+      {confirmacao && (
+        <Dialog open onOpenChange={(o) => { if (!o && !salvando) setConfirmacao(null); }}>
+          <DialogContent className="max-w-sm" aria-describedby={undefined}>
+            <DialogHeader>
+              <DialogTitle>Confirmar leitura</DialogTitle>
+            </DialogHeader>
             <div className="space-y-3">
               <div>
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Endereço</p>
@@ -474,17 +474,17 @@ function TelaContagem() {
                 <Badge className="bg-warning text-warning-foreground">{confirmacao.contagem}ª contagem</Badge>
               )}
             </div>
-          )}
-          <DialogFooter className="gap-2 sm:gap-2">
-            <Button variant="outline" onClick={() => setConfirmacao(null)} disabled={salvando} className="flex-1">
-              Corrigir
-            </Button>
-            <Button onClick={persistir} disabled={salvando} className="flex-1 bg-primary hover:bg-primary/90 font-bold">
-              {salvando ? "Salvando..." : "✓ Confirmar"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <DialogFooter className="gap-2 sm:gap-2">
+              <Button variant="outline" onClick={() => setConfirmacao(null)} disabled={salvando} className="flex-1">
+                Corrigir
+              </Button>
+              <Button onClick={persistir} disabled={salvando} className="flex-1 bg-primary hover:bg-primary/90 font-bold">
+                {salvando ? "Salvando..." : "✓ Confirmar"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

@@ -74,8 +74,9 @@ function TelaContagem() {
         if (error || !data) { toast.error("Inventário não encontrado"); navigate({ to: "/inventarios" }); return; }
         if (data.status !== "aberto") { toast.error("Inventário encerrado"); navigate({ to: "/inventarios" }); return; }
         setInv(data);
+        void carregarLeiturasExistentes();
       });
-  }, [inventarioId, navigate]);
+  }, [inventarioId, navigate, carregarLeiturasExistentes]);
 
   useEffect(() => {
     scanBufferRef.current = "";
@@ -96,23 +97,11 @@ function TelaContagem() {
         lido_em: q.lido_em,
         operador_nome: q.operador_nome ?? null,
       }));
-    if (!navigator.onLine) return locais;
-    const { data, error } = await supabase
-      .from("leituras")
-      .select("codigo_produto, quantidade, numero_contagem, lido_em, operador_id, operadores(nome)")
-      .eq("inventario_id", inventarioId)
-      .eq("codigo_posicao", codPos)
-      .order("lido_em", { ascending: false });
-    if (error) return locais;
-    const remotas: LeituraExistente[] = (data ?? []).map((d: any) => ({
-      codigo_produto: d.codigo_produto,
-      quantidade: Number(d.quantidade),
-      numero_contagem: d.numero_contagem,
-      lido_em: d.lido_em,
-      operador_nome: d.operadores?.nome ?? null,
-    }));
+    const remotas: LeituraExistente[] = leiturasCache
+      .filter((l) => l.codigo_posicao === codPos)
+      .map(({ codigo_posicao: _codigo_posicao, ...l }) => l);
     return [...locais, ...remotas].sort((a, b) => b.lido_em.localeCompare(a.lido_em));
-  }, [inventarioId]);
+  }, [inventarioId, leiturasCache]);
 
   async function confirmarPosicao(valor?: string) {
     const cod = normalizeCode(valor ?? posicao);
@@ -148,32 +137,12 @@ function TelaContagem() {
     const codRaw = (valor ?? produtoInput).trim();
     scanBufferRef.current = "";
     if (!isValidCode(codRaw)) { beepError(); toast.error("Produto inválido"); return; }
-    // Tenta traduzir EAN -> SKU
     let sku = normalizeCode(codRaw);
     let desc: string | null = null;
     if (navigator.onLine) {
-      // Busca por EAN (apenas dígitos)
-      const eanDigits = codRaw.replace(/\D/g, "");
-      if (eanDigits.length >= 6) {
-        const { data } = await supabase
-          .from("produto_eans")
-          .select("sku, produtos(descricao)")
-          .eq("ean", eanDigits)
-          .maybeSingle();
-        if (data) {
-          sku = data.sku;
-          desc = (data as any).produtos?.descricao ?? null;
-        }
-      }
-      if (!desc) {
-        // Tenta como SKU direto
-        const { data } = await supabase
-          .from("produtos")
-          .select("descricao")
-          .eq("sku", sku)
-          .maybeSingle();
-        if (data) desc = data.descricao;
-      }
+      const produto = await resolverProdutoPorCodigo(codRaw);
+      sku = produto.sku;
+      desc = produto.descricao;
     }
     if (!desc) {
       beepWarn();

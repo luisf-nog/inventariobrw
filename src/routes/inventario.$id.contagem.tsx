@@ -242,9 +242,6 @@ function TelaContagem() {
       else void confirmarProduto(valor);
       return;
     }
-    if (e.key.length === 1) {
-      scanBufferRef.current += e.key;
-    }
   }
 
   useEffect(() => {

@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, type KeyboardEvent } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { getOperador, clearOperador } from "@/lib/operador-session";
 import { beepSuccess, beepWarn, beepError } from "@/lib/feedback";
@@ -224,7 +224,7 @@ function TelaContagem() {
     setEtapa("posicao");
   }
 
-  function handleScanKey(e: React.KeyboardEvent<HTMLInputElement>, tipo: "posicao" | "produto") {
+  function handleScanKey(e: KeyboardEvent<HTMLInputElement>, tipo: "posicao" | "produto") {
     if (e.key === "Enter" || e.key === "Tab") {
       e.preventDefault();
       const valor = e.currentTarget.value || scanBufferRef.current;

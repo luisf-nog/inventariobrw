@@ -448,6 +448,43 @@ function TelaContagem() {
           onEscolher={escolherAcaoDup}
         />
       )}
+
+      <Dialog open={!!confirmacao} onOpenChange={(o) => { if (!o && !salvando) setConfirmacao(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Confirmar leitura</DialogTitle>
+          </DialogHeader>
+          {confirmacao && (
+            <div className="space-y-3">
+              <div>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Endereço</p>
+                <p className="text-lg font-mono font-bold">{formatPosicaoDisplay(confirmacao.posicao)}</p>
+                <p className="text-[10px] text-muted-foreground font-mono">{confirmacao.posicao}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Produto</p>
+                <p className="text-lg font-mono font-bold">{confirmacao.sku}</p>
+                {confirmacao.desc && <p className="text-xs text-muted-foreground">{confirmacao.desc}</p>}
+              </div>
+              <div>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Quantidade</p>
+                <p className="text-3xl font-bold text-success">{confirmacao.qtd}</p>
+              </div>
+              {confirmacao.contagem > 1 && (
+                <Badge className="bg-warning text-warning-foreground">{confirmacao.contagem}ª contagem</Badge>
+              )}
+            </div>
+          )}
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button variant="outline" onClick={() => setConfirmacao(null)} disabled={salvando} className="flex-1">
+              Corrigir
+            </Button>
+            <Button onClick={persistir} disabled={salvando} className="flex-1 bg-primary hover:bg-primary/90 font-bold">
+              {salvando ? "Salvando..." : "✓ Confirmar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -233,41 +233,56 @@ function TelaContagem() {
     setEtapa("posicao");
   }
 
-  function handleScanKey(e: KeyboardEvent<HTMLInputElement>, tipo: "posicao" | "produto") {
-    if (e.key === "Enter" || e.key === "Tab") {
-      e.preventDefault();
-      const valor = e.currentTarget.value || scanBufferRef.current;
-      if (tipo === "posicao") void confirmarPosicao(valor);
-      else void confirmarProduto(valor);
-      return;
-    }
-  }
-
   useEffect(() => {
     if (modalDup || (etapa !== "posicao" && etapa !== "produto")) return;
 
+    const SCANNER_GAP_MS = 50; // intervalo máximo entre teclas pra considerar scanner
+    const MIN_SCAN_LEN = 2;
+
     const onScannerKey = (e: globalThis.KeyboardEvent) => {
       if (e.ctrlKey || e.altKey || e.metaKey) return;
-      const input = etapa === "posicao" ? refPos.current : refProd.current;
-      const valorAtual = input?.value ?? "";
+
+      // Ignora se foco está num campo de quantidade ou em outro input editável
+      const ae = document.activeElement as HTMLElement | null;
+      if (ae && (ae.tagName === "TEXTAREA" || (ae.tagName === "INPUT" && ae !== refPos.current && ae !== refProd.current))) {
+        return;
+      }
+
+      const now = performance.now();
+      const delta = now - lastKeyTimeRef.current;
 
       if (e.key === "Enter" || e.key === "Tab") {
-        e.preventDefault();
-        e.stopPropagation();
-        const valor = valorAtual || scanBufferRef.current;
-        if (etapa === "posicao") void confirmarPosicao(valor);
-        else void confirmarProduto(valor);
+        const buffer = scanBufferRef.current;
+        if (buffer.length >= MIN_SCAN_LEN) {
+          e.preventDefault();
+          e.stopPropagation();
+          scanBufferRef.current = "";
+          setScanDisplay("");
+          lastKeyTimeRef.current = 0;
+          if (etapa === "posicao") void confirmarPosicao(buffer);
+          else void confirmarProduto(buffer);
+        }
         return;
       }
 
       if (e.key.length === 1) {
+        // Reseta buffer se intervalo grande (digitação humana ou nova leitura)
+        if (delta > SCANNER_GAP_MS && scanBufferRef.current.length > 0) {
+          scanBufferRef.current = "";
+        }
         scanBufferRef.current += e.key;
+        setScanDisplay(scanBufferRef.current);
+        lastKeyTimeRef.current = now;
+        e.preventDefault();
+      } else if (e.key === "Backspace") {
+        scanBufferRef.current = scanBufferRef.current.slice(0, -1);
+        setScanDisplay(scanBufferRef.current);
       }
     };
 
     window.addEventListener("keydown", onScannerKey, true);
     return () => window.removeEventListener("keydown", onScannerKey, true);
-  }, [etapa, modalDup]);
+  }, [etapa, modalDup, confirmarPosicao, confirmarProduto]);
 
   function sair() {
     clearOperador();

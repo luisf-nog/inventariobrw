@@ -30,6 +30,7 @@ function TelaResumo() {
   const navigate = useNavigate();
   const [inv, setInv] = useState<{ nome: string; status: string } | null>(null);
   const [linhas, setLinhas] = useState<Linha[]>([]);
+  const [descricoes, setDescricoes] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [filtroPos, setFiltroPos] = useState("");
   const [filtroProd, setFiltroProd] = useState("");
@@ -49,7 +50,7 @@ function TelaResumo() {
         .eq("inventario_id", id)
         .order("codigo_posicao");
       if (error) { toast.error(error.message); setLoading(false); return; }
-      setLinhas((data ?? []).map((d: any) => ({
+      const ls: Linha[] = (data ?? []).map((d: any) => ({
         codigo_posicao: d.codigo_posicao,
         codigo_produto: d.codigo_produto,
         numero_contagem: d.numero_contagem,
@@ -57,23 +58,32 @@ function TelaResumo() {
         operador_id: d.operador_id,
         operador_nome: d.operadores?.nome ?? null,
         lido_em: d.lido_em,
-      })));
+      }));
+      setLinhas(ls);
+      // Busca descrições dos produtos
+      const skus = Array.from(new Set(ls.map((l) => l.codigo_produto)));
+      if (skus.length > 0) {
+        const { data: prods } = await supabase.from("produtos").select("sku, descricao").in("sku", skus);
+        const map: Record<string, string> = {};
+        for (const p of prods ?? []) map[p.sku] = p.descricao;
+        setDescricoes(map);
+      }
       setLoading(false);
     })();
   }, [id]);
 
   // Agrupa por posição+produto+contagem
   const grupos = useMemo(() => {
-    const map = new Map<string, { posicao: string; produto: string; contagem: number; total: number; operadores: Set<string> }>();
+    const map = new Map<string, { posicao: string; produto: string; descricao: string; contagem: number; total: number; operadores: Set<string> }>();
     for (const l of linhas) {
       const k = `${l.codigo_posicao}|${l.codigo_produto}|${l.numero_contagem}`;
-      const g = map.get(k) ?? { posicao: l.codigo_posicao, produto: l.codigo_produto, contagem: l.numero_contagem, total: 0, operadores: new Set<string>() };
+      const g = map.get(k) ?? { posicao: l.codigo_posicao, produto: l.codigo_produto, descricao: descricoes[l.codigo_produto] ?? "", contagem: l.numero_contagem, total: 0, operadores: new Set<string>() };
       g.total += l.quantidade;
       if (l.operador_nome) g.operadores.add(l.operador_nome);
       map.set(k, g);
     }
     return Array.from(map.values());
-  }, [linhas]);
+  }, [linhas, descricoes]);
 
   // Detecta divergências: mesma posição+produto com contagens diferentes em quantidades diferentes
   const divergencias = useMemo(() => {
@@ -99,7 +109,7 @@ function TelaResumo() {
     const fr = filtroProd.trim().toUpperCase();
     const fo = filtroOp.trim().toLowerCase();
     if (fp && !g.posicao.includes(fp)) return false;
-    if (fr && !g.produto.includes(fr)) return false;
+    if (fr && !(g.produto.includes(fr) || g.descricao.toUpperCase().includes(fr))) return false;
     if (fo && !Array.from(g.operadores).some((n) => n.toLowerCase().includes(fo))) return false;
     return true;
   });
@@ -111,8 +121,8 @@ function TelaResumo() {
   }, [linhas]);
 
   function exportarCSV() {
-    const header = ["posicao", "produto", "contagem", "quantidade_total", "operadores"];
-    const rows = filtrados.map((g) => [g.posicao, g.produto, g.contagem, g.total, Array.from(g.operadores).join("; ")]);
+    const header = ["posicao", "produto", "descricao", "contagem", "quantidade_total", "operadores"];
+    const rows = filtrados.map((g) => [g.posicao, g.produto, g.descricao, g.contagem, g.total, Array.from(g.operadores).join("; ")]);
     const csv = [header, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
     const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -165,6 +175,7 @@ function TelaResumo() {
                 <tr className="text-left">
                   <th className="px-3 py-2">Posição</th>
                   <th className="px-3 py-2">Produto</th>
+                  <th className="px-3 py-2">Descrição</th>
                   <th className="px-3 py-2 text-center">Contagem</th>
                   <th className="px-3 py-2 text-right">Quantidade</th>
                   <th className="px-3 py-2">Operadores</th>
@@ -177,6 +188,9 @@ function TelaResumo() {
                     <tr key={i} className={`border-t border-border ${div ? "bg-destructive/10" : ""}`}>
                       <td className="px-3 py-2 font-mono">{g.posicao}</td>
                       <td className="px-3 py-2 font-mono">{g.produto}</td>
+                      <td className="px-3 py-2 text-xs max-w-xs truncate" title={g.descricao}>
+                        {g.descricao || <span className="text-muted-foreground italic">—</span>}
+                      </td>
                       <td className="px-3 py-2 text-center">{g.contagem}</td>
                       <td className="px-3 py-2 text-right font-semibold">{g.total} {div && <span className="text-destructive">⚠</span>}</td>
                       <td className="px-3 py-2 text-xs text-muted-foreground">{Array.from(g.operadores).join(", ")}</td>
@@ -184,7 +198,7 @@ function TelaResumo() {
                   );
                 })}
                 {filtrados.length === 0 && (
-                  <tr><td colSpan={5} className="px-3 py-6 text-center text-muted-foreground">Nenhuma leitura</td></tr>
+                  <tr><td colSpan={6} className="px-3 py-6 text-center text-muted-foreground">Nenhuma leitura</td></tr>
                 )}
               </tbody>
             </table>

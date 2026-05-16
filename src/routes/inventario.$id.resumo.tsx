@@ -81,12 +81,12 @@ function TelaResumo() {
     })();
   }, [id]);
 
-  // Agrupa por posição+produto+contagem
+  // Agrupa por posição+sku+contagem
   const grupos = useMemo(() => {
     const map = new Map<string, { posicao: string; produto: string; descricao: string; contagem: number; total: number; operadores: Set<string> }>();
     for (const l of linhas) {
-      const k = `${l.codigo_posicao}|${l.codigo_produto}|${l.numero_contagem}`;
-      const g = map.get(k) ?? { posicao: l.codigo_posicao, produto: l.codigo_produto, descricao: descricoes[l.codigo_produto] ?? "", contagem: l.numero_contagem, total: 0, operadores: new Set<string>() };
+      const k = `${l.codigo_posicao}|${l.sku}|${l.numero_contagem}`;
+      const g = map.get(k) ?? { posicao: l.codigo_posicao, produto: l.sku, descricao: descricoes[l.sku] ?? "", contagem: l.numero_contagem, total: 0, operadores: new Set<string>() };
       g.total += l.quantidade;
       if (l.operador_nome) g.operadores.add(l.operador_nome);
       map.set(k, g);

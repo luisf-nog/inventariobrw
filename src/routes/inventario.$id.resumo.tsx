@@ -172,18 +172,18 @@ function TelaResumo() {
                 </tr>
               </thead>
               <tbody>
-                {filtrados.map((g, i) => {
-                  const div = divergencias.has(`${g.posicao}|${g.produto}`);
+                {filtrados.map((l) => {
+                  const div = divergencias.has(`${l.codigo_posicao}|${l.sku}`);
                   return (
-                    <tr key={i} className={`border-t border-border ${div ? "bg-destructive/10" : ""}`}>
-                      <td className="px-3 py-2 font-mono">{g.posicao}</td>
-                      <td className="px-3 py-2 font-mono">{g.produto}</td>
-                      <td className="px-3 py-2 text-xs max-w-xs truncate" title={g.descricao}>
-                        {g.descricao || <span className="text-muted-foreground italic">—</span>}
+                    <tr key={l.id} className={`border-t border-border ${div ? "bg-destructive/10" : ""}`}>
+                      <td className="px-3 py-2 font-mono">{l.codigo_posicao}</td>
+                      <td className="px-3 py-2 font-mono">{l.sku}</td>
+                      <td className="px-3 py-2 text-xs max-w-xs truncate" title={l.descricao}>
+                        {l.descricao || <span className="text-muted-foreground italic">—</span>}
                       </td>
-                      <td className="px-3 py-2 text-center">{g.contagem}</td>
-                      <td className="px-3 py-2 text-right font-semibold">{g.total} {div && <span className="text-destructive">⚠</span>}</td>
-                      <td className="px-3 py-2 text-xs text-muted-foreground">{Array.from(g.operadores).join(", ")}</td>
+                      <td className="px-3 py-2 text-center">{l.numero_contagem}</td>
+                      <td className="px-3 py-2 text-right font-semibold">{l.quantidade} {div && <span className="text-destructive">⚠</span>}</td>
+                      <td className="px-3 py-2 text-xs text-muted-foreground">{l.operador_nome ?? "—"}</td>
                     </tr>
                   );
                 })}

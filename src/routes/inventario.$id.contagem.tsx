@@ -152,26 +152,57 @@ function TelaContagem() {
     if (qtd === null) { beepError(); toast.error("Quantidade inválida"); return; }
     if (!op) return;
     setSalvando(true);
-    const { data, error } = await supabase
-      .from("leituras")
-      .insert({
+    const lidoEm = new Date().toISOString();
+    let id: string;
+    if (!navigator.onLine) {
+      const item = enqueueLeitura({
         inventario_id: inventarioId,
         codigo_posicao: posicao,
         codigo_produto: produto,
         quantidade: qtd,
         numero_contagem: numeroContagem,
         operador_id: op.id,
-      })
-      .select("id, lido_em")
-      .single();
+        operador_nome: op.nome,
+        lido_em: lidoEm,
+      });
+      id = item.id;
+    } else {
+      const { data, error } = await supabase
+        .from("leituras")
+        .insert({
+          inventario_id: inventarioId,
+          codigo_posicao: posicao,
+          codigo_produto: produto,
+          quantidade: qtd,
+          numero_contagem: numeroContagem,
+          operador_id: op.id,
+        })
+        .select("id, lido_em")
+        .single();
+      if (error || !data) {
+        // fallback: enfileira offline
+        const item = enqueueLeitura({
+          inventario_id: inventarioId,
+          codigo_posicao: posicao,
+          codigo_produto: produto,
+          quantidade: qtd,
+          numero_contagem: numeroContagem,
+          operador_id: op.id,
+          operador_nome: op.nome,
+          lido_em: lidoEm,
+        });
+        id = item.id;
+        toast.warning("Salvo offline (sem conexão)");
+      } else {
+        id = data.id;
+      }
+    }
     setSalvando(false);
-    if (error || !data) { beepError(); toast.error("Erro: " + (error?.message ?? "?")); return; }
     beepSuccess();
     setLeiturasSessao((prev) => [
-      { id: data.id, codigo_posicao: posicao, codigo_produto: produto, quantidade: qtd, numero_contagem: numeroContagem, lido_em: data.lido_em },
+      { id, codigo_posicao: posicao, codigo_produto: produto, quantidade: qtd, numero_contagem: numeroContagem, lido_em: lidoEm },
       ...prev,
     ].slice(0, 50));
-    // mantém posição e numeroContagem, limpa produto/qtd
     setProduto("");
     setQuantidade("");
     setEtapa("produto");
@@ -181,8 +212,12 @@ function TelaContagem() {
     if (!confirmDelete) return;
     const id = confirmDelete.id;
     setConfirmDelete(null);
-    const { error } = await supabase.from("leituras").delete().eq("id", id);
-    if (error) { toast.error("Erro: " + error.message); return; }
+    if (id.startsWith("local-")) {
+      removeFromQueue(id);
+    } else {
+      const { error } = await supabase.from("leituras").delete().eq("id", id);
+      if (error) { toast.error("Erro: " + error.message); return; }
+    }
     setLeiturasSessao((prev) => prev.filter((l) => l.id !== id));
     toast.success("Leitura removida");
   }

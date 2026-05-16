@@ -4,9 +4,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { getOperador, clearOperador } from "@/lib/operador-session";
 import { beepSuccess, beepWarn, beepError } from "@/lib/feedback";
 import { normalizeCode, isValidCode, parseQuantidade } from "@/lib/validation";
+import { formatPosicaoDisplay } from "@/lib/posicao";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { LogOut, MapPin, Barcode, Hash, Wifi, WifiOff, CheckCircle2 } from "lucide-react";
 import { PosicaoJaContadaModal, type AcaoPosicao, type LeituraExistente } from "@/components/PosicaoJaContadaModal";
@@ -40,6 +42,7 @@ function TelaContagem() {
   const [ultima, setUltima] = useState<{ posicao: string; sku: string; desc: string | null; qtd: number; contagem: number } | null>(null);
 
   const [modalDup, setModalDup] = useState<{ leituras: LeituraExistente[]; contagemAtual: number } | null>(null);
+  const [confirmacao, setConfirmacao] = useState<{ posicao: string; sku: string; desc: string | null; qtd: number; contagem: number } | null>(null);
   const [leiturasCache, setLeiturasCache] = useState<LeituraCache[]>([]);
 
   const refPos = useRef<HTMLInputElement>(null);
@@ -163,20 +166,27 @@ function TelaContagem() {
     setEtapa("quantidade");
   }
 
-  async function gravar() {
+  function gravar() {
     const qtd = parseQuantidade(quantidade);
     if (qtd === null) { beepError(); toast.error("Quantidade inválida"); return; }
     if (!op) return;
+    // Abre modal de confirmação — só persiste após o operador confirmar
+    setConfirmacao({ posicao, sku: produtoSku, desc: produtoDesc, qtd, contagem: numeroContagem });
+  }
+
+  async function persistir() {
+    if (!confirmacao || !op) return;
+    const { posicao: pos, sku, desc, qtd, contagem } = confirmacao;
     setSalvando(true);
     const lidoEm = new Date().toISOString();
     let offline = false;
     if (!navigator.onLine) {
       enqueueLeitura({
         inventario_id: inventarioId,
-        codigo_posicao: posicao,
-        codigo_produto: produtoSku,
+        codigo_posicao: pos,
+        codigo_produto: sku,
         quantidade: qtd,
-        numero_contagem: numeroContagem,
+        numero_contagem: contagem,
         operador_id: op.id,
         operador_nome: op.nome,
         lido_em: lidoEm,
@@ -187,20 +197,20 @@ function TelaContagem() {
         .from("leituras")
         .insert({
           inventario_id: inventarioId,
-          codigo_posicao: posicao,
-          codigo_produto: produtoSku,
+          codigo_posicao: pos,
+          codigo_produto: sku,
           quantidade: qtd,
-          numero_contagem: numeroContagem,
+          numero_contagem: contagem,
           operador_id: op.id,
           lido_em: lidoEm,
         });
       if (error) {
         enqueueLeitura({
           inventario_id: inventarioId,
-          codigo_posicao: posicao,
-          codigo_produto: produtoSku,
+          codigo_posicao: pos,
+          codigo_produto: sku,
           quantidade: qtd,
-          numero_contagem: numeroContagem,
+          numero_contagem: contagem,
           operador_id: op.id,
           operador_nome: op.nome,
           lido_em: lidoEm,
@@ -211,23 +221,26 @@ function TelaContagem() {
     setSalvando(false);
     if (!offline) {
       setLeiturasCache((atuais) => [{
-        codigo_posicao: posicao,
-        codigo_produto: produtoSku,
+        codigo_posicao: pos,
+        codigo_produto: sku,
         quantidade: qtd,
-        numero_contagem: numeroContagem,
+        numero_contagem: contagem,
         operador_nome: op.nome,
         lido_em: lidoEm,
       }, ...atuais]);
     }
     beepSuccess();
-    setUltima({ posicao, sku: produtoSku, desc: produtoDesc, qtd, contagem: numeroContagem });
+    setUltima({ posicao: pos, sku, desc, qtd, contagem });
     if (offline) toast.warning("Salvo offline — será sincronizado");
-    // Continua na mesma posição, volta pra etapa de produto
+    // 1 item por posição: volta pro início, aguarda nova posição
+    setConfirmacao(null);
+    setPosicao("");
     setProdutoInput("");
     setProdutoSku("");
     setProdutoDesc(null);
     setQuantidade("");
-    setEtapa("produto");
+    setNumeroContagem(1);
+    setEtapa("posicao");
   }
 
   function trocarPosicao() {
@@ -239,7 +252,7 @@ function TelaContagem() {
 
   // Sincroniza refs com state/handlers a cada render — evita closures obsoletos
   etapaRef.current = etapa;
-  modalAbertoRef.current = !!modalDup;
+  modalAbertoRef.current = !!modalDup || !!confirmacao;
   confirmarPosicaoRef.current = confirmarPosicao;
   confirmarProdutoRef.current = confirmarProduto;
 
@@ -326,7 +339,7 @@ function TelaContagem() {
             <CheckCircle2 className="h-4 w-4 text-success shrink-0 mt-0.5" />
             <div className="min-w-0 flex-1">
               <p className="font-mono text-xs leading-tight">
-                <span className="text-muted-foreground">{ultima.posicao}</span>
+                <span className="text-muted-foreground">{formatPosicaoDisplay(ultima.posicao)}</span>
                 <span className="mx-1 text-muted-foreground/50">›</span>
                 <span className="font-bold">{ultima.sku}</span>
                 <span className="ml-1.5 font-bold text-success">{ultima.qtd}</span>
@@ -356,9 +369,9 @@ function TelaContagem() {
               {scanDisplay && <span className="ml-1 animate-pulse">|</span>}
             </div>
           ) : (
-            <button onClick={trocarPosicao} className="w-full text-left text-lg font-mono font-bold leading-tight hover:text-primary">
-              {posicao}
-              <span className="ml-2 text-[10px] text-muted-foreground font-sans">(trocar)</span>
+            <button onClick={trocarPosicao} className="w-full text-left leading-tight hover:text-primary">
+              <span className="block text-lg font-mono font-bold">{formatPosicaoDisplay(posicao)}</span>
+              <span className="block text-[10px] text-muted-foreground font-mono">{posicao} <span className="font-sans">(trocar)</span></span>
             </button>
           )}
         </div>
@@ -435,6 +448,43 @@ function TelaContagem() {
           onEscolher={escolherAcaoDup}
         />
       )}
+
+      <Dialog open={!!confirmacao} onOpenChange={(o) => { if (!o && !salvando) setConfirmacao(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Confirmar leitura</DialogTitle>
+          </DialogHeader>
+          {confirmacao && (
+            <div className="space-y-3">
+              <div>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Endereço</p>
+                <p className="text-lg font-mono font-bold">{formatPosicaoDisplay(confirmacao.posicao)}</p>
+                <p className="text-[10px] text-muted-foreground font-mono">{confirmacao.posicao}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Produto</p>
+                <p className="text-lg font-mono font-bold">{confirmacao.sku}</p>
+                {confirmacao.desc && <p className="text-xs text-muted-foreground">{confirmacao.desc}</p>}
+              </div>
+              <div>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Quantidade</p>
+                <p className="text-3xl font-bold text-success">{confirmacao.qtd}</p>
+              </div>
+              {confirmacao.contagem > 1 && (
+                <Badge className="bg-warning text-warning-foreground">{confirmacao.contagem}ª contagem</Badge>
+              )}
+            </div>
+          )}
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button variant="outline" onClick={() => setConfirmacao(null)} disabled={salvando} className="flex-1">
+              Corrigir
+            </Button>
+            <Button onClick={persistir} disabled={salvando} className="flex-1 bg-primary hover:bg-primary/90 font-bold">
+              {salvando ? "Salvando..." : "✓ Confirmar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

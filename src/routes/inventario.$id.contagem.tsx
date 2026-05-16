@@ -369,9 +369,9 @@ function TelaContagem() {
               {scanDisplay && <span className="ml-1 animate-pulse">|</span>}
             </div>
           ) : (
-            <button onClick={trocarPosicao} className="w-full text-left text-lg font-mono font-bold leading-tight hover:text-primary">
-              {posicao}
-              <span className="ml-2 text-[10px] text-muted-foreground font-sans">(trocar)</span>
+            <button onClick={trocarPosicao} className="w-full text-left leading-tight hover:text-primary">
+              <span className="block text-lg font-mono font-bold">{formatPosicaoDisplay(posicao)}</span>
+              <span className="block text-[10px] text-muted-foreground font-mono">{posicao} <span className="font-sans">(trocar)</span></span>
             </button>
           )}
         </div>

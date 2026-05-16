@@ -333,7 +333,7 @@ function TelaContagem() {
               className="h-12 text-xl font-mono tracking-wider"
               autoComplete="off"
               autoCapitalize="characters"
-              inputMode="none"
+              inputMode="text"
             />
           ) : (
             <button onClick={trocarPosicao} className="w-full text-left text-lg font-mono font-bold leading-tight hover:text-primary">
@@ -361,7 +361,7 @@ function TelaContagem() {
                 className="h-12 text-xl font-mono tracking-wider"
                 autoComplete="off"
                 autoCapitalize="characters"
-                inputMode="none"
+                inputMode="text"
               />
             ) : (
               <div>

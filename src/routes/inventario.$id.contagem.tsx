@@ -81,11 +81,17 @@ function TelaContagem() {
   useEffect(() => {
     scanBufferRef.current = "";
     window.requestAnimationFrame(() => {
-      if (etapa === "posicao") refPos.current?.focus({ preventScroll: true });
-      else if (etapa === "produto") refProd.current?.focus({ preventScroll: true });
-      else if (etapa === "quantidade") refQtd.current?.focus({ preventScroll: true });
+      if (etapa === "posicao") {
+        if (refPos.current) refPos.current.value = posicao;
+        refPos.current?.focus({ preventScroll: true });
+      } else if (etapa === "produto") {
+        if (refProd.current) refProd.current.value = produtoInput;
+        refProd.current?.focus({ preventScroll: true });
+      } else if (etapa === "quantidade") {
+        refQtd.current?.focus({ preventScroll: true });
+      }
     });
-  }, [etapa]);
+  }, [etapa, posicao, produtoInput]);
 
   const checarPosicao = useCallback(async (codPos: string): Promise<LeituraExistente[] | null> => {
     const locais: LeituraExistente[] = getQueueForInventario(inventarioId)
@@ -323,8 +329,8 @@ function TelaContagem() {
               ref={refPos}
               type="text"
               autoFocus
-              value={posicao}
-              onChange={(e) => { scanBufferRef.current = e.target.value; setPosicao(e.target.value); }}
+              defaultValue={posicao}
+              onInput={(e) => { scanBufferRef.current = e.currentTarget.value; }}
               onKeyDown={(e) => handleScanKey(e, "posicao")}
               placeholder="Bipe o endereço"
               className="h-12 text-xl font-mono tracking-wider"
@@ -351,8 +357,8 @@ function TelaContagem() {
                 ref={refProd}
                 type="text"
                 autoFocus
-                value={produtoInput}
-                onChange={(e) => { scanBufferRef.current = e.target.value; setProdutoInput(e.target.value); }}
+                defaultValue={produtoInput}
+                onInput={(e) => { scanBufferRef.current = e.currentTarget.value; }}
                 onKeyDown={(e) => handleScanKey(e, "produto")}
                 placeholder="Bipe o código"
                 className="h-12 text-xl font-mono tracking-wider"

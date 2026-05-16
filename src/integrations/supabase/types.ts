@@ -127,6 +127,53 @@ export type Database = {
         }
         Relationships: []
       }
+      produto_eans: {
+        Row: {
+          ean: string
+          sku: string
+          tipo: string | null
+        }
+        Insert: {
+          ean: string
+          sku: string
+          tipo?: string | null
+        }
+        Update: {
+          ean?: string
+          sku?: string
+          tipo?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "produto_eans_sku_fkey"
+            columns: ["sku"]
+            isOneToOne: false
+            referencedRelation: "produtos"
+            referencedColumns: ["sku"]
+          },
+        ]
+      }
+      produtos: {
+        Row: {
+          atualizado_em: string
+          criado_em: string
+          descricao: string
+          sku: string
+        }
+        Insert: {
+          atualizado_em?: string
+          criado_em?: string
+          descricao: string
+          sku: string
+        }
+        Update: {
+          atualizado_em?: string
+          criado_em?: string
+          descricao?: string
+          sku?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string

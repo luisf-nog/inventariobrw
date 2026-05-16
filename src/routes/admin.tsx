@@ -104,6 +104,7 @@ function AdminLayout() {
       <nav className="flex gap-2 mb-6 border-b border-border">
         <Link to="/admin" className="px-4 py-2 text-sm hover:text-primary [&.active]:text-primary [&.active]:border-b-2 [&.active]:border-primary" activeOptions={{ exact: true }}>Inventários</Link>
         <Link to="/admin/operadores" className="px-4 py-2 text-sm hover:text-primary [&.active]:text-primary [&.active]:border-b-2 [&.active]:border-primary">Operadores</Link>
+        <Link to="/admin/produtos" className="px-4 py-2 text-sm hover:text-primary [&.active]:text-primary [&.active]:border-b-2 [&.active]:border-primary">Produtos</Link>
       </nav>
 
       <Outlet />

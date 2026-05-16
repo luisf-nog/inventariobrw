@@ -75,27 +75,14 @@ function TelaResumo() {
     })();
   }, [id]);
 
-  // Agrupa por posição+sku+contagem
-  const grupos = useMemo(() => {
-    const map = new Map<string, { posicao: string; produto: string; descricao: string; contagem: number; total: number; operadores: Set<string> }>();
-    for (const l of linhas) {
-      const k = `${l.codigo_posicao}|${l.sku}|${l.numero_contagem}`;
-      const g = map.get(k) ?? { posicao: l.codigo_posicao, produto: l.sku, descricao: descricoes[l.sku] ?? "", contagem: l.numero_contagem, total: 0, operadores: new Set<string>() };
-      g.total += l.quantidade;
-      if (l.operador_nome) g.operadores.add(l.operador_nome);
-      map.set(k, g);
-    }
-    return Array.from(map.values());
-  }, [linhas, descricoes]);
-
   // Detecta divergências: mesma posição+produto com contagens diferentes em quantidades diferentes
   const divergencias = useMemo(() => {
     const set = new Set<string>();
     const byPP = new Map<string, Map<number, number>>();
-    for (const g of grupos) {
-      const k = `${g.posicao}|${g.produto}`;
+    for (const l of linhas) {
+      const k = `${l.codigo_posicao}|${l.sku}`;
       const m = byPP.get(k) ?? new Map();
-      m.set(g.contagem, g.total);
+      m.set(l.numero_contagem, (m.get(l.numero_contagem) ?? 0) + l.quantidade);
       byPP.set(k, m);
     }
     for (const [k, m] of byPP) {
@@ -105,15 +92,15 @@ function TelaResumo() {
       }
     }
     return set;
-  }, [grupos]);
+  }, [linhas]);
 
-  const filtrados = grupos.filter((g) => {
+  const filtrados = linhas.filter((l) => {
     const fp = filtroPos.trim().toUpperCase();
     const fr = filtroProd.trim().toUpperCase();
     const fo = filtroOp.trim().toLowerCase();
-    if (fp && !g.posicao.includes(fp)) return false;
-    if (fr && !(g.produto.includes(fr) || g.descricao.toUpperCase().includes(fr))) return false;
-    if (fo && !Array.from(g.operadores).some((n) => n.toLowerCase().includes(fo))) return false;
+    if (fp && !l.codigo_posicao.includes(fp)) return false;
+    if (fr && !(l.sku.includes(fr) || l.descricao.toUpperCase().includes(fr) || l.codigo_produto.includes(fr))) return false;
+    if (fo && !(l.operador_nome ?? "").toLowerCase().includes(fo)) return false;
     return true;
   });
 
@@ -124,8 +111,8 @@ function TelaResumo() {
   }, [linhas]);
 
   function exportarCSV() {
-    const header = ["posicao", "produto", "descricao", "contagem", "quantidade_total", "operadores"];
-    const rows = filtrados.map((g) => [g.posicao, g.produto, g.descricao, g.contagem, g.total, Array.from(g.operadores).join("; ")]);
+    const header = ["posicao", "produto", "descricao", "contagem", "quantidade", "operador", "lido_em"];
+    const rows = filtrados.map((l) => [l.codigo_posicao, l.sku, l.descricao, l.numero_contagem, l.quantidade, l.operador_nome ?? "", l.lido_em]);
     const csv = [header, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
     const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);

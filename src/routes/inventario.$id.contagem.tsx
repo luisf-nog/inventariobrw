@@ -18,8 +18,10 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { LogOut, Trash2, FileText, MapPin, Barcode, Hash } from "lucide-react";
+import { LogOut, Trash2, FileText, MapPin, Barcode, Hash, Wifi, WifiOff } from "lucide-react";
 import { PosicaoJaContadaModal, type AcaoPosicao, type LeituraExistente } from "@/components/PosicaoJaContadaModal";
+import { enqueueLeitura, getQueueForInventario, removeFromQueue } from "@/lib/offline-queue";
+import { useOfflineSync } from "@/hooks/use-offline-sync";
 
 export const Route = createFileRoute("/inventario/$id/contagem")({
   component: TelaContagem,

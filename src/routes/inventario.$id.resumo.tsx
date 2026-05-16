@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Download, Lock } from "lucide-react";
 import { toast } from "sonner";
+import { buscarDescricoesPorSku, traduzirEansParaSkus } from "@/lib/produtos";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -16,9 +17,11 @@ export const Route = createFileRoute("/inventario/$id/resumo")({
 });
 
 type Linha = {
+  id: string;
   codigo_posicao: string;
   codigo_produto: string;
   sku: string;
+  descricao: string;
   numero_contagem: number;
   quantidade: number;
   operador_id: string | null;
@@ -31,7 +34,6 @@ function TelaResumo() {
   const navigate = useNavigate();
   const [inv, setInv] = useState<{ nome: string; status: string } | null>(null);
   const [linhas, setLinhas] = useState<Linha[]>([]);
-  const [descricoes, setDescricoes] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [filtroPos, setFiltroPos] = useState("");
   const [filtroProd, setFiltroProd] = useState("");
@@ -47,21 +49,21 @@ function TelaResumo() {
       setInv(invData);
       const { data, error } = await supabase
         .from("leituras")
-        .select("codigo_posicao, codigo_produto, numero_contagem, quantidade, operador_id, lido_em, operadores(nome)")
+        .select("id, codigo_posicao, codigo_produto, numero_contagem, quantidade, operador_id, lido_em, operadores(nome)")
         .eq("inventario_id", id)
-        .order("codigo_posicao");
+        .order("codigo_posicao")
+        .order("lido_em", { ascending: true });
       if (error) { toast.error(error.message); setLoading(false); return; }
       const codigosLidos = Array.from(new Set((data ?? []).map((d: any) => d.codigo_produto)));
-      // Traduz EAN -> SKU
-      const eanToSku: Record<string, string> = {};
-      if (codigosLidos.length > 0) {
-        const { data: eans } = await supabase.from("produto_eans").select("ean, sku").in("ean", codigosLidos);
-        for (const e of eans ?? []) eanToSku[e.ean] = e.sku;
-      }
+      const eanToSku = await traduzirEansParaSkus(codigosLidos);
+      const skuPorCodigo = (codigo: string) => eanToSku[codigo.replace(/\D/g, "")] ?? codigo;
+      const descricoes = await buscarDescricoesPorSku(codigosLidos.map(skuPorCodigo));
       const ls: Linha[] = (data ?? []).map((d: any) => ({
+        id: d.id,
         codigo_posicao: d.codigo_posicao,
         codigo_produto: d.codigo_produto,
-        sku: eanToSku[d.codigo_produto] ?? d.codigo_produto,
+        sku: skuPorCodigo(d.codigo_produto),
+        descricao: descricoes[skuPorCodigo(d.codigo_produto)] ?? "",
         numero_contagem: d.numero_contagem,
         quantidade: Number(d.quantidade),
         operador_id: d.operador_id,
@@ -69,39 +71,18 @@ function TelaResumo() {
         lido_em: d.lido_em,
       }));
       setLinhas(ls);
-      // Busca descrições dos produtos pelos SKUs traduzidos
-      const skus = Array.from(new Set(ls.map((l) => l.sku)));
-      if (skus.length > 0) {
-        const { data: prods } = await supabase.from("produtos").select("sku, descricao").in("sku", skus);
-        const map: Record<string, string> = {};
-        for (const p of prods ?? []) map[p.sku] = p.descricao;
-        setDescricoes(map);
-      }
       setLoading(false);
     })();
   }, [id]);
-
-  // Agrupa por posição+sku+contagem
-  const grupos = useMemo(() => {
-    const map = new Map<string, { posicao: string; produto: string; descricao: string; contagem: number; total: number; operadores: Set<string> }>();
-    for (const l of linhas) {
-      const k = `${l.codigo_posicao}|${l.sku}|${l.numero_contagem}`;
-      const g = map.get(k) ?? { posicao: l.codigo_posicao, produto: l.sku, descricao: descricoes[l.sku] ?? "", contagem: l.numero_contagem, total: 0, operadores: new Set<string>() };
-      g.total += l.quantidade;
-      if (l.operador_nome) g.operadores.add(l.operador_nome);
-      map.set(k, g);
-    }
-    return Array.from(map.values());
-  }, [linhas, descricoes]);
 
   // Detecta divergências: mesma posição+produto com contagens diferentes em quantidades diferentes
   const divergencias = useMemo(() => {
     const set = new Set<string>();
     const byPP = new Map<string, Map<number, number>>();
-    for (const g of grupos) {
-      const k = `${g.posicao}|${g.produto}`;
+    for (const l of linhas) {
+      const k = `${l.codigo_posicao}|${l.sku}`;
       const m = byPP.get(k) ?? new Map();
-      m.set(g.contagem, g.total);
+      m.set(l.numero_contagem, (m.get(l.numero_contagem) ?? 0) + l.quantidade);
       byPP.set(k, m);
     }
     for (const [k, m] of byPP) {
@@ -111,15 +92,15 @@ function TelaResumo() {
       }
     }
     return set;
-  }, [grupos]);
+  }, [linhas]);
 
-  const filtrados = grupos.filter((g) => {
+  const filtrados = linhas.filter((l) => {
     const fp = filtroPos.trim().toUpperCase();
     const fr = filtroProd.trim().toUpperCase();
     const fo = filtroOp.trim().toLowerCase();
-    if (fp && !g.posicao.includes(fp)) return false;
-    if (fr && !(g.produto.includes(fr) || g.descricao.toUpperCase().includes(fr))) return false;
-    if (fo && !Array.from(g.operadores).some((n) => n.toLowerCase().includes(fo))) return false;
+    if (fp && !l.codigo_posicao.includes(fp)) return false;
+    if (fr && !(l.sku.includes(fr) || l.descricao.toUpperCase().includes(fr) || l.codigo_produto.includes(fr))) return false;
+    if (fo && !(l.operador_nome ?? "").toLowerCase().includes(fo)) return false;
     return true;
   });
 
@@ -130,8 +111,8 @@ function TelaResumo() {
   }, [linhas]);
 
   function exportarCSV() {
-    const header = ["posicao", "produto", "descricao", "contagem", "quantidade_total", "operadores"];
-    const rows = filtrados.map((g) => [g.posicao, g.produto, g.descricao, g.contagem, g.total, Array.from(g.operadores).join("; ")]);
+    const header = ["posicao", "produto", "descricao", "contagem", "quantidade", "operador", "lido_em"];
+    const rows = filtrados.map((l) => [l.codigo_posicao, l.sku, l.descricao, l.numero_contagem, l.quantidade, l.operador_nome ?? "", l.lido_em]);
     const csv = [header, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
     const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -191,18 +172,18 @@ function TelaResumo() {
                 </tr>
               </thead>
               <tbody>
-                {filtrados.map((g, i) => {
-                  const div = divergencias.has(`${g.posicao}|${g.produto}`);
+                {filtrados.map((l) => {
+                  const div = divergencias.has(`${l.codigo_posicao}|${l.sku}`);
                   return (
-                    <tr key={i} className={`border-t border-border ${div ? "bg-destructive/10" : ""}`}>
-                      <td className="px-3 py-2 font-mono">{g.posicao}</td>
-                      <td className="px-3 py-2 font-mono">{g.produto}</td>
-                      <td className="px-3 py-2 text-xs max-w-xs truncate" title={g.descricao}>
-                        {g.descricao || <span className="text-muted-foreground italic">—</span>}
+                    <tr key={l.id} className={`border-t border-border ${div ? "bg-destructive/10" : ""}`}>
+                      <td className="px-3 py-2 font-mono">{l.codigo_posicao}</td>
+                      <td className="px-3 py-2 font-mono">{l.sku}</td>
+                      <td className="px-3 py-2 text-xs max-w-xs truncate" title={l.descricao}>
+                        {l.descricao || <span className="text-muted-foreground italic">—</span>}
                       </td>
-                      <td className="px-3 py-2 text-center">{g.contagem}</td>
-                      <td className="px-3 py-2 text-right font-semibold">{g.total} {div && <span className="text-destructive">⚠</span>}</td>
-                      <td className="px-3 py-2 text-xs text-muted-foreground">{Array.from(g.operadores).join(", ")}</td>
+                      <td className="px-3 py-2 text-center">{l.numero_contagem}</td>
+                      <td className="px-3 py-2 text-right font-semibold">{l.quantidade} {div && <span className="text-destructive">⚠</span>}</td>
+                      <td className="px-3 py-2 text-xs text-muted-foreground">{l.operador_nome ?? "—"}</td>
                     </tr>
                   );
                 })}

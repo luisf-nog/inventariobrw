@@ -12,12 +12,14 @@ import { LogOut, MapPin, Barcode, Hash, Wifi, WifiOff, CheckCircle2 } from "luci
 import { PosicaoJaContadaModal, type AcaoPosicao, type LeituraExistente } from "@/components/PosicaoJaContadaModal";
 import { enqueueLeitura, getQueueForInventario } from "@/lib/offline-queue";
 import { useOfflineSync } from "@/hooks/use-offline-sync";
+import { resolverProdutoPorCodigo } from "@/lib/produtos";
 
 export const Route = createFileRoute("/inventario/$id/contagem")({
   component: TelaContagem,
 });
 
 type Etapa = "posicao" | "produto" | "quantidade";
+type LeituraCache = LeituraExistente & { codigo_posicao: string };
 
 function TelaContagem() {
   const { id: inventarioId } = Route.useParams();
@@ -38,11 +40,30 @@ function TelaContagem() {
   const [ultima, setUltima] = useState<{ posicao: string; sku: string; desc: string | null; qtd: number; contagem: number } | null>(null);
 
   const [modalDup, setModalDup] = useState<{ leituras: LeituraExistente[]; contagemAtual: number } | null>(null);
+  const [leiturasCache, setLeiturasCache] = useState<LeituraCache[]>([]);
 
   const refPos = useRef<HTMLInputElement>(null);
   const refProd = useRef<HTMLInputElement>(null);
   const refQtd = useRef<HTMLInputElement>(null);
   const scanBufferRef = useRef("");
+
+  const carregarLeiturasExistentes = useCallback(async () => {
+    if (!navigator.onLine) return;
+    const { data, error } = await supabase
+      .from("leituras")
+      .select("codigo_posicao, codigo_produto, quantidade, numero_contagem, lido_em, operador_id, operadores(nome)")
+      .eq("inventario_id", inventarioId)
+      .order("lido_em", { ascending: false });
+    if (error) return;
+    setLeiturasCache((data ?? []).map((d: any) => ({
+      codigo_posicao: d.codigo_posicao,
+      codigo_produto: d.codigo_produto,
+      quantidade: Number(d.quantidade),
+      numero_contagem: d.numero_contagem,
+      lido_em: d.lido_em,
+      operador_nome: d.operadores?.nome ?? null,
+    })));
+  }, [inventarioId]);
 
   useEffect(() => {
     const o = getOperador();
@@ -53,17 +74,24 @@ function TelaContagem() {
         if (error || !data) { toast.error("Inventário não encontrado"); navigate({ to: "/inventarios" }); return; }
         if (data.status !== "aberto") { toast.error("Inventário encerrado"); navigate({ to: "/inventarios" }); return; }
         setInv(data);
+        void carregarLeiturasExistentes();
       });
-  }, [inventarioId, navigate]);
+  }, [inventarioId, navigate, carregarLeiturasExistentes]);
 
   useEffect(() => {
     scanBufferRef.current = "";
     window.requestAnimationFrame(() => {
-      if (etapa === "posicao") refPos.current?.focus({ preventScroll: true });
-      else if (etapa === "produto") refProd.current?.focus({ preventScroll: true });
-      else if (etapa === "quantidade") refQtd.current?.focus({ preventScroll: true });
+      if (etapa === "posicao") {
+        if (refPos.current) refPos.current.value = posicao;
+        refPos.current?.focus({ preventScroll: true });
+      } else if (etapa === "produto") {
+        if (refProd.current) refProd.current.value = produtoInput;
+        refProd.current?.focus({ preventScroll: true });
+      } else if (etapa === "quantidade") {
+        refQtd.current?.focus({ preventScroll: true });
+      }
     });
-  }, [etapa]);
+  }, [etapa, posicao, produtoInput]);
 
   const checarPosicao = useCallback(async (codPos: string): Promise<LeituraExistente[] | null> => {
     const locais: LeituraExistente[] = getQueueForInventario(inventarioId)
@@ -75,23 +103,11 @@ function TelaContagem() {
         lido_em: q.lido_em,
         operador_nome: q.operador_nome ?? null,
       }));
-    if (!navigator.onLine) return locais;
-    const { data, error } = await supabase
-      .from("leituras")
-      .select("codigo_produto, quantidade, numero_contagem, lido_em, operador_id, operadores(nome)")
-      .eq("inventario_id", inventarioId)
-      .eq("codigo_posicao", codPos)
-      .order("lido_em", { ascending: false });
-    if (error) return locais;
-    const remotas: LeituraExistente[] = (data ?? []).map((d: any) => ({
-      codigo_produto: d.codigo_produto,
-      quantidade: Number(d.quantidade),
-      numero_contagem: d.numero_contagem,
-      lido_em: d.lido_em,
-      operador_nome: d.operadores?.nome ?? null,
-    }));
+    const remotas: LeituraExistente[] = leiturasCache
+      .filter((l) => l.codigo_posicao === codPos)
+      .map(({ codigo_posicao: _codigo_posicao, ...l }) => l);
     return [...locais, ...remotas].sort((a, b) => b.lido_em.localeCompare(a.lido_em));
-  }, [inventarioId]);
+  }, [inventarioId, leiturasCache]);
 
   async function confirmarPosicao(valor?: string) {
     const cod = normalizeCode(valor ?? posicao);
@@ -127,32 +143,12 @@ function TelaContagem() {
     const codRaw = (valor ?? produtoInput).trim();
     scanBufferRef.current = "";
     if (!isValidCode(codRaw)) { beepError(); toast.error("Produto inválido"); return; }
-    // Tenta traduzir EAN -> SKU
     let sku = normalizeCode(codRaw);
     let desc: string | null = null;
     if (navigator.onLine) {
-      // Busca por EAN (apenas dígitos)
-      const eanDigits = codRaw.replace(/\D/g, "");
-      if (eanDigits.length >= 6) {
-        const { data } = await supabase
-          .from("produto_eans")
-          .select("sku, produtos(descricao)")
-          .eq("ean", eanDigits)
-          .maybeSingle();
-        if (data) {
-          sku = data.sku;
-          desc = (data as any).produtos?.descricao ?? null;
-        }
-      }
-      if (!desc) {
-        // Tenta como SKU direto
-        const { data } = await supabase
-          .from("produtos")
-          .select("descricao")
-          .eq("sku", sku)
-          .maybeSingle();
-        if (data) desc = data.descricao;
-      }
+      const produto = await resolverProdutoPorCodigo(codRaw);
+      sku = produto.sku;
+      desc = produto.descricao;
     }
     if (!desc) {
       beepWarn();
@@ -193,6 +189,7 @@ function TelaContagem() {
           quantidade: qtd,
           numero_contagem: numeroContagem,
           operador_id: op.id,
+          lido_em: lidoEm,
         });
       if (error) {
         enqueueLeitura({
@@ -209,6 +206,16 @@ function TelaContagem() {
       }
     }
     setSalvando(false);
+    if (!offline) {
+      setLeiturasCache((atuais) => [{
+        codigo_posicao: posicao,
+        codigo_produto: produtoSku,
+        quantidade: qtd,
+        numero_contagem: numeroContagem,
+        operador_nome: op.nome,
+        lido_em: lidoEm,
+      }, ...atuais]);
+    }
     beepSuccess();
     setUltima({ posicao, sku: produtoSku, desc: produtoDesc, qtd, contagem: numeroContagem });
     if (offline) toast.warning("Salvo offline — será sincronizado");
@@ -234,9 +241,6 @@ function TelaContagem() {
       if (tipo === "posicao") void confirmarPosicao(valor);
       else void confirmarProduto(valor);
       return;
-    }
-    if (e.key.length === 1) {
-      scanBufferRef.current += e.key;
     }
   }
 
@@ -322,8 +326,8 @@ function TelaContagem() {
               ref={refPos}
               type="text"
               autoFocus
-              value={posicao}
-              onChange={(e) => { scanBufferRef.current = e.target.value; setPosicao(e.target.value); }}
+              defaultValue={posicao}
+              onInput={(e) => { scanBufferRef.current = e.currentTarget.value; }}
               onKeyDown={(e) => handleScanKey(e, "posicao")}
               placeholder="Bipe o endereço"
               className="h-12 text-xl font-mono tracking-wider"
@@ -350,8 +354,8 @@ function TelaContagem() {
                 ref={refProd}
                 type="text"
                 autoFocus
-                value={produtoInput}
-                onChange={(e) => { scanBufferRef.current = e.target.value; setProdutoInput(e.target.value); }}
+                defaultValue={produtoInput}
+                onInput={(e) => { scanBufferRef.current = e.currentTarget.value; }}
                 onKeyDown={(e) => handleScanKey(e, "produto")}
                 placeholder="Bipe o código"
                 className="h-12 text-xl font-mono tracking-wider"

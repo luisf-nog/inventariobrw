@@ -57,9 +57,12 @@ function TelaContagem() {
   }, [inventarioId, navigate]);
 
   useEffect(() => {
-    if (etapa === "posicao") refPos.current?.focus();
-    else if (etapa === "produto") refProd.current?.focus();
-    else if (etapa === "quantidade") refQtd.current?.focus();
+    scanBufferRef.current = "";
+    window.requestAnimationFrame(() => {
+      if (etapa === "posicao") refPos.current?.focus({ preventScroll: true });
+      else if (etapa === "produto") refProd.current?.focus({ preventScroll: true });
+      else if (etapa === "quantidade") refQtd.current?.focus({ preventScroll: true });
+    });
   }, [etapa]);
 
   const checarPosicao = useCallback(async (codPos: string): Promise<LeituraExistente[] | null> => {
@@ -236,6 +239,32 @@ function TelaContagem() {
       scanBufferRef.current += e.key;
     }
   }
+
+  useEffect(() => {
+    if (modalDup || (etapa !== "posicao" && etapa !== "produto")) return;
+
+    const onScannerKey = (e: globalThis.KeyboardEvent) => {
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
+      const input = etapa === "posicao" ? refPos.current : refProd.current;
+      const valorAtual = input?.value ?? "";
+
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        e.stopPropagation();
+        const valor = valorAtual || scanBufferRef.current;
+        if (etapa === "posicao") void confirmarPosicao(valor);
+        else void confirmarProduto(valor);
+        return;
+      }
+
+      if (e.key.length === 1) {
+        scanBufferRef.current += e.key;
+      }
+    };
+
+    window.addEventListener("keydown", onScannerKey, true);
+    return () => window.removeEventListener("keydown", onScannerKey, true);
+  }, [etapa, modalDup]);
 
   function sair() {
     clearOperador();

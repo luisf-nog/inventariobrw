@@ -166,20 +166,27 @@ function TelaContagem() {
     setEtapa("quantidade");
   }
 
-  async function gravar() {
+  function gravar() {
     const qtd = parseQuantidade(quantidade);
     if (qtd === null) { beepError(); toast.error("Quantidade inválida"); return; }
     if (!op) return;
+    // Abre modal de confirmação — só persiste após o operador confirmar
+    setConfirmacao({ posicao, sku: produtoSku, desc: produtoDesc, qtd, contagem: numeroContagem });
+  }
+
+  async function persistir() {
+    if (!confirmacao || !op) return;
+    const { posicao: pos, sku, desc, qtd, contagem } = confirmacao;
     setSalvando(true);
     const lidoEm = new Date().toISOString();
     let offline = false;
     if (!navigator.onLine) {
       enqueueLeitura({
         inventario_id: inventarioId,
-        codigo_posicao: posicao,
-        codigo_produto: produtoSku,
+        codigo_posicao: pos,
+        codigo_produto: sku,
         quantidade: qtd,
-        numero_contagem: numeroContagem,
+        numero_contagem: contagem,
         operador_id: op.id,
         operador_nome: op.nome,
         lido_em: lidoEm,
@@ -190,20 +197,20 @@ function TelaContagem() {
         .from("leituras")
         .insert({
           inventario_id: inventarioId,
-          codigo_posicao: posicao,
-          codigo_produto: produtoSku,
+          codigo_posicao: pos,
+          codigo_produto: sku,
           quantidade: qtd,
-          numero_contagem: numeroContagem,
+          numero_contagem: contagem,
           operador_id: op.id,
           lido_em: lidoEm,
         });
       if (error) {
         enqueueLeitura({
           inventario_id: inventarioId,
-          codigo_posicao: posicao,
-          codigo_produto: produtoSku,
+          codigo_posicao: pos,
+          codigo_produto: sku,
           quantidade: qtd,
-          numero_contagem: numeroContagem,
+          numero_contagem: contagem,
           operador_id: op.id,
           operador_nome: op.nome,
           lido_em: lidoEm,
@@ -214,23 +221,26 @@ function TelaContagem() {
     setSalvando(false);
     if (!offline) {
       setLeiturasCache((atuais) => [{
-        codigo_posicao: posicao,
-        codigo_produto: produtoSku,
+        codigo_posicao: pos,
+        codigo_produto: sku,
         quantidade: qtd,
-        numero_contagem: numeroContagem,
+        numero_contagem: contagem,
         operador_nome: op.nome,
         lido_em: lidoEm,
       }, ...atuais]);
     }
     beepSuccess();
-    setUltima({ posicao, sku: produtoSku, desc: produtoDesc, qtd, contagem: numeroContagem });
+    setUltima({ posicao: pos, sku, desc, qtd, contagem });
     if (offline) toast.warning("Salvo offline — será sincronizado");
-    // Continua na mesma posição, volta pra etapa de produto
+    // 1 item por posição: volta pro início, aguarda nova posição
+    setConfirmacao(null);
+    setPosicao("");
     setProdutoInput("");
     setProdutoSku("");
     setProdutoDesc(null);
     setQuantidade("");
-    setEtapa("produto");
+    setNumeroContagem(1);
+    setEtapa("posicao");
   }
 
   function trocarPosicao() {

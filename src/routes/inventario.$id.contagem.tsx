@@ -304,7 +304,7 @@ function TelaContagem() {
                 autoFocus
                 value={produtoInput}
                 onChange={(e) => setProdutoInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); confirmarProduto(); } }}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); confirmarProduto(e.currentTarget.value); } }}
                 placeholder="Bipe o código"
                 className="h-12 text-xl font-mono tracking-wider"
                 autoComplete="off"

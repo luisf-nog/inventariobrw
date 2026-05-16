@@ -30,7 +30,7 @@ export function PosicaoJaContadaModal({ open, posicao, contagemAtual, leituras, 
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg bg-background border-2 border-warning shadow-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-warning">
             <AlertTriangle className="h-5 w-5" />

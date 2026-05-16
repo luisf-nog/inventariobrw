@@ -226,50 +226,49 @@ function TelaContagem() {
   }
 
   return (
-    <div className="min-h-screen pb-4">
-      <header className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border px-4 py-3 flex items-center justify-between gap-2">
+    <div className="min-h-screen pb-2 bg-background">
+      <header className="sticky top-0 z-10 bg-background border-b border-border px-2 py-1.5 flex items-center justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-xs text-muted-foreground truncate">{inv?.nome ?? "..."}</p>
-          <p className="text-sm font-semibold truncate">{op?.nome}</p>
+          <p className="text-[10px] text-muted-foreground truncate leading-tight">{inv?.nome ?? "..."}</p>
+          <p className="text-xs font-semibold truncate leading-tight">{op?.nome}</p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1 shrink-0">
           <Badge
             variant={online ? "secondary" : "destructive"}
-            className="text-xs gap-1"
+            className="text-[10px] gap-1 px-1.5 py-0"
             title={online ? "Online" : "Offline"}
           >
             {online ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
-            {pending > 0 ? `${pending} pend.` : online ? "online" : "offline"}
+            {pending > 0 ? `${pending}` : online ? "on" : "off"}
           </Badge>
-          <Button variant="ghost" size="icon" onClick={sair} aria-label="Sair"><LogOut className="h-4 w-4" /></Button>
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={sair} aria-label="Sair"><LogOut className="h-4 w-4" /></Button>
         </div>
       </header>
 
-      <main className="px-4 py-4 max-w-2xl mx-auto space-y-3">
+      <main className="px-2 py-2 max-w-2xl mx-auto space-y-2">
         {/* Toast persistente de confirmação da última leitura */}
         {ultima && (
-          <div className="rounded-xl border-2 border-success bg-success/10 p-3 flex items-start gap-3">
-            <CheckCircle2 className="h-6 w-6 text-success shrink-0 mt-0.5" />
+          <div className="rounded-lg border border-success bg-success/10 px-2 py-1.5 flex items-start gap-2">
+            <CheckCircle2 className="h-4 w-4 text-success shrink-0 mt-0.5" />
             <div className="min-w-0 flex-1">
-              <p className="text-xs text-success font-semibold uppercase tracking-wide">Última leitura confirmada</p>
-              <p className="font-mono text-sm">
+              <p className="font-mono text-xs leading-tight">
                 <span className="text-muted-foreground">{ultima.posicao}</span>
-                <span className="mx-1.5 text-muted-foreground/50">›</span>
+                <span className="mx-1 text-muted-foreground/50">›</span>
                 <span className="font-bold">{ultima.sku}</span>
-                <span className="ml-2 font-bold text-success">{ultima.qtd}</span>
-                {ultima.contagem > 1 && <span className="ml-1 text-xs text-muted-foreground">(c{ultima.contagem})</span>}
+                <span className="ml-1.5 font-bold text-success">{ultima.qtd}</span>
+                {ultima.contagem > 1 && <span className="ml-1 text-[10px] text-muted-foreground">(c{ultima.contagem})</span>}
               </p>
-              {ultima.desc && <p className="text-xs text-muted-foreground truncate mt-0.5">{ultima.desc}</p>}
+              {ultima.desc && <p className="text-[10px] text-muted-foreground truncate leading-tight">{ultima.desc}</p>}
             </div>
           </div>
         )}
 
         {/* POSIÇÃO */}
-        <div className={`rounded-xl border p-4 ${etapa === "posicao" ? "bg-card border-primary" : "bg-card/50 border-border"}`}>
-          <label className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
-            <MapPin className="h-4 w-4" /> Endereço
+        <div className={`rounded-lg border p-2 ${etapa === "posicao" ? "bg-card border-primary" : "bg-card/50 border-border"}`}>
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+            <MapPin className="h-3 w-3" /> Endereço
             {numeroContagem > 1 && etapa !== "posicao" && (
-              <Badge className="bg-warning text-warning-foreground">{numeroContagem}ª contagem</Badge>
+              <Badge className="bg-warning text-warning-foreground text-[10px] px-1.5 py-0">{numeroContagem}ª</Badge>
             )}
           </label>
           {etapa === "posicao" ? (
@@ -280,23 +279,24 @@ function TelaContagem() {
               onChange={(e) => setPosicao(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); confirmarPosicao(); } }}
               placeholder="Bipe o endereço"
-              className="h-16 text-2xl font-mono tracking-wider"
+              className="h-12 text-xl font-mono tracking-wider"
               autoComplete="off"
               autoCapitalize="characters"
+              inputMode="none"
             />
           ) : (
-            <button onClick={trocarPosicao} className="w-full text-left text-2xl font-mono font-bold py-2 hover:text-primary">
+            <button onClick={trocarPosicao} className="w-full text-left text-lg font-mono font-bold leading-tight hover:text-primary">
               {posicao}
-              <span className="ml-2 text-xs text-muted-foreground font-sans">(tocar para trocar)</span>
+              <span className="ml-2 text-[10px] text-muted-foreground font-sans">(trocar)</span>
             </button>
           )}
         </div>
 
         {/* PRODUTO */}
         {etapa !== "posicao" && (
-          <div className={`rounded-xl border p-4 ${etapa === "produto" ? "bg-card border-primary" : "bg-card/50 border-border"}`}>
-            <label className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
-              <Barcode className="h-4 w-4" /> Produto
+          <div className={`rounded-lg border p-2 ${etapa === "produto" ? "bg-card border-primary" : "bg-card/50 border-border"}`}>
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+              <Barcode className="h-3 w-3" /> Produto
             </label>
             {etapa === "produto" ? (
               <Input
@@ -305,15 +305,16 @@ function TelaContagem() {
                 value={produtoInput}
                 onChange={(e) => setProdutoInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); confirmarProduto(); } }}
-                placeholder="Bipe o código de barras"
-                className="h-16 text-2xl font-mono tracking-wider"
+                placeholder="Bipe o código"
+                className="h-12 text-xl font-mono tracking-wider"
                 autoComplete="off"
                 autoCapitalize="characters"
+                inputMode="none"
               />
             ) : (
-              <div className="py-1">
-                <p className="text-2xl font-mono font-bold">{produtoSku}</p>
-                {produtoDesc && <p className="text-sm text-muted-foreground mt-1">{produtoDesc}</p>}
+              <div>
+                <p className="text-lg font-mono font-bold leading-tight">{produtoSku}</p>
+                {produtoDesc && <p className="text-[11px] text-muted-foreground leading-tight truncate">{produtoDesc}</p>}
               </div>
             )}
           </div>
@@ -321,9 +322,9 @@ function TelaContagem() {
 
         {/* QUANTIDADE */}
         {etapa === "quantidade" && (
-          <div className="rounded-xl border border-primary bg-card p-4 space-y-3">
-            <label className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Hash className="h-4 w-4" /> Quantidade
+          <div className="rounded-lg border border-primary bg-card p-2 space-y-2">
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Hash className="h-3 w-3" /> Quantidade
             </label>
             <Input
               ref={refQtd}
@@ -333,23 +334,22 @@ function TelaContagem() {
               onChange={(e) => setQuantidade(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); gravar(); } }}
               placeholder="0"
-              className="h-20 text-4xl text-center font-bold"
+              className="h-14 text-3xl text-center font-bold"
               autoComplete="off"
             />
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-4 gap-1.5">
               {[1, 5, 10].map((n) => (
-                <Button key={n} variant="secondary" size="lg" className="h-12 text-base"
+                <Button key={n} variant="secondary" size="sm" className="h-9 text-sm"
                   onClick={() => setQuantidade(String((parseQuantidade(quantidade) ?? 0) + n))}>
                   +{n}
                 </Button>
               ))}
-              <Button variant="outline" size="lg" className="h-12" onClick={() => setQuantidade("")}>Limpar</Button>
+              <Button variant="outline" size="sm" className="h-9" onClick={() => setQuantidade("")}>Limpar</Button>
             </div>
             <Button
               onClick={gravar}
               disabled={salvando}
-              size="lg"
-              className="w-full h-16 text-xl font-bold bg-primary hover:bg-primary/90"
+              className="w-full h-12 text-base font-bold bg-primary hover:bg-primary/90"
             >
               {salvando ? "Salvando..." : "✓ CONFIRMAR"}
             </Button>

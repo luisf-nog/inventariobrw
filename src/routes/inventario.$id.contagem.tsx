@@ -336,19 +336,15 @@ function TelaContagem() {
             )}
           </label>
           {etapa === "posicao" ? (
-            <Input
-              ref={refPos}
-              type="text"
-              autoFocus
-              defaultValue={posicao}
-              onInput={(e) => { scanBufferRef.current = e.currentTarget.value; }}
-              onKeyDown={(e) => handleScanKey(e, "posicao")}
-              placeholder="Bipe o endereço"
-              className="h-12 text-xl font-mono tracking-wider"
-              autoComplete="off"
-              autoCapitalize="characters"
-              inputMode="text"
-            />
+            <div
+              ref={(el) => { /* visual only */ }}
+              className="h-12 px-3 rounded-md border border-input bg-background flex items-center text-xl font-mono tracking-wider"
+              aria-label="Aguardando leitura da posição"
+            >
+              <input ref={refPos} type="hidden" defaultValue="" />
+              {scanDisplay || <span className="text-muted-foreground/60 text-base">Bipe o endereço…</span>}
+              {scanDisplay && <span className="ml-1 animate-pulse">|</span>}
+            </div>
           ) : (
             <button onClick={trocarPosicao} className="w-full text-left text-lg font-mono font-bold leading-tight hover:text-primary">
               {posicao}

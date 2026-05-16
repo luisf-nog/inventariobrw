@@ -79,22 +79,35 @@ function TelaContagem() {
     else if (etapa === "quantidade") refQtd.current?.focus();
   }, [etapa]);
 
-  const checarPosicao = useCallback(async (codPos: string) => {
+  const checarPosicao = useCallback(async (codPos: string): Promise<LeituraExistente[] | null> => {
+    const locais: LeituraExistente[] = getQueueForInventario(inventarioId)
+      .filter((q) => q.codigo_posicao === codPos)
+      .map((q) => ({
+        codigo_produto: q.codigo_produto,
+        quantidade: q.quantidade,
+        numero_contagem: q.numero_contagem,
+        lido_em: q.lido_em,
+        operador_nome: q.operador_nome ?? null,
+      }));
+    if (!navigator.onLine) return locais;
     const { data, error } = await supabase
       .from("leituras")
       .select("codigo_produto, quantidade, numero_contagem, lido_em, operador_id, operadores(nome)")
       .eq("inventario_id", inventarioId)
       .eq("codigo_posicao", codPos)
       .order("lido_em", { ascending: false });
-    if (error) { toast.error("Erro: " + error.message); return null; }
-    if (!data || data.length === 0) return [] as LeituraExistente[];
-    return data.map((d: any) => ({
+    if (error) {
+      // se rede falhar, usa só locais
+      return locais;
+    }
+    const remotas: LeituraExistente[] = (data ?? []).map((d: any) => ({
       codigo_produto: d.codigo_produto,
       quantidade: Number(d.quantidade),
       numero_contagem: d.numero_contagem,
       lido_em: d.lido_em,
       operador_nome: d.operadores?.nome ?? null,
-    })) as LeituraExistente[];
+    }));
+    return [...locais, ...remotas].sort((a, b) => b.lido_em.localeCompare(a.lido_em));
   }, [inventarioId]);
 
   async function confirmarPosicao() {

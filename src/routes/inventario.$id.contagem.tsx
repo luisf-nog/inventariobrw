@@ -293,8 +293,8 @@ function TelaContagem() {
               ref={refPos}
               autoFocus
               value={posicao}
-              onChange={(e) => setPosicao(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); confirmarPosicao(e.currentTarget.value); } }}
+              onChange={(e) => { scanBufferRef.current = e.target.value; setPosicao(e.target.value); }}
+              onKeyDown={(e) => handleScanKey(e, "posicao")}
               placeholder="Bipe o endereço"
               className="h-12 text-xl font-mono tracking-wider"
               autoComplete="off"
@@ -320,8 +320,8 @@ function TelaContagem() {
                 ref={refProd}
                 autoFocus
                 value={produtoInput}
-                onChange={(e) => setProdutoInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); confirmarProduto(e.currentTarget.value); } }}
+                onChange={(e) => { scanBufferRef.current = e.target.value; setProdutoInput(e.target.value); }}
+                onKeyDown={(e) => handleScanKey(e, "produto")}
                 placeholder="Bipe o código"
                 className="h-12 text-xl font-mono tracking-wider"
                 autoComplete="off"

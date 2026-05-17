@@ -32,6 +32,14 @@ export const Route = createFileRoute("/inventario/$id/contagem")({
 
 type Etapa = "posicao" | "produto" | "quantidade";
 type LeituraCache = LeituraExistente & { codigo_posicao: string };
+type LeituraRemota = {
+  codigo_posicao: string;
+  codigo_produto: string;
+  quantidade: number | string;
+  numero_contagem: number;
+  lido_em: string;
+  operadores?: { nome: string | null } | null;
+};
 
 function TelaContagem() {
   const { id: inventarioId } = Route.useParams();
@@ -92,7 +100,7 @@ function TelaContagem() {
       .order("lido_em", { ascending: false });
     if (error) return;
     setLeiturasCache(
-      (data ?? []).map((d: any) => ({
+      ((data ?? []) as LeituraRemota[]).map((d) => ({
         codigo_posicao: d.codigo_posicao,
         codigo_produto: d.codigo_produto,
         quantidade: Number(d.quantidade),

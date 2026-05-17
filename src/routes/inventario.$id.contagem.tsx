@@ -91,13 +91,30 @@ function TelaContagem() {
     scanBufferRef.current = "";
     setScanDisplay("");
     lastKeyTimeRef.current = 0;
-    if (etapa === "quantidade") {
+    if (etapa === "posicao") {
+      window.requestAnimationFrame(() => refPos.current?.focus({ preventScroll: true }));
+    } else if (etapa === "produto") {
+      window.requestAnimationFrame(() => refProd.current?.focus({ preventScroll: true }));
+    } else if (etapa === "quantidade") {
       window.requestAnimationFrame(() => refQtd.current?.focus({ preventScroll: true }));
-    } else if (document.activeElement instanceof HTMLElement) {
-      // tira o foco para não abrir teclado virtual no celular
-      document.activeElement.blur();
     }
   }, [etapa]);
+
+  function receberDigitacaoScanner(valor: string) {
+    scanBufferRef.current = valor;
+    setScanDisplay(valor);
+    lastKeyTimeRef.current = performance.now();
+  }
+
+  function finalizarDigitacaoScanner(valor?: string) {
+    const lido = (valor ?? scanBufferRef.current).trim();
+    if (lido.length < 2) return;
+    scanBufferRef.current = "";
+    setScanDisplay("");
+    lastKeyTimeRef.current = 0;
+    if (etapaRef.current === "posicao") void confirmarPosicaoRef.current(lido);
+    else if (etapaRef.current === "produto") void confirmarProdutoRef.current(lido);
+  }
 
   const checarPosicao = useCallback(async (codPos: string): Promise<LeituraExistente[] | null> => {
     const locais: LeituraExistente[] = getQueueForInventario(inventarioId)

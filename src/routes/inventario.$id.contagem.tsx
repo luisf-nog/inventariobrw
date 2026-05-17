@@ -377,11 +377,22 @@ function TelaContagem() {
           </label>
           {etapa === "posicao" ? (
             <div
-              ref={(el) => { /* visual only */ }}
               className="h-12 px-3 rounded-md border border-input bg-background flex items-center text-xl font-mono tracking-wider"
               aria-label="Aguardando leitura da posição"
+              onClick={() => refPos.current?.focus({ preventScroll: true })}
             >
-              <input ref={refPos} type="hidden" defaultValue="" />
+              <input
+                ref={refPos}
+                type="text"
+                inputMode="none"
+                autoComplete="off"
+                value={scanDisplay}
+                onChange={(e) => receberDigitacaoScanner(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); finalizarDigitacaoScanner(e.currentTarget.value); } }}
+                onBlur={() => { if (etapaRef.current === "posicao" && !modalAbertoRef.current) window.setTimeout(() => refPos.current?.focus({ preventScroll: true }), 0); }}
+                className="sr-only"
+                aria-hidden="true"
+              />
               {scanDisplay || <span className="text-muted-foreground/60 text-base">Bipe o endereço…</span>}
               {scanDisplay && <span className="ml-1 animate-pulse">|</span>}
             </div>
@@ -403,8 +414,20 @@ function TelaContagem() {
               <div
                 className="h-12 px-3 rounded-md border border-input bg-background flex items-center text-xl font-mono tracking-wider"
                 aria-label="Aguardando leitura do produto"
+                onClick={() => refProd.current?.focus({ preventScroll: true })}
               >
-                <input ref={refProd} type="hidden" defaultValue="" />
+                <input
+                  ref={refProd}
+                  type="text"
+                  inputMode="none"
+                  autoComplete="off"
+                  value={scanDisplay}
+                  onChange={(e) => receberDigitacaoScanner(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); finalizarDigitacaoScanner(e.currentTarget.value); } }}
+                  onBlur={() => { if (etapaRef.current === "produto" && !modalAbertoRef.current) window.setTimeout(() => refProd.current?.focus({ preventScroll: true }), 0); }}
+                  className="sr-only"
+                  aria-hidden="true"
+                />
                 {scanDisplay || <span className="text-muted-foreground/60 text-base">Bipe o código…</span>}
                 {scanDisplay && <span className="ml-1 animate-pulse">|</span>}
               </div>

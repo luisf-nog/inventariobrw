@@ -8,10 +8,20 @@ import { formatPosicaoDisplay } from "@/lib/posicao";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { LogOut, MapPin, Barcode, Hash, Wifi, WifiOff, CheckCircle2 } from "lucide-react";
-import { PosicaoJaContadaModal, type AcaoPosicao, type LeituraExistente } from "@/components/PosicaoJaContadaModal";
+import {
+  PosicaoJaContadaModal,
+  type AcaoPosicao,
+  type LeituraExistente,
+} from "@/components/PosicaoJaContadaModal";
 import { enqueueLeitura, getQueueForInventario } from "@/lib/offline-queue";
 import { useOfflineSync } from "@/hooks/use-offline-sync";
 import { resolverProdutoPorCodigo } from "@/lib/produtos";
@@ -22,6 +32,14 @@ export const Route = createFileRoute("/inventario/$id/contagem")({
 
 type Etapa = "posicao" | "produto" | "quantidade";
 type LeituraCache = LeituraExistente & { codigo_posicao: string };
+type LeituraRemota = {
+  codigo_posicao: string;
+  codigo_produto: string;
+  quantidade: number | string;
+  numero_contagem: number;
+  lido_em: string;
+  operadores?: { nome: string | null } | null;
+};
 
 function TelaContagem() {
   const { id: inventarioId } = Route.useParams();
@@ -39,10 +57,25 @@ function TelaContagem() {
   const [numeroContagem, setNumeroContagem] = useState(1);
 
   const [salvando, setSalvando] = useState(false);
-  const [ultima, setUltima] = useState<{ posicao: string; sku: string; desc: string | null; qtd: number; contagem: number } | null>(null);
+  const [ultima, setUltima] = useState<{
+    posicao: string;
+    sku: string;
+    desc: string | null;
+    qtd: number;
+    contagem: number;
+  } | null>(null);
 
-  const [modalDup, setModalDup] = useState<{ leituras: LeituraExistente[]; contagemAtual: number } | null>(null);
-  const [confirmacao, setConfirmacao] = useState<{ posicao: string; sku: string; desc: string | null; qtd: number; contagem: number } | null>(null);
+  const [modalDup, setModalDup] = useState<{
+    leituras: LeituraExistente[];
+    contagemAtual: number;
+  } | null>(null);
+  const [confirmacao, setConfirmacao] = useState<{
+    posicao: string;
+    sku: string;
+    desc: string | null;
+    qtd: number;
+    contagem: number;
+  } | null>(null);
   const [leiturasCache, setLeiturasCache] = useState<LeituraCache[]>([]);
 
   const refPos = useRef<HTMLInputElement>(null);
@@ -60,28 +93,47 @@ function TelaContagem() {
     if (!navigator.onLine) return;
     const { data, error } = await supabase
       .from("leituras")
-      .select("codigo_posicao, codigo_produto, quantidade, numero_contagem, lido_em, operador_id, operadores(nome)")
+      .select(
+        "codigo_posicao, codigo_produto, quantidade, numero_contagem, lido_em, operador_id, operadores(nome)",
+      )
       .eq("inventario_id", inventarioId)
       .order("lido_em", { ascending: false });
     if (error) return;
-    setLeiturasCache((data ?? []).map((d: any) => ({
-      codigo_posicao: d.codigo_posicao,
-      codigo_produto: d.codigo_produto,
-      quantidade: Number(d.quantidade),
-      numero_contagem: d.numero_contagem,
-      lido_em: d.lido_em,
-      operador_nome: d.operadores?.nome ?? null,
-    })));
+    setLeiturasCache(
+      ((data ?? []) as LeituraRemota[]).map((d) => ({
+        codigo_posicao: d.codigo_posicao,
+        codigo_produto: d.codigo_produto,
+        quantidade: Number(d.quantidade),
+        numero_contagem: d.numero_contagem,
+        lido_em: d.lido_em,
+        operador_nome: d.operadores?.nome ?? null,
+      })),
+    );
   }, [inventarioId]);
 
   useEffect(() => {
     const o = getOperador();
-    if (!o) { navigate({ to: "/" }); return; }
+    if (!o) {
+      navigate({ to: "/" });
+      return;
+    }
     setOp(o);
-    supabase.from("inventarios").select("nome, status").eq("id", inventarioId).single()
+    supabase
+      .from("inventarios")
+      .select("nome, status")
+      .eq("id", inventarioId)
+      .single()
       .then(({ data, error }) => {
-        if (error || !data) { toast.error("Inventário não encontrado"); navigate({ to: "/inventarios" }); return; }
-        if (data.status !== "aberto") { toast.error("Inventário encerrado"); navigate({ to: "/inventarios" }); return; }
+        if (error || !data) {
+          toast.error("Inventário não encontrado");
+          navigate({ to: "/inventarios" });
+          return;
+        }
+        if (data.status !== "aberto") {
+          toast.error("Inventário encerrado");
+          navigate({ to: "/inventarios" });
+          return;
+        }
         setInv(data);
         void carregarLeiturasExistentes();
       });
@@ -91,34 +143,58 @@ function TelaContagem() {
     scanBufferRef.current = "";
     setScanDisplay("");
     lastKeyTimeRef.current = 0;
-    if (etapa === "quantidade") {
+    if (etapa === "posicao") {
+      window.requestAnimationFrame(() => refPos.current?.focus({ preventScroll: true }));
+    } else if (etapa === "produto") {
+      window.requestAnimationFrame(() => refProd.current?.focus({ preventScroll: true }));
+    } else if (etapa === "quantidade") {
       window.requestAnimationFrame(() => refQtd.current?.focus({ preventScroll: true }));
-    } else if (document.activeElement instanceof HTMLElement) {
-      // tira o foco para não abrir teclado virtual no celular
-      document.activeElement.blur();
     }
   }, [etapa]);
 
-  const checarPosicao = useCallback(async (codPos: string): Promise<LeituraExistente[] | null> => {
-    const locais: LeituraExistente[] = getQueueForInventario(inventarioId)
-      .filter((q) => q.codigo_posicao === codPos)
-      .map((q) => ({
-        codigo_produto: q.codigo_produto,
-        quantidade: q.quantidade,
-        numero_contagem: q.numero_contagem,
-        lido_em: q.lido_em,
-        operador_nome: q.operador_nome ?? null,
-      }));
-    const remotas: LeituraExistente[] = leiturasCache
-      .filter((l) => l.codigo_posicao === codPos)
-      .map(({ codigo_posicao: _codigo_posicao, ...l }) => l);
-    return [...locais, ...remotas].sort((a, b) => b.lido_em.localeCompare(a.lido_em));
-  }, [inventarioId, leiturasCache]);
+  function receberDigitacaoScanner(valor: string) {
+    scanBufferRef.current = valor;
+    setScanDisplay(valor);
+    lastKeyTimeRef.current = performance.now();
+  }
+
+  function finalizarDigitacaoScanner(valor?: string) {
+    const lido = (valor ?? scanBufferRef.current).trim();
+    if (lido.length < 2) return;
+    scanBufferRef.current = "";
+    setScanDisplay("");
+    lastKeyTimeRef.current = 0;
+    if (etapaRef.current === "posicao") void confirmarPosicaoRef.current(lido);
+    else if (etapaRef.current === "produto") void confirmarProdutoRef.current(lido);
+  }
+
+  const checarPosicao = useCallback(
+    async (codPos: string): Promise<LeituraExistente[] | null> => {
+      const locais: LeituraExistente[] = getQueueForInventario(inventarioId)
+        .filter((q) => q.codigo_posicao === codPos)
+        .map((q) => ({
+          codigo_produto: q.codigo_produto,
+          quantidade: q.quantidade,
+          numero_contagem: q.numero_contagem,
+          lido_em: q.lido_em,
+          operador_nome: q.operador_nome ?? null,
+        }));
+      const remotas: LeituraExistente[] = leiturasCache
+        .filter((l) => l.codigo_posicao === codPos)
+        .map(({ codigo_posicao: _codigo_posicao, ...l }) => l);
+      return [...locais, ...remotas].sort((a, b) => b.lido_em.localeCompare(a.lido_em));
+    },
+    [inventarioId, leiturasCache],
+  );
 
   async function confirmarPosicao(valor?: string) {
     const cod = normalizeCode(valor ?? posicao);
     scanBufferRef.current = "";
-    if (!cod) { beepError(); toast.error("Bipe a posição"); return; }
+    if (!cod) {
+      beepError();
+      toast.error("Bipe a posição");
+      return;
+    }
     setPosicao(cod);
     const existentes = await checarPosicao(cod);
     if (existentes === null) return;
@@ -148,7 +224,11 @@ function TelaContagem() {
   async function confirmarProduto(valor?: string) {
     const codRaw = (valor ?? produtoInput).trim();
     scanBufferRef.current = "";
-    if (!isValidCode(codRaw)) { beepError(); toast.error("Produto inválido"); return; }
+    if (!isValidCode(codRaw)) {
+      beepError();
+      toast.error("Produto inválido");
+      return;
+    }
     let sku = normalizeCode(codRaw);
     let desc: string | null = null;
     if (navigator.onLine) {
@@ -168,7 +248,11 @@ function TelaContagem() {
 
   function gravar() {
     const qtd = parseQuantidade(quantidade);
-    if (qtd === null) { beepError(); toast.error("Quantidade inválida"); return; }
+    if (qtd === null) {
+      beepError();
+      toast.error("Quantidade inválida");
+      return;
+    }
     if (!op) return;
     // Abre modal de confirmação — só persiste após o operador confirmar
     setConfirmacao({ posicao, sku: produtoSku, desc: produtoDesc, qtd, contagem: numeroContagem });
@@ -193,17 +277,15 @@ function TelaContagem() {
       });
       offline = true;
     } else {
-      const { error } = await supabase
-        .from("leituras")
-        .insert({
-          inventario_id: inventarioId,
-          codigo_posicao: pos,
-          codigo_produto: sku,
-          quantidade: qtd,
-          numero_contagem: contagem,
-          operador_id: op.id,
-          lido_em: lidoEm,
-        });
+      const { error } = await supabase.from("leituras").insert({
+        inventario_id: inventarioId,
+        codigo_posicao: pos,
+        codigo_produto: sku,
+        quantidade: qtd,
+        numero_contagem: contagem,
+        operador_id: op.id,
+        lido_em: lidoEm,
+      });
       if (error) {
         enqueueLeitura({
           inventario_id: inventarioId,
@@ -220,14 +302,17 @@ function TelaContagem() {
     }
     setSalvando(false);
     if (!offline) {
-      setLeiturasCache((atuais) => [{
-        codigo_posicao: pos,
-        codigo_produto: sku,
-        quantidade: qtd,
-        numero_contagem: contagem,
-        operador_nome: op.nome,
-        lido_em: lidoEm,
-      }, ...atuais]);
+      setLeiturasCache((atuais) => [
+        {
+          codigo_posicao: pos,
+          codigo_produto: sku,
+          quantidade: qtd,
+          numero_contagem: contagem,
+          operador_nome: op.nome,
+          lido_em: lidoEm,
+        },
+        ...atuais,
+      ]);
     }
     beepSuccess();
     setUltima({ posicao: pos, sku, desc, qtd, contagem });
@@ -245,7 +330,11 @@ function TelaContagem() {
 
   function trocarPosicao() {
     scanBufferRef.current = "";
-    setPosicao(""); setProdutoInput(""); setProdutoSku(""); setProdutoDesc(null); setQuantidade("");
+    setPosicao("");
+    setProdutoInput("");
+    setProdutoSku("");
+    setProdutoDesc(null);
+    setQuantidade("");
     setNumeroContagem(1);
     setEtapa("posicao");
   }
@@ -268,7 +357,11 @@ function TelaContagem() {
       if (etapaAtual !== "posicao" && etapaAtual !== "produto") return;
 
       const ae = document.activeElement as HTMLElement | null;
-      if (ae && (ae.tagName === "TEXTAREA" || (ae.tagName === "INPUT" && ae !== refPos.current && ae !== refProd.current))) {
+      if (
+        ae &&
+        (ae.tagName === "TEXTAREA" ||
+          (ae.tagName === "INPUT" && ae !== refPos.current && ae !== refProd.current))
+      ) {
         return;
       }
 
@@ -316,7 +409,9 @@ function TelaContagem() {
     <div className="min-h-screen pb-2 bg-background">
       <header className="sticky top-0 z-10 bg-background border-b border-border px-2 py-1.5 flex items-center justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-[10px] text-muted-foreground truncate leading-tight">{inv?.nome ?? "..."}</p>
+          <p className="text-[10px] text-muted-foreground truncate leading-tight">
+            {inv?.nome ?? "..."}
+          </p>
           <p className="text-xs font-semibold truncate leading-tight">{op?.nome}</p>
         </div>
         <div className="flex items-center gap-1 shrink-0">
@@ -328,7 +423,9 @@ function TelaContagem() {
             {online ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
             {pending > 0 ? `${pending}` : online ? "on" : "off"}
           </Badge>
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={sair} aria-label="Sair"><LogOut className="h-4 w-4" /></Button>
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={sair} aria-label="Sair">
+            <LogOut className="h-4 w-4" />
+          </Button>
         </div>
       </header>
 
@@ -339,46 +436,90 @@ function TelaContagem() {
             <CheckCircle2 className="h-4 w-4 text-success shrink-0 mt-0.5" />
             <div className="min-w-0 flex-1">
               <p className="font-mono text-xs leading-tight">
-                <span className="text-muted-foreground">{formatPosicaoDisplay(ultima.posicao)}</span>
+                <span className="text-muted-foreground">
+                  {formatPosicaoDisplay(ultima.posicao)}
+                </span>
                 <span className="mx-1 text-muted-foreground/50">›</span>
                 <span className="font-bold">{ultima.sku}</span>
                 <span className="ml-1.5 font-bold text-success">{ultima.qtd}</span>
-                {ultima.contagem > 1 && <span className="ml-1 text-[10px] text-muted-foreground">(c{ultima.contagem})</span>}
+                {ultima.contagem > 1 && (
+                  <span className="ml-1 text-[10px] text-muted-foreground">
+                    (c{ultima.contagem})
+                  </span>
+                )}
               </p>
-              {ultima.desc && <p className="text-[10px] text-muted-foreground truncate leading-tight">{ultima.desc}</p>}
+              {ultima.desc && (
+                <p className="text-[10px] text-muted-foreground truncate leading-tight">
+                  {ultima.desc}
+                </p>
+              )}
             </div>
           </div>
         )}
 
         {/* POSIÇÃO */}
-        <div className={`rounded-lg border p-2 ${etapa === "posicao" ? "bg-card border-primary" : "bg-card/50 border-border"}`}>
+        <div
+          className={`rounded-lg border p-2 ${etapa === "posicao" ? "bg-card border-primary" : "bg-card/50 border-border"}`}
+        >
           <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
             <MapPin className="h-3 w-3" /> Endereço
             {numeroContagem > 1 && etapa !== "posicao" && (
-              <Badge className="bg-warning text-warning-foreground text-[10px] px-1.5 py-0">{numeroContagem}ª</Badge>
+              <Badge className="bg-warning text-warning-foreground text-[10px] px-1.5 py-0">
+                {numeroContagem}ª
+              </Badge>
             )}
           </label>
           {etapa === "posicao" ? (
             <div
-              ref={(el) => { /* visual only */ }}
               className="h-12 px-3 rounded-md border border-input bg-background flex items-center text-xl font-mono tracking-wider"
               aria-label="Aguardando leitura da posição"
+              onClick={() => refPos.current?.focus({ preventScroll: true })}
             >
-              <input ref={refPos} type="hidden" defaultValue="" />
-              {scanDisplay || <span className="text-muted-foreground/60 text-base">Bipe o endereço…</span>}
+              <input
+                ref={refPos}
+                type="text"
+                inputMode="none"
+                autoComplete="off"
+                value={scanDisplay}
+                onChange={(e) => receberDigitacaoScanner(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === "Tab") {
+                    e.preventDefault();
+                    finalizarDigitacaoScanner(e.currentTarget.value);
+                  }
+                }}
+                onBlur={() => {
+                  if (etapaRef.current === "posicao" && !modalAbertoRef.current)
+                    window.setTimeout(() => refPos.current?.focus({ preventScroll: true }), 0);
+                }}
+                className="sr-only"
+                aria-hidden="true"
+              />
+              {scanDisplay || (
+                <span className="text-muted-foreground/60 text-base">Bipe o endereço…</span>
+              )}
               {scanDisplay && <span className="ml-1 animate-pulse">|</span>}
             </div>
           ) : (
-            <button onClick={trocarPosicao} className="w-full text-left leading-tight hover:text-primary">
-              <span className="block text-lg font-mono font-bold">{formatPosicaoDisplay(posicao)}</span>
-              <span className="block text-[10px] text-muted-foreground font-mono">{posicao} <span className="font-sans">(trocar)</span></span>
+            <button
+              onClick={trocarPosicao}
+              className="w-full text-left leading-tight hover:text-primary"
+            >
+              <span className="block text-lg font-mono font-bold">
+                {formatPosicaoDisplay(posicao)}
+              </span>
+              <span className="block text-[10px] text-muted-foreground font-mono">
+                {posicao} <span className="font-sans">(trocar)</span>
+              </span>
             </button>
           )}
         </div>
 
         {/* PRODUTO */}
         {etapa !== "posicao" && (
-          <div className={`rounded-lg border p-2 ${etapa === "produto" ? "bg-card border-primary" : "bg-card/50 border-border"}`}>
+          <div
+            className={`rounded-lg border p-2 ${etapa === "produto" ? "bg-card border-primary" : "bg-card/50 border-border"}`}
+          >
             <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
               <Barcode className="h-3 w-3" /> Produto
             </label>
@@ -386,15 +527,41 @@ function TelaContagem() {
               <div
                 className="h-12 px-3 rounded-md border border-input bg-background flex items-center text-xl font-mono tracking-wider"
                 aria-label="Aguardando leitura do produto"
+                onClick={() => refProd.current?.focus({ preventScroll: true })}
               >
-                <input ref={refProd} type="hidden" defaultValue="" />
-                {scanDisplay || <span className="text-muted-foreground/60 text-base">Bipe o código…</span>}
+                <input
+                  ref={refProd}
+                  type="text"
+                  inputMode="none"
+                  autoComplete="off"
+                  value={scanDisplay}
+                  onChange={(e) => receberDigitacaoScanner(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === "Tab") {
+                      e.preventDefault();
+                      finalizarDigitacaoScanner(e.currentTarget.value);
+                    }
+                  }}
+                  onBlur={() => {
+                    if (etapaRef.current === "produto" && !modalAbertoRef.current)
+                      window.setTimeout(() => refProd.current?.focus({ preventScroll: true }), 0);
+                  }}
+                  className="sr-only"
+                  aria-hidden="true"
+                />
+                {scanDisplay || (
+                  <span className="text-muted-foreground/60 text-base">Bipe o código…</span>
+                )}
                 {scanDisplay && <span className="ml-1 animate-pulse">|</span>}
               </div>
             ) : (
               <div>
                 <p className="text-lg font-mono font-bold leading-tight">{produtoSku}</p>
-                {produtoDesc && <p className="text-[11px] text-muted-foreground leading-tight truncate">{produtoDesc}</p>}
+                {produtoDesc && (
+                  <p className="text-[11px] text-muted-foreground leading-tight truncate">
+                    {produtoDesc}
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -413,19 +580,31 @@ function TelaContagem() {
               inputMode="decimal"
               value={quantidade}
               onChange={(e) => setQuantidade(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); gravar(); } }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  gravar();
+                }
+              }}
               placeholder="0"
               className="h-14 text-3xl text-center font-bold"
               autoComplete="off"
             />
             <div className="grid grid-cols-4 gap-1.5">
               {[1, 5, 10].map((n) => (
-                <Button key={n} variant="secondary" size="sm" className="h-9 text-sm"
-                  onClick={() => setQuantidade(String((parseQuantidade(quantidade) ?? 0) + n))}>
+                <Button
+                  key={n}
+                  variant="secondary"
+                  size="sm"
+                  className="h-9 text-sm"
+                  onClick={() => setQuantidade(String((parseQuantidade(quantidade) ?? 0) + n))}
+                >
                   +{n}
                 </Button>
               ))}
-              <Button variant="outline" size="sm" className="h-9" onClick={() => setQuantidade("")}>Limpar</Button>
+              <Button variant="outline" size="sm" className="h-9" onClick={() => setQuantidade("")}>
+                Limpar
+              </Button>
             </div>
             <Button
               onClick={gravar}
@@ -444,41 +623,69 @@ function TelaContagem() {
           posicao={posicao}
           contagemAtual={modalDup.contagemAtual}
           leituras={modalDup.leituras}
-          onClose={() => { setModalDup(null); setPosicao(""); setEtapa("posicao"); }}
+          onClose={() => {
+            setModalDup(null);
+            setPosicao("");
+            setEtapa("posicao");
+          }}
           onEscolher={escolherAcaoDup}
         />
       )}
 
       {confirmacao && (
-        <Dialog open onOpenChange={(o) => { if (!o && !salvando) setConfirmacao(null); }}>
+        <Dialog
+          open
+          onOpenChange={(o) => {
+            if (!o && !salvando) setConfirmacao(null);
+          }}
+        >
           <DialogContent className="max-w-sm" aria-describedby={undefined}>
             <DialogHeader>
               <DialogTitle>Confirmar leitura</DialogTitle>
             </DialogHeader>
             <div className="space-y-3">
               <div>
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Endereço</p>
-                <p className="text-lg font-mono font-bold">{formatPosicaoDisplay(confirmacao.posicao)}</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide">
+                  Endereço
+                </p>
+                <p className="text-lg font-mono font-bold">
+                  {formatPosicaoDisplay(confirmacao.posicao)}
+                </p>
                 <p className="text-[10px] text-muted-foreground font-mono">{confirmacao.posicao}</p>
               </div>
               <div>
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Produto</p>
                 <p className="text-lg font-mono font-bold">{confirmacao.sku}</p>
-                {confirmacao.desc && <p className="text-xs text-muted-foreground">{confirmacao.desc}</p>}
+                {confirmacao.desc && (
+                  <p className="text-xs text-muted-foreground">{confirmacao.desc}</p>
+                )}
               </div>
               <div>
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Quantidade</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide">
+                  Quantidade
+                </p>
                 <p className="text-3xl font-bold text-success">{confirmacao.qtd}</p>
               </div>
               {confirmacao.contagem > 1 && (
-                <Badge className="bg-warning text-warning-foreground">{confirmacao.contagem}ª contagem</Badge>
+                <Badge className="bg-warning text-warning-foreground">
+                  {confirmacao.contagem}ª contagem
+                </Badge>
               )}
             </div>
             <DialogFooter className="gap-2 sm:gap-2">
-              <Button variant="outline" onClick={() => setConfirmacao(null)} disabled={salvando} className="flex-1">
+              <Button
+                variant="outline"
+                onClick={() => setConfirmacao(null)}
+                disabled={salvando}
+                className="flex-1"
+              >
                 Corrigir
               </Button>
-              <Button onClick={persistir} disabled={salvando} className="flex-1 bg-primary hover:bg-primary/90 font-bold">
+              <Button
+                onClick={persistir}
+                disabled={salvando}
+                className="flex-1 bg-primary hover:bg-primary/90 font-bold"
+              >
                 {salvando ? "Salvando..." : "✓ Confirmar"}
               </Button>
             </DialogFooter>

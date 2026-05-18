@@ -4,7 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Download, Lock } from "lucide-react";
+import { ArrowLeft, Download, FileSpreadsheet, Lock } from "lucide-react";
+import * as XLSX from "xlsx";
 import { toast } from "sonner";
 import { buscarDescricoesPorSku, traduzirEansParaSkus } from "@/lib/produtos";
 import {
@@ -123,6 +124,24 @@ function TelaResumo() {
     URL.revokeObjectURL(url);
   }
 
+  function exportarXLSX() {
+    const nomeArquivo = `inventario-${inv?.nome ?? id}-${new Date().toISOString().slice(0,10)}`;
+    const dados = filtrados.map((l) => ({
+      Posi\u00E7\u00E3o: l.codigo_posicao,
+      Produto: l.sku,
+      Descri\u00E7\u00E3o: l.descricao,
+      Contagem: l.numero_contagem,
+      Quantidade: l.quantidade,
+      Operador: l.operador_nome ?? "",
+      "Lido em": new Date(l.lido_em).toLocaleString("pt-BR"),
+      Diverg\u00EAncia: divergencias.has(`${l.codigo_posicao}|${l.sku}`) ? "Sim" : "",
+    }));
+    const ws = XLSX.utils.json_to_sheet(dados);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Leituras");
+    XLSX.writeFile(wb, `${nomeArquivo}.xlsx`);
+  }
+
   async function encerrar() {
     if (confirmTexto.trim().toUpperCase() !== "ENCERRAR") { toast.error("Digite ENCERRAR para confirmar"); return; }
     const { error } = await supabase.from("inventarios").update({ status: "encerrado", encerrado_em: new Date().toISOString() }).eq("id", id);
@@ -140,6 +159,7 @@ function TelaResumo() {
           <h1 className="text-xl font-bold truncate">{inv?.nome}</h1>
           {inv?.status === "encerrado" && <Badge variant="secondary">Encerrado</Badge>}
         </div>
+        <Button onClick={exportarXLSX} variant="outline" size="sm"><FileSpreadsheet className="h-4 w-4 mr-1" /> XLSX</Button>
         <Button onClick={exportarCSV} variant="outline" size="sm"><Download className="h-4 w-4 mr-1" /> CSV</Button>
       </header>
 

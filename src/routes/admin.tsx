@@ -17,7 +17,6 @@ function AdminLayout() {
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [modo, setModo] = useState<"login" | "signup">("login");
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -35,22 +34,9 @@ function AdminLayout() {
   async function entrar(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
-    if (modo === "login") {
-      const { error } = await supabase.auth.signInWithPassword({ email, password: senha });
-      if (error) toast.error(error.message);
-      else toast.success("Login efetuado");
-    } else {
-      const { data, error } = await supabase.auth.signUp({
-        email, password: senha,
-        options: { emailRedirectTo: `${window.location.origin}/admin` },
-      });
-      if (error) toast.error(error.message);
-      else if (data.user) {
-        // Tenta criar role admin (vai falhar se já houver políticas restritivas, mas no primeiro usuário funciona via service via SQL manual)
-        try { await supabase.from("user_roles").insert({ user_id: data.user.id, role: "admin" }); } catch {}
-        toast.success("Conta criada — você pode entrar");
-      }
-    }
+    const { error } = await supabase.auth.signInWithPassword({ email, password: senha });
+    if (error) toast.error(error.message);
+    else toast.success("Login efetuado");
     setSubmitting(false);
   }
 
@@ -70,7 +56,7 @@ function AdminLayout() {
               <ArrowLeft className="h-3 w-3" /> Voltar
             </Link>
             <h1 className="text-2xl font-bold mt-2">Supervisor</h1>
-            <p className="text-sm text-muted-foreground">{modo === "login" ? "Acesso administrativo" : "Criar conta de supervisor"}</p>
+            <p className="text-sm text-muted-foreground">Acesso administrativo</p>
           </div>
           <div className="space-y-2">
             <Label>Email</Label>
@@ -81,11 +67,8 @@ function AdminLayout() {
             <Input type="password" required value={senha} onChange={(e) => setSenha(e.target.value)} />
           </div>
           <Button type="submit" disabled={submitting} className="w-full h-12">
-            {submitting ? "..." : modo === "login" ? "Entrar" : "Criar conta"}
+            {submitting ? "..." : "Entrar"}
           </Button>
-          <button type="button" onClick={() => setModo(modo === "login" ? "signup" : "login")} className="w-full text-xs text-muted-foreground hover:text-foreground">
-            {modo === "login" ? "Primeira vez? Criar conta" : "Já tem conta? Entrar"}
-          </button>
         </form>
       </div>
     );

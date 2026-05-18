@@ -12,7 +12,7 @@ export const Route = createFileRoute("/")({
   component: SelecaoOperador,
 });
 
-type Operador = { id: string; nome: string; pin: string | null };
+type Operador = { id: string; nome: string; tem_pin: boolean };
 
 function SelecaoOperador() {
   const navigate = useNavigate();
@@ -20,28 +20,37 @@ function SelecaoOperador() {
   const [loading, setLoading] = useState(true);
   const [selecionado, setSelecionado] = useState<Operador | null>(null);
   const [pin, setPin] = useState("");
+  const [validando, setValidando] = useState(false);
 
   useEffect(() => {
-    supabase.from("operadores").select("id, nome, pin").eq("ativo", true).order("nome").then(({ data, error }) => {
+    supabase.from("operadores").select("id, nome, tem_pin").eq("ativo", true).order("nome").then(({ data, error }) => {
       if (error) toast.error("Erro ao carregar operadores: " + error.message);
-      setOperadores(data ?? []);
+      setOperadores((data ?? []) as Operador[]);
       setLoading(false);
     });
   }, []);
 
   function escolher(op: Operador) {
-    if (op.pin) {
+    if (op.tem_pin) {
       setSelecionado(op);
       setPin("");
     } else {
-      confirmar(op);
+      void confirmar(op);
     }
   }
 
-  function confirmar(op: Operador, pinInformado?: string) {
-    if (op.pin && op.pin !== pinInformado) {
-      toast.error("PIN incorreto");
-      return;
+  async function confirmar(op: Operador, pinInformado?: string) {
+    if (op.tem_pin && pinInformado !== undefined) {
+      setValidando(true);
+      const { data: valido, error } = await supabase.rpc("verificar_pin_operador", {
+        p_operador_id: op.id,
+        p_pin: pinInformado,
+      });
+      setValidando(false);
+      if (error || !valido) {
+        toast.error("PIN incorreto");
+        return;
+      }
     }
     setOperador({ id: op.id, nome: op.nome });
     navigate({ to: "/inventarios" });
@@ -80,7 +89,7 @@ function SelecaoOperador() {
                 </div>
                 <div>
                   <p className="text-lg font-semibold">{op.nome}</p>
-                  {op.pin && <p className="text-xs text-muted-foreground">PIN protegido</p>}
+                  {op.tem_pin && <p className="text-xs text-muted-foreground">PIN protegido</p>}
                 </div>
               </div>
             </button>
@@ -100,10 +109,10 @@ function SelecaoOperador() {
             placeholder="••••"
             value={pin}
             onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
-            onKeyDown={(e) => { if (e.key === "Enter" && selecionado) confirmar(selecionado, pin); }}
+            onKeyDown={(e) => { if (e.key === "Enter" && selecionado) void confirmar(selecionado, pin); }}
             className="text-center text-3xl h-16 tracking-[0.5em]"
           />
-          <Button size="lg" className="h-14 text-lg" onClick={() => selecionado && confirmar(selecionado, pin)}>
+          <Button size="lg" className="h-14 text-lg" disabled={validando} onClick={() => selecionado && void confirmar(selecionado, pin)}>
             Continuar
           </Button>
         </DialogContent>

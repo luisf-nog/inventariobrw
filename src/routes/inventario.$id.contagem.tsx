@@ -86,9 +86,10 @@ function TelaContagem() {
     lastKeyTimeRef.current = 0;
     if (etapa === "quantidade") {
       window.requestAnimationFrame(() => refQtd.current?.focus({ preventScroll: true }));
-    } else if (document.activeElement instanceof HTMLElement) {
-      // tira o foco para não abrir teclado virtual no celular
-      document.activeElement.blur();
+    } else if (etapa === "posicao") {
+      window.requestAnimationFrame(() => refPos.current?.focus({ preventScroll: true }));
+    } else if (etapa === "produto") {
+      window.requestAnimationFrame(() => refProd.current?.focus({ preventScroll: true }));
     }
   }, [etapa]);
 
@@ -108,7 +109,7 @@ function TelaContagem() {
     return [...locais, ...remotas].sort((a, b) => b.lido_em.localeCompare(a.lido_em));
   }, [inventarioId, leiturasCache]);
 
-  async function confirmarPosicao(valor?: string) {
+  const confirmarPosicao = useCallback(async (valor?: string) => {
     const cod = normalizeCode(valor ?? posicao);
     scanBufferRef.current = "";
     if (!cod) { beepError(); toast.error("Bipe a posição"); return; }
@@ -123,7 +124,7 @@ function TelaContagem() {
     }
     setNumeroContagem(1);
     setEtapa("produto");
-  }
+  }, [posicao, checarPosicao]);
 
   function escolherAcaoDup(acao: AcaoPosicao) {
     if (!modalDup) return;
@@ -138,7 +139,7 @@ function TelaContagem() {
     setEtapa("produto");
   }
 
-  async function confirmarProduto(valor?: string) {
+  const confirmarProduto = useCallback(async (valor?: string) => {
     const codRaw = (valor ?? produtoInput).trim();
     scanBufferRef.current = "";
     if (!isValidCode(codRaw)) { beepError(); toast.error("Produto inválido"); return; }
@@ -157,7 +158,7 @@ function TelaContagem() {
     setProdutoDesc(desc);
     setQuantidade("");
     setEtapa("quantidade");
-  }
+  }, [produtoInput]);
 
   async function gravar() {
     const qtd = parseQuantidade(quantidade);
@@ -341,7 +342,17 @@ function TelaContagem() {
               className="h-12 px-3 rounded-md border border-input bg-background flex items-center text-xl font-mono tracking-wider"
               aria-label="Aguardando leitura da posição"
             >
-              <input ref={refPos} type="hidden" defaultValue="" />
+              <input
+                ref={refPos}
+                type="text"
+                readOnly
+                inputMode="none"
+                value={scanDisplay}
+                onChange={() => {}}
+                className="sr-only"
+                tabIndex={0}
+                aria-label="Scanner de posição"
+              />
               {scanDisplay || <span className="text-muted-foreground/60 text-base">Bipe o endereço…</span>}
               {scanDisplay && <span className="ml-1 animate-pulse">|</span>}
             </div>
@@ -364,7 +375,17 @@ function TelaContagem() {
                 className="h-12 px-3 rounded-md border border-input bg-background flex items-center text-xl font-mono tracking-wider"
                 aria-label="Aguardando leitura do produto"
               >
-                <input ref={refProd} type="hidden" defaultValue="" />
+                <input
+                  ref={refProd}
+                  type="text"
+                  readOnly
+                  inputMode="none"
+                  value={scanDisplay}
+                  onChange={() => {}}
+                  className="sr-only"
+                  tabIndex={0}
+                  aria-label="Scanner de produto"
+                />
                 {scanDisplay || <span className="text-muted-foreground/60 text-base">Bipe o código…</span>}
                 {scanDisplay && <span className="ml-1 animate-pulse">|</span>}
               </div>

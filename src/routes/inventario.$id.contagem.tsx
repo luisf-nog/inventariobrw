@@ -472,6 +472,7 @@ function TelaContagem() {
           posicao={posicao}
           contagemAtual={modalDup.contagemAtual}
           leituras={modalDup.leituras}
+          operadorAtualId={op?.id ?? null}
           onClose={() => { setModalDup(null); setPosicao(""); setEtapa("posicao"); }}
           onEscolher={escolherAcaoDup}
         />

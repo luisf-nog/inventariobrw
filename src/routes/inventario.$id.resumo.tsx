@@ -416,45 +416,50 @@ function TelaResumo() {
                           <td className="px-3 py-2 text-xs text-muted-foreground tabular-nums hidden lg:table-cell">
                             {new Date(l.lido_em).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
                           </td>
-                          {isAdmin && (
-                            <td className="px-2 py-1 text-right">
-                              {confirmando ? (
-                                <div className="flex items-center gap-1 justify-end">
-                                  <Button
-                                    size="sm"
-                                    variant="destructive"
-                                    className="h-6 px-2 text-[10px]"
-                                    onClick={() => deletarLeitura(l.id)}
-                                  >
-                                    Excluir
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="h-6 w-6 p-0 text-muted-foreground"
-                                    onClick={() => setDeletandoId(null)}
-                                  >
-                                    ✕
-                                  </Button>
-                                </div>
-                              ) : (
+                          <td className="px-2 py-1 text-right">
+                            {confirmando ? (
+                              <div className="flex items-center gap-1 justify-end">
                                 <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="h-7 w-7 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 [tr:hover_&]:opacity-100"
-                                  onClick={() => setDeletandoId(l.id)}
+                                  size="sm"
+                                  variant="destructive"
+                                  className="h-7 px-2 text-[11px]"
+                                  onClick={() => deletarLeitura(l.id)}
                                 >
-                                  <Trash2 className="h-3.5 w-3.5" />
+                                  Excluir
                                 </Button>
-                              )}
-                            </td>
-                          )}
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 w-7 p-0 text-muted-foreground"
+                                  onClick={() => setDeletandoId(null)}
+                                >
+                                  ✕
+                                </Button>
+                              </div>
+                            ) : (
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                title={isAdmin ? "Excluir leitura" : "Faça login como supervisor para excluir"}
+                                onClick={() => {
+                                  if (!isAdmin) {
+                                    toast.error("Faça login como supervisor para excluir leituras");
+                                    return;
+                                  }
+                                  setDeletandoId(l.id);
+                                }}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                          </td>
                         </tr>
                       );
                     })}
                     {filtrados.length === 0 && (
                       <tr>
-                        <td colSpan={isAdmin ? 8 : 7} className="px-3 py-10 text-center text-muted-foreground text-sm">
+                        <td colSpan={8} className="px-3 py-10 text-center text-muted-foreground text-sm">
                           Nenhuma leitura
                         </td>
                       </tr>

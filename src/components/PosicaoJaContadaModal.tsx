@@ -12,7 +12,7 @@ export type LeituraExistente = {
   operador_nome: string | null;
 };
 
-export type AcaoPosicao = "pular" | "nova_contagem" | "adicionar";
+export type AcaoPosicao = "pular" | "nova_contagem";
 
 type Props = {
   open: boolean;

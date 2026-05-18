@@ -8,7 +8,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { LogOut, MapPin, Barcode, Hash, Wifi, WifiOff, CheckCircle2 } from "lucide-react";
+import { LogOut, MapPin, Barcode, Hash, Wifi, WifiOff, CheckCircle2, PackageCheck } from "lucide-react";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
 import { PosicaoJaContadaModal, type AcaoPosicao, type LeituraExistente } from "@/components/PosicaoJaContadaModal";
 import { enqueueLeitura, getQueueForInventario } from "@/lib/offline-queue";
 import { useOfflineSync } from "@/hooks/use-offline-sync";
@@ -38,6 +41,7 @@ function TelaContagem() {
 
   const [salvando, setSalvando] = useState(false);
   const [ultima, setUltima] = useState<{ posicao: string; sku: string; desc: string | null; qtd: number; contagem: number } | null>(null);
+  const [confirmandoLeitura, setConfirmandoLeitura] = useState(false);
 
   const [modalDup, setModalDup] = useState<{ leituras: LeituraExistente[]; contagemAtual: number } | null>(null);
   const [leiturasCache, setLeiturasCache] = useState<LeituraCache[]>([]);
@@ -157,10 +161,17 @@ function TelaContagem() {
     setEtapa("quantidade");
   }, [produtoInput]);
 
-  async function gravar() {
+  function pedirConfirmacao() {
     const qtd = parseQuantidade(quantidade);
     if (qtd === null) { beepError(); toast.error("Quantidade inválida"); return; }
+    setConfirmandoLeitura(true);
+  }
+
+  async function gravar() {
+    const qtd = parseQuantidade(quantidade);
+    if (qtd === null) return;
     if (!op) return;
+    setConfirmandoLeitura(false);
     setSalvando(true);
     const lidoEm = new Date().toISOString();
     let offline = false;
@@ -216,12 +227,14 @@ function TelaContagem() {
     beepSuccess();
     setUltima({ posicao, sku: produtoSku, desc: produtoDesc, qtd, contagem: numeroContagem });
     if (offline) toast.warning("Salvo offline — será sincronizado");
-    // Continua na mesma posição, volta pra etapa de produto
+    // Volta para nova posição (1 item por posição)
+    setPosicao("");
     setProdutoInput("");
     setProdutoSku("");
     setProdutoDesc(null);
     setQuantidade("");
-    setEtapa("produto");
+    setNumeroContagem(1);
+    setEtapa("posicao");
   }
 
   function trocarPosicao() {
@@ -368,7 +381,7 @@ function TelaContagem() {
               inputMode="decimal"
               value={quantidade}
               onChange={(e) => setQuantidade(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); gravar(); } }}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); pedirConfirmacao(); } }}
               placeholder="0"
               className="h-14 text-3xl text-center font-bold"
               autoComplete="off"
@@ -383,7 +396,7 @@ function TelaContagem() {
               <Button variant="outline" size="sm" className="h-9" onClick={() => setQuantidade("")}>Limpar</Button>
             </div>
             <Button
-              onClick={gravar}
+              onClick={pedirConfirmacao}
               disabled={salvando}
               className="w-full h-12 text-base font-bold bg-primary hover:bg-primary/90"
             >
@@ -392,6 +405,48 @@ function TelaContagem() {
           </div>
         )}
       </main>
+
+      {/* Popup de confirmação antes de gravar */}
+      <Dialog open={confirmandoLeitura} onOpenChange={(open) => !open && setConfirmandoLeitura(false)}>
+        <DialogContent className="max-w-xs">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <PackageCheck className="h-5 w-5 text-primary" /> Confirmar leitura
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <div className="rounded-lg bg-muted px-3 py-2 space-y-1">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Endereço</p>
+              <p className="font-mono font-bold text-base">{posicao}</p>
+            </div>
+            <div className="rounded-lg bg-muted px-3 py-2 space-y-1">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Produto</p>
+              <p className="font-mono font-bold text-base">{produtoSku}</p>
+              {produtoDesc && <p className="text-xs text-muted-foreground leading-tight">{produtoDesc}</p>}
+            </div>
+            <div className="rounded-lg bg-muted px-3 py-2 space-y-1">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Quantidade</p>
+              <p className="font-bold text-2xl">{quantidade}</p>
+            </div>
+          </div>
+          <DialogFooter className="flex-col gap-2 sm:flex-col">
+            <Button
+              onClick={gravar}
+              disabled={salvando}
+              className="w-full h-12 text-base font-bold bg-primary hover:bg-primary/90"
+            >
+              {salvando ? "Salvando..." : "✓ Confirmar"}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setConfirmandoLeitura(false)}
+              className="w-full"
+            >
+              ← Corrigir quantidade
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {modalDup && (
         <PosicaoJaContadaModal

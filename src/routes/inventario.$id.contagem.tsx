@@ -115,6 +115,7 @@ function TelaContagem() {
         numero_contagem: q.numero_contagem,
         lido_em: q.lido_em,
         operador_nome: q.operador_nome ?? null,
+        operador_id: q.operador_id ?? null,
       }));
     const remotas: LeituraExistente[] = leiturasCache
       .filter((l) => l.codigo_posicao === codPos)
@@ -142,6 +143,11 @@ function TelaContagem() {
   function escolherAcaoDup(acao: AcaoPosicao) {
     if (!modalDup) return;
     const atual = modalDup.contagemAtual;
+    if (acao === "nova_contagem" && op && modalDup.leituras.some((l) => l.operador_id === op.id)) {
+      beepError();
+      toast.error("Você já contou esta posição. A próxima contagem precisa ser feita por outro operador.");
+      return;
+    }
     setModalDup(null);
     if (acao === "pular") { setPosicao(""); setEtapa("posicao"); return; }
     setNumeroContagem(atual + 1);
@@ -466,6 +472,7 @@ function TelaContagem() {
           posicao={posicao}
           contagemAtual={modalDup.contagemAtual}
           leituras={modalDup.leituras}
+          operadorAtualId={op?.id ?? null}
           onClose={() => { setModalDup(null); setPosicao(""); setEtapa("posicao"); }}
           onEscolher={escolherAcaoDup}
         />

@@ -143,6 +143,11 @@ function TelaContagem() {
   function escolherAcaoDup(acao: AcaoPosicao) {
     if (!modalDup) return;
     const atual = modalDup.contagemAtual;
+    if (acao === "nova_contagem" && op && modalDup.leituras.some((l) => l.operador_id === op.id)) {
+      beepError();
+      toast.error("Você já contou esta posição. A próxima contagem precisa ser feita por outro operador.");
+      return;
+    }
     setModalDup(null);
     if (acao === "pular") { setPosicao(""); setEtapa("posicao"); return; }
     setNumeroContagem(atual + 1);

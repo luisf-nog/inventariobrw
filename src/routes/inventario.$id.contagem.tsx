@@ -345,10 +345,13 @@ function TelaContagem() {
               <input
                 ref={refPos}
                 type="text"
-                readOnly
                 inputMode="none"
                 value={scanDisplay}
                 onChange={() => {}}
+                onBlur={(e) => {
+                  const goingToDialog = e.relatedTarget instanceof Element && !!e.relatedTarget.closest('[role="dialog"]');
+                  if (!goingToDialog) window.requestAnimationFrame(() => refPos.current?.focus({ preventScroll: true }));
+                }}
                 className="sr-only"
                 tabIndex={0}
                 aria-label="Scanner de posição"
@@ -378,10 +381,13 @@ function TelaContagem() {
                 <input
                   ref={refProd}
                   type="text"
-                  readOnly
                   inputMode="none"
                   value={scanDisplay}
                   onChange={() => {}}
+                  onBlur={(e) => {
+                    const goingToDialog = e.relatedTarget instanceof Element && !!e.relatedTarget.closest('[role="dialog"]');
+                    if (!goingToDialog) window.requestAnimationFrame(() => refProd.current?.focus({ preventScroll: true }));
+                  }}
                   className="sr-only"
                   tabIndex={0}
                   aria-label="Scanner de produto"

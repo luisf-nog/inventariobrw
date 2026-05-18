@@ -131,7 +131,7 @@ function TelaContagem() {
     const atual = modalDup.contagemAtual;
     setModalDup(null);
     if (acao === "pular") { setPosicao(""); setEtapa("posicao"); return; }
-    setNumeroContagem(acao === "nova_contagem" ? atual + 1 : atual);
+    setNumeroContagem(atual + 1);
     setEtapa("produto");
   }
 

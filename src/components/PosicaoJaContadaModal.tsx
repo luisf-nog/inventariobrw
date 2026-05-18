@@ -25,7 +25,8 @@ type Props = {
   onEscolher: (acao: AcaoPosicao) => void;
 };
 
-export function PosicaoJaContadaModal({ open, posicao, contagemAtual, leituras, onClose, onEscolher }: Props) {
+export function PosicaoJaContadaModal({ open, posicao, contagemAtual, leituras, operadorAtualId, onClose, onEscolher }: Props) {
+  const jaContouEsteOperador = operadorAtualId != null && leituras.some((l) => l.operador_id === operadorAtualId);
   const [expanded, setExpanded] = useState(false);
   const visible = expanded ? leituras : leituras.slice(0, 3);
   const ultima = leituras[0];

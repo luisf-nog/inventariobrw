@@ -5,8 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Users } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/admin/operadores")({
@@ -30,10 +31,7 @@ function AdminOperadores() {
   async function criar(e: React.FormEvent) {
     e.preventDefault();
     if (!nome.trim()) return;
-    const { error } = await supabase.from("operadores").insert({
-      nome: nome.trim(),
-      pin: pin.trim() || null,
-    });
+    const { error } = await supabase.from("operadores").insert({ nome: nome.trim(), pin: pin.trim() || null });
     if (error) { toast.error(error.message); return; }
     toast.success("Operador criado");
     setNome(""); setPin(""); setOpen(false);
@@ -54,47 +52,73 @@ function AdminOperadores() {
   }
 
   return (
-    <div>
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-lg font-semibold">Operadores</h2>
+    <div className="space-y-5">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-base font-semibold">Operadores</h2>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button><Plus className="h-4 w-4 mr-1" /> Adicionar</Button>
+            <Button size="sm" className="gap-1.5"><Plus className="h-4 w-4" /> Adicionar</Button>
           </DialogTrigger>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Novo operador</DialogTitle></DialogHeader>
-            <form onSubmit={criar} className="space-y-3">
-              <div><Label>Nome</Label><Input required value={nome} onChange={(e) => setNome(e.target.value)} /></div>
-              <div>
-                <Label>PIN (opcional, 4 dígitos)</Label>
-                <Input value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0,4))} inputMode="numeric" />
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Novo operador</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={criar} className="space-y-4 pt-1">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground uppercase tracking-wide">Nome</Label>
+                <Input required value={nome} onChange={(e) => setNome(e.target.value)} placeholder="João Silva" />
               </div>
-              <Button type="submit" className="w-full">Criar</Button>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground uppercase tracking-wide">PIN (opcional, 4 dígitos)</Label>
+                <Input
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                  inputMode="numeric"
+                  maxLength={4}
+                  placeholder="••••"
+                  className="tracking-widest text-center font-mono text-lg h-11"
+                />
+              </div>
+              <Button type="submit" className="w-full h-11 font-semibold">Criar operador</Button>
             </form>
           </DialogContent>
         </Dialog>
       </div>
 
-      <div className="space-y-2">
-        {ops.length === 0 && <p className="text-muted-foreground text-sm">Nenhum operador.</p>}
-        {ops.map((op) => (
-          <div key={op.id} className="bg-card border border-border rounded-lg p-4 flex items-center justify-between gap-3">
-            <div>
-              <p className="font-semibold">{op.nome}</p>
-              <p className="text-xs text-muted-foreground">{op.pin ? "PIN configurado" : "Sem PIN"}</p>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
-                <Switch checked={op.ativo} onCheckedChange={() => toggleAtivo(op)} />
-                <span className="text-xs text-muted-foreground">{op.ativo ? "Ativo" : "Inativo"}</span>
+      {ops.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-border p-10 text-center">
+          <Users className="h-8 w-8 text-muted-foreground/30 mx-auto mb-3" />
+          <p className="text-sm text-muted-foreground">Nenhum operador cadastrado.</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {ops.map((op) => (
+            <div key={op.id} className={`bg-card border rounded-xl p-4 flex items-center justify-between gap-3 ${op.ativo ? "border-border" : "border-border/40 opacity-60"}`}>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <p className="font-semibold">{op.nome}</p>
+                  {op.pin && <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">PIN</Badge>}
+                  {!op.ativo && <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">Inativo</Badge>}
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5">{op.pin ? "PIN configurado" : "Sem PIN"}</p>
               </div>
-              <Button variant="ghost" size="icon" onClick={() => remover(op)} className="text-destructive">
-                <Trash2 className="h-4 w-4" />
-              </Button>
+              <div className="flex items-center gap-3 shrink-0">
+                <div className="flex items-center gap-2">
+                  <Switch checked={op.ativo} onCheckedChange={() => toggleAtivo(op)} />
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                  onClick={() => remover(op)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

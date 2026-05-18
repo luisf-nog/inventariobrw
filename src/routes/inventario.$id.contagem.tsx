@@ -91,7 +91,6 @@ function TelaContagem() {
     if (etapa === "quantidade") {
       window.requestAnimationFrame(() => refQtd.current?.focus({ preventScroll: true }));
     }
-    // posicao e produto usam autoFocus nativo no input — mais confiável em Android
   }, [etapa]);
 
   const checarPosicao = useCallback(async (codPos: string): Promise<LeituraExistente[] | null> => {
@@ -106,7 +105,7 @@ function TelaContagem() {
       }));
     const remotas: LeituraExistente[] = leiturasCache
       .filter((l) => l.codigo_posicao === codPos)
-      .map(({ codigo_posicao: _codigo_posicao, ...l }) => l);
+      .map(({ codigo_posicao: _c, ...l }) => l);
     return [...locais, ...remotas].sort((a, b) => b.lido_em.localeCompare(a.lido_em));
   }, [inventarioId, leiturasCache]);
 
@@ -131,11 +130,7 @@ function TelaContagem() {
     if (!modalDup) return;
     const atual = modalDup.contagemAtual;
     setModalDup(null);
-    if (acao === "pular") {
-      setPosicao("");
-      setEtapa("posicao");
-      return;
-    }
+    if (acao === "pular") { setPosicao(""); setEtapa("posicao"); return; }
     setNumeroContagem(acao === "nova_contagem" ? atual + 1 : atual);
     setEtapa("produto");
   }
@@ -176,168 +171,100 @@ function TelaContagem() {
     const lidoEm = new Date().toISOString();
     let offline = false;
     if (!navigator.onLine) {
-      enqueueLeitura({
-        inventario_id: inventarioId,
-        codigo_posicao: posicao,
-        codigo_produto: produtoSku,
-        quantidade: qtd,
-        numero_contagem: numeroContagem,
-        operador_id: op.id,
-        operador_nome: op.nome,
-        lido_em: lidoEm,
-      });
+      enqueueLeitura({ inventario_id: inventarioId, codigo_posicao: posicao, codigo_produto: produtoSku, quantidade: qtd, numero_contagem: numeroContagem, operador_id: op.id, operador_nome: op.nome, lido_em: lidoEm });
       offline = true;
     } else {
-      const { error } = await supabase
-        .from("leituras")
-        .insert({
-          inventario_id: inventarioId,
-          codigo_posicao: posicao,
-          codigo_produto: produtoSku,
-          quantidade: qtd,
-          numero_contagem: numeroContagem,
-          operador_id: op.id,
-          lido_em: lidoEm,
-        });
+      const { error } = await supabase.from("leituras").insert({ inventario_id: inventarioId, codigo_posicao: posicao, codigo_produto: produtoSku, quantidade: qtd, numero_contagem: numeroContagem, operador_id: op.id, lido_em: lidoEm });
       if (error) {
-        enqueueLeitura({
-          inventario_id: inventarioId,
-          codigo_posicao: posicao,
-          codigo_produto: produtoSku,
-          quantidade: qtd,
-          numero_contagem: numeroContagem,
-          operador_id: op.id,
-          operador_nome: op.nome,
-          lido_em: lidoEm,
-        });
+        enqueueLeitura({ inventario_id: inventarioId, codigo_posicao: posicao, codigo_produto: produtoSku, quantidade: qtd, numero_contagem: numeroContagem, operador_id: op.id, operador_nome: op.nome, lido_em: lidoEm });
         offline = true;
       }
     }
     setSalvando(false);
     if (!offline) {
-      setLeiturasCache((atuais) => [{
-        codigo_posicao: posicao,
-        codigo_produto: produtoSku,
-        quantidade: qtd,
-        numero_contagem: numeroContagem,
-        operador_nome: op.nome,
-        lido_em: lidoEm,
-      }, ...atuais]);
+      setLeiturasCache((prev) => [{ codigo_posicao: posicao, codigo_produto: produtoSku, quantidade: qtd, numero_contagem: numeroContagem, operador_nome: op.nome, lido_em: lidoEm }, ...prev]);
     }
     beepSuccess();
     setUltima({ posicao, sku: produtoSku, desc: produtoDesc, qtd, contagem: numeroContagem });
     if (offline) toast.warning("Salvo offline — será sincronizado");
-    // Volta para nova posição (1 item por posição)
-    setPosicao("");
-    setProdutoInput("");
-    setProdutoSku("");
-    setProdutoDesc(null);
-    setQuantidade("");
-    setNumeroContagem(1);
+    setPosicao(""); setProdutoInput(""); setProdutoSku(""); setProdutoDesc(null); setQuantidade(""); setNumeroContagem(1);
     setEtapa("posicao");
   }
 
   function trocarPosicao() {
     scanBufferRef.current = "";
-    setPosicao(""); setProdutoInput(""); setProdutoSku(""); setProdutoDesc(null); setQuantidade("");
-    setNumeroContagem(1);
+    setPosicao(""); setProdutoInput(""); setProdutoSku(""); setProdutoDesc(null); setQuantidade(""); setNumeroContagem(1);
     setEtapa("posicao");
   }
 
-  // Inputs de posicao e produto têm autoFocus + onKeyDown próprios — sem listener global necessário
-
-  function sair() {
-    clearOperador();
-    navigate({ to: "/" });
-  }
+  function sair() { clearOperador(); navigate({ to: "/" }); }
 
   return (
-    <div className="min-h-screen pb-2 bg-background">
-      <header className="sticky top-0 z-10 bg-background border-b border-border px-2 py-1.5 flex items-center justify-between gap-2">
-        <div className="min-w-0">
-          <p className="text-[10px] text-muted-foreground truncate leading-tight">{inv?.nome ?? "..."}</p>
-          <p className="text-xs font-semibold truncate leading-tight">{op?.nome}</p>
-        </div>
-        <div className="flex items-center gap-1 shrink-0">
-          <Badge
-            variant={online ? "secondary" : "destructive"}
-            className="text-[10px] gap-1 px-1.5 py-0"
-            title={online ? "Online" : "Offline"}
-          >
-            {online ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
-            {pending > 0 ? `${pending}` : online ? "on" : "off"}
-          </Badge>
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={sair} aria-label="Sair"><LogOut className="h-4 w-4" /></Button>
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <header className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm border-b border-border">
+        <div className="max-w-lg mx-auto px-4 h-14 flex items-center justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wide truncate leading-none">{inv?.nome ?? "..."}</p>
+            <p className="text-sm font-semibold truncate leading-tight mt-0.5">{op?.nome}</p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <div className={`flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full border font-medium ${
+              online
+                ? "text-success border-success/30 bg-success/10"
+                : "text-destructive border-destructive/30 bg-destructive/10"
+            }`}>
+              {online ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
+              {pending > 0 ? `${pending}` : online ? "on" : "off"}
+            </div>
+            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={sair} aria-label="Sair">
+              <LogOut className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </header>
 
-      <main className="px-2 py-2 max-w-2xl mx-auto space-y-2">
-        {/* Toast persistente de confirmação da última leitura */}
-        {ultima && (
-          <div className="rounded-lg border border-success bg-success/10 px-2 py-1.5 flex items-start gap-2">
+      {/* Última leitura */}
+      {ultima && (
+        <div className="bg-success/8 border-b border-success/20">
+          <div className="max-w-lg mx-auto px-4 py-2.5 flex items-start gap-2.5">
             <CheckCircle2 className="h-4 w-4 text-success shrink-0 mt-0.5" />
             <div className="min-w-0 flex-1">
-              <p className="font-mono text-xs leading-tight">
+              <p className="text-xs font-mono leading-snug">
                 <span className="text-muted-foreground">{formatPosicaoDisplay(ultima.posicao)}</span>
-                <span className="mx-1 text-muted-foreground/50">›</span>
-                <span className="font-bold">{ultima.sku}</span>
-                <span className="ml-1.5 font-bold text-success">{ultima.qtd}</span>
-                {ultima.contagem > 1 && <span className="ml-1 text-[10px] text-muted-foreground">(c{ultima.contagem})</span>}
+                <span className="mx-1.5 text-muted-foreground/40">›</span>
+                <span className="font-semibold">{ultima.sku}</span>
+                <span className="mx-1.5 text-muted-foreground/40">·</span>
+                <span className="font-bold text-success">{ultima.qtd}</span>
+                {ultima.contagem > 1 && <span className="ml-1.5 text-[10px] text-muted-foreground">{ultima.contagem}ª c.</span>}
               </p>
-              {ultima.desc && <p className="text-[10px] text-muted-foreground truncate leading-tight">{ultima.desc}</p>}
+              {ultima.desc && <p className="text-[10px] text-muted-foreground truncate mt-0.5">{ultima.desc}</p>}
             </div>
           </div>
-        )}
-
-        {/* POSIÇÃO */}
-        <div className={`rounded-lg border p-2 ${etapa === "posicao" ? "bg-card border-primary" : "bg-card/50 border-border"}`}>
-          <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-            <MapPin className="h-3 w-3" /> Endereço
-            {numeroContagem > 1 && etapa !== "posicao" && (
-              <Badge className="bg-warning text-warning-foreground text-[10px] px-1.5 py-0">{numeroContagem}ª</Badge>
-            )}
-          </label>
-          {etapa === "posicao" ? (
-            <input
-              ref={refPos}
-              type="text"
-              // eslint-disable-next-line jsx-a11y/no-autofocus
-              autoFocus
-              onChange={(e) => setScanDisplay(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === "Tab") {
-                  e.preventDefault();
-                  const val = (refPos.current?.value ?? "").trim();
-                  if (refPos.current) refPos.current.value = "";
-                  setScanDisplay("");
-                  scanBufferRef.current = "";
-                  if (val.length >= 2) void confirmarPosicao(val);
-                }
-              }}
-              onBlur={(e) => {
-                const goingToDialog = e.relatedTarget instanceof Element && !!e.relatedTarget.closest('[role="dialog"]');
-                if (!goingToDialog) window.requestAnimationFrame(() => refPos.current?.focus({ preventScroll: true }));
-              }}
-              placeholder="Bipe o endereço…"
-              className="h-12 px-3 rounded-md border border-input bg-background text-xl font-mono tracking-wider w-full placeholder:text-muted-foreground/60 placeholder:text-base focus-visible:ring-1 focus-visible:ring-primary focus-visible:outline-none"
-            />
-          ) : (
-            <button onClick={trocarPosicao} className="w-full text-left text-lg font-mono font-bold leading-tight hover:text-primary">
-              {formatPosicaoDisplay(posicao)}
-              <span className="ml-2 text-[10px] text-muted-foreground font-sans">(trocar)</span>
-            </button>
-          )}
         </div>
+      )}
 
-        {/* PRODUTO */}
-        {etapa !== "posicao" && (
-          <div className={`rounded-lg border p-2 ${etapa === "produto" ? "bg-card border-primary" : "bg-card/50 border-border"}`}>
-            <label className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-              <Barcode className="h-3 w-3" /> Produto
-            </label>
-            {etapa === "produto" ? (
+      <main className="max-w-lg mx-auto px-4 py-4 space-y-3">
+        {/* ENDEREÇO */}
+        <div className={`rounded-xl overflow-hidden border bg-card ${etapa === "posicao" ? "border-primary" : "border-border"}`}>
+          <div className={`px-4 py-2.5 border-b border-border/50 flex items-center gap-2 ${etapa === "posicao" ? "bg-primary/5" : ""}`}>
+            <div className={`w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center shrink-0 ${
+              etapa === "posicao" ? "bg-primary text-primary-foreground" : "bg-success/20 text-success"
+            }`}>
+              {etapa === "posicao" ? "1" : "✓"}
+            </div>
+            <MapPin className={`h-3.5 w-3.5 ${etapa === "posicao" ? "text-primary" : "text-muted-foreground"}`} />
+            <span className={`text-xs font-medium uppercase tracking-wide ${etapa === "posicao" ? "text-primary" : "text-muted-foreground"}`}>
+              Endereço
+            </span>
+            {numeroContagem > 1 && etapa !== "posicao" && (
+              <Badge className="ml-auto bg-warning/15 text-warning border-warning/25 text-[10px] px-1.5 py-0 h-5">{numeroContagem}ª</Badge>
+            )}
+          </div>
+          <div className="px-4 py-3">
+            {etapa === "posicao" ? (
               <input
-                ref={refProd}
+                ref={refPos}
                 type="text"
                 // eslint-disable-next-line jsx-a11y/no-autofocus
                 autoFocus
@@ -345,104 +272,158 @@ function TelaContagem() {
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === "Tab") {
                     e.preventDefault();
-                    const val = (refProd.current?.value ?? "").trim();
-                    if (refProd.current) refProd.current.value = "";
+                    const val = (refPos.current?.value ?? "").trim();
+                    if (refPos.current) refPos.current.value = "";
                     setScanDisplay("");
                     scanBufferRef.current = "";
-                    if (val.length >= 2) void confirmarProduto(val);
+                    if (val.length >= 2) void confirmarPosicao(val);
                   }
                 }}
                 onBlur={(e) => {
                   const goingToDialog = e.relatedTarget instanceof Element && !!e.relatedTarget.closest('[role="dialog"]');
-                  if (!goingToDialog) window.requestAnimationFrame(() => refProd.current?.focus({ preventScroll: true }));
+                  if (!goingToDialog) window.requestAnimationFrame(() => refPos.current?.focus({ preventScroll: true }));
                 }}
-                placeholder="Bipe o código…"
-                className="h-12 px-3 rounded-md border border-input bg-background text-xl font-mono tracking-wider w-full placeholder:text-muted-foreground/60 placeholder:text-base focus-visible:ring-1 focus-visible:ring-primary focus-visible:outline-none"
+                placeholder="Bipe o código de endereço…"
+                className="w-full h-14 bg-transparent text-2xl font-mono tracking-widest border-none outline-none ring-0 placeholder:text-muted-foreground/30 placeholder:text-sm placeholder:font-sans placeholder:tracking-normal focus:outline-none"
               />
             ) : (
-              <div>
-                <p className="text-lg font-mono font-bold leading-tight">{produtoSku}</p>
-                {produtoDesc && <p className="text-[11px] text-muted-foreground leading-tight truncate">{produtoDesc}</p>}
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xl font-mono font-bold">{formatPosicaoDisplay(posicao)}</span>
+                <button
+                  onClick={trocarPosicao}
+                  className="text-xs text-muted-foreground hover:text-primary transition-colors px-2 py-1 rounded-md hover:bg-primary/10 shrink-0"
+                >
+                  trocar
+                </button>
               </div>
             )}
+          </div>
+        </div>
+
+        {/* PRODUTO */}
+        {etapa !== "posicao" && (
+          <div className={`rounded-xl overflow-hidden border bg-card ${etapa === "produto" ? "border-primary" : "border-border"}`}>
+            <div className={`px-4 py-2.5 border-b border-border/50 flex items-center gap-2 ${etapa === "produto" ? "bg-primary/5" : ""}`}>
+              <div className={`w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center shrink-0 ${
+                etapa === "produto" ? "bg-primary text-primary-foreground" : "bg-success/20 text-success"
+              }`}>
+                {etapa === "produto" ? "2" : "✓"}
+              </div>
+              <Barcode className={`h-3.5 w-3.5 ${etapa === "produto" ? "text-primary" : "text-muted-foreground"}`} />
+              <span className={`text-xs font-medium uppercase tracking-wide ${etapa === "produto" ? "text-primary" : "text-muted-foreground"}`}>
+                Produto
+              </span>
+            </div>
+            <div className="px-4 py-3">
+              {etapa === "produto" ? (
+                <input
+                  ref={refProd}
+                  type="text"
+                  // eslint-disable-next-line jsx-a11y/no-autofocus
+                  autoFocus
+                  onChange={(e) => setScanDisplay(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === "Tab") {
+                      e.preventDefault();
+                      const val = (refProd.current?.value ?? "").trim();
+                      if (refProd.current) refProd.current.value = "";
+                      setScanDisplay("");
+                      scanBufferRef.current = "";
+                      if (val.length >= 2) void confirmarProduto(val);
+                    }
+                  }}
+                  onBlur={(e) => {
+                    const goingToDialog = e.relatedTarget instanceof Element && !!e.relatedTarget.closest('[role="dialog"]');
+                    if (!goingToDialog) window.requestAnimationFrame(() => refProd.current?.focus({ preventScroll: true }));
+                  }}
+                  placeholder="Bipe o código do produto…"
+                  className="w-full h-14 bg-transparent text-2xl font-mono tracking-widest border-none outline-none ring-0 placeholder:text-muted-foreground/30 placeholder:text-sm placeholder:font-sans placeholder:tracking-normal focus:outline-none"
+                />
+              ) : (
+                <div>
+                  <p className="text-xl font-mono font-bold leading-tight">{produtoSku}</p>
+                  {produtoDesc && <p className="text-xs text-muted-foreground mt-0.5 leading-tight">{produtoDesc}</p>}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
         {/* QUANTIDADE */}
         {etapa === "quantidade" && (
-          <div className="rounded-lg border border-primary bg-card p-2 space-y-2">
-            <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Hash className="h-3 w-3" /> Quantidade
-            </label>
-            <Input
-              ref={refQtd}
-              type="text"
-              autoFocus
-              inputMode="decimal"
-              value={quantidade}
-              onChange={(e) => setQuantidade(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); pedirConfirmacao(); } }}
-              placeholder="0"
-              className="h-14 text-3xl text-center font-bold"
-              autoComplete="off"
-            />
-            <div className="grid grid-cols-4 gap-1.5">
-              {[1, 5, 10].map((n) => (
-                <Button key={n} variant="secondary" size="sm" className="h-9 text-sm"
-                  onClick={() => setQuantidade(String((parseQuantidade(quantidade) ?? 0) + n))}>
-                  +{n}
-                </Button>
-              ))}
-              <Button variant="outline" size="sm" className="h-9" onClick={() => setQuantidade("")}>Limpar</Button>
+          <div className="rounded-xl overflow-hidden border border-primary bg-card">
+            <div className="px-4 py-2.5 border-b border-border/50 flex items-center gap-2 bg-primary/5">
+              <div className="w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center bg-primary text-primary-foreground shrink-0">3</div>
+              <Hash className="h-3.5 w-3.5 text-primary" />
+              <span className="text-xs font-medium uppercase tracking-wide text-primary">Quantidade</span>
             </div>
-            <Button
-              onClick={pedirConfirmacao}
-              disabled={salvando}
-              className="w-full h-12 text-base font-bold bg-primary hover:bg-primary/90"
-            >
-              {salvando ? "Salvando..." : "✓ CONFIRMAR"}
-            </Button>
+            <div className="px-4 py-4 space-y-3">
+              <Input
+                ref={refQtd}
+                type="text"
+                autoFocus
+                inputMode="decimal"
+                value={quantidade}
+                onChange={(e) => setQuantidade(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); pedirConfirmacao(); } }}
+                placeholder="0"
+                className="h-16 text-4xl text-center font-bold font-mono tracking-wider"
+                autoComplete="off"
+              />
+              <div className="grid grid-cols-4 gap-2">
+                {[1, 5, 10].map((n) => (
+                  <Button key={n} variant="secondary" className="h-10 text-sm font-semibold"
+                    onClick={() => setQuantidade(String((parseQuantidade(quantidade) ?? 0) + n))}>
+                    +{n}
+                  </Button>
+                ))}
+                <Button variant="outline" className="h-10 text-sm" onClick={() => setQuantidade("")}>
+                  Limpar
+                </Button>
+              </div>
+              <Button
+                onClick={pedirConfirmacao}
+                disabled={salvando || !quantidade.trim()}
+                className="w-full h-14 text-base font-bold gap-2"
+              >
+                <PackageCheck className="h-5 w-5" /> Confirmar
+              </Button>
+            </div>
           </div>
         )}
       </main>
 
-      {/* Popup de confirmação antes de gravar */}
+      {/* Popup de confirmação */}
       <Dialog open={confirmandoLeitura} onOpenChange={(open) => !open && setConfirmandoLeitura(false)}>
-        <DialogContent className="max-w-xs">
+        <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <PackageCheck className="h-5 w-5 text-primary" /> Confirmar leitura
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-3 py-1">
-            <div className="rounded-lg bg-muted px-3 py-2 space-y-1">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Endereço</p>
-              <p className="font-mono font-bold text-base">{formatPosicaoDisplay(posicao)}</p>
+          <div className="rounded-lg overflow-hidden border border-border divide-y divide-border">
+            <div className="px-4 py-3">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Endereço</p>
+              <p className="font-mono font-bold text-lg leading-tight">{formatPosicaoDisplay(posicao)}</p>
             </div>
-            <div className="rounded-lg bg-muted px-3 py-2 space-y-1">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Produto</p>
-              <p className="font-mono font-bold text-base">{produtoSku}</p>
-              {produtoDesc && <p className="text-xs text-muted-foreground leading-tight">{produtoDesc}</p>}
+            <div className="px-4 py-3">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Produto</p>
+              <p className="font-mono font-bold text-lg leading-tight">{produtoSku}</p>
+              {produtoDesc && <p className="text-xs text-muted-foreground mt-0.5">{produtoDesc}</p>}
             </div>
-            <div className="rounded-lg bg-muted px-3 py-2 space-y-1">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Quantidade</p>
-              <p className="font-bold text-2xl">{quantidade}</p>
+            <div className="px-4 py-3">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Quantidade</p>
+              <p className="font-bold text-3xl text-primary leading-tight">{quantidade}</p>
             </div>
           </div>
           <DialogFooter className="flex-col gap-2 sm:flex-col">
-            <Button
-              onClick={gravar}
-              disabled={salvando}
-              className="w-full h-12 text-base font-bold bg-primary hover:bg-primary/90"
-            >
-              {salvando ? "Salvando..." : "✓ Confirmar"}
+            <Button onClick={gravar} disabled={salvando} className="w-full h-12 text-base font-bold gap-2">
+              {salvando
+                ? <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                : <><CheckCircle2 className="h-5 w-5" /> Confirmar</>}
             </Button>
-            <Button
-              variant="outline"
-              onClick={() => setConfirmandoLeitura(false)}
-              className="w-full"
-            >
-              ← Corrigir quantidade
+            <Button variant="outline" onClick={() => setConfirmandoLeitura(false)} className="w-full h-10">
+              Corrigir quantidade
             </Button>
           </DialogFooter>
         </DialogContent>

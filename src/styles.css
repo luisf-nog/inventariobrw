@@ -36,31 +36,31 @@
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
-/* Dark theme by default — galpão tem iluminação ruim */
+/* Dark by default — galpão tem iluminação ruim */
 :root {
   --radius: 0.75rem;
-  --background: oklch(0.21 0.03 256);            /* slate-900 */
-  --foreground: oklch(0.984 0.003 247.858);      /* slate-50 */
-  --card: oklch(0.27 0.03 256);                  /* slate-800 */
-  --card-foreground: oklch(0.984 0.003 247.858);
-  --popover: oklch(0.27 0.03 256);
-  --popover-foreground: oklch(0.984 0.003 247.858);
+  --background: oklch(0.13 0.02 256);           /* quase preto */
+  --foreground: oklch(0.97 0.003 247);
+  --card: oklch(0.19 0.03 256);                  /* card ligeiramente mais claro */
+  --card-foreground: oklch(0.97 0.003 247);
+  --popover: oklch(0.30 0.04 256);               /* dialog/popover bem mais claro → contraste nítido */
+  --popover-foreground: oklch(0.97 0.003 247);
   --primary: oklch(0.72 0.17 162);               /* emerald-500 */
-  --primary-foreground: oklch(0.15 0.02 256);
-  --secondary: oklch(0.33 0.03 256);             /* slate-700 */
-  --secondary-foreground: oklch(0.984 0.003 247.858);
-  --muted: oklch(0.33 0.03 256);
-  --muted-foreground: oklch(0.72 0.03 256);
-  --accent: oklch(0.33 0.03 256);
-  --accent-foreground: oklch(0.984 0.003 247.858);
-  --destructive: oklch(0.6 0.22 25);             /* red-500 */
-  --destructive-foreground: oklch(0.984 0.003 247.858);
-  --warning: oklch(0.78 0.16 75);                /* amber-500 */
-  --warning-foreground: oklch(0.15 0.02 256);
+  --primary-foreground: oklch(0.13 0.02 256);
+  --secondary: oklch(0.24 0.03 256);
+  --secondary-foreground: oklch(0.97 0.003 247);
+  --muted: oklch(0.22 0.03 256);
+  --muted-foreground: oklch(0.62 0.03 256);
+  --accent: oklch(0.24 0.03 256);
+  --accent-foreground: oklch(0.97 0.003 247);
+  --destructive: oklch(0.60 0.22 25);
+  --destructive-foreground: oklch(0.97 0.003 247);
+  --warning: oklch(0.78 0.16 75);
+  --warning-foreground: oklch(0.13 0.02 256);
   --success: oklch(0.72 0.17 162);
-  --success-foreground: oklch(0.15 0.02 256);
-  --border: oklch(0.33 0.03 256);
-  --input: oklch(0.33 0.03 256);
+  --success-foreground: oklch(0.13 0.02 256);
+  --border: oklch(0.26 0.03 256);
+  --input: oklch(0.23 0.03 256);
   --ring: oklch(0.72 0.17 162);
 }
 
@@ -71,9 +71,8 @@
   input, button { font-family: inherit; }
 }
 
-/* Pulse on success */
 @keyframes flash-success {
-  0% { background-color: var(--color-success); }
+  0%   { background-color: oklch(0.72 0.17 162 / 0.3); }
   100% { background-color: transparent; }
 }
-.flash-success { animation: flash-success 400ms ease-out; }
+.flash-success { animation: flash-success 500ms ease-out; }

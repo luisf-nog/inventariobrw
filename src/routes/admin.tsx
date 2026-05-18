@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { ArrowLeft, LogOut } from "lucide-react";
+import { ArrowLeft, LogOut, ShieldCheck } from "lucide-react";
 
 export const Route = createFileRoute("/admin")({
   component: AdminLayout,
@@ -45,52 +45,85 @@ function AdminLayout() {
     navigate({ to: "/admin" });
   }
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center text-muted-foreground">Carregando...</div>;
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4">
-        <form onSubmit={entrar} className="w-full max-w-sm bg-card rounded-xl border border-border p-6 space-y-4">
-          <div>
-            <Link to="/" className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
-              <ArrowLeft className="h-3 w-3" /> Voltar
+      <div className="min-h-screen flex items-center justify-center p-4 bg-background">
+        <div className="w-full max-w-sm space-y-6">
+          <div className="text-center">
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 mb-4">
+              <ShieldCheck className="h-7 w-7 text-primary" />
+            </div>
+            <h1 className="text-2xl font-bold">Supervisor</h1>
+            <p className="text-sm text-muted-foreground mt-1">Acesso administrativo</p>
+          </div>
+
+          <form onSubmit={entrar} className="bg-card border border-border rounded-xl p-6 space-y-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground uppercase tracking-wide">Email</Label>
+              <Input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="h-11" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground uppercase tracking-wide">Senha</Label>
+              <Input type="password" required value={senha} onChange={(e) => setSenha(e.target.value)} className="h-11" />
+            </div>
+            <Button type="submit" disabled={submitting} className="w-full h-12 text-base font-semibold">
+              {submitting
+                ? <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                : "Entrar"}
+            </Button>
+          </form>
+
+          <div className="text-center">
+            <Link to="/" className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
+              <ArrowLeft className="h-3.5 w-3.5" /> Voltar ao início
             </Link>
-            <h1 className="text-2xl font-bold mt-2">Supervisor</h1>
-            <p className="text-sm text-muted-foreground">Acesso administrativo</p>
           </div>
-          <div className="space-y-2">
-            <Label>Email</Label>
-            <Input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <Label>Senha</Label>
-            <Input type="password" required value={senha} onChange={(e) => setSenha(e.target.value)} />
-          </div>
-          <Button type="submit" disabled={submitting} className="w-full h-12">
-            {submitting ? "..." : "Entrar"}
-          </Button>
-        </form>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen p-4 md:p-8 max-w-5xl mx-auto">
-      <header className="mb-6 flex items-center justify-between gap-2">
-        <div>
-          <p className="text-xs text-muted-foreground">Supervisor</p>
-          <h1 className="text-xl font-bold">{user.email}</h1>
+    <div className="min-h-screen bg-background">
+      <header className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b border-border">
+        <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Supervisor</p>
+            <p className="text-sm font-semibold truncate leading-tight">{user.email}</p>
+          </div>
+          <Button variant="ghost" size="sm" onClick={sair} className="gap-1.5 text-muted-foreground hover:text-foreground shrink-0">
+            <LogOut className="h-4 w-4" /> Sair
+          </Button>
         </div>
-        <Button variant="ghost" size="sm" onClick={sair}><LogOut className="h-4 w-4 mr-1" /> Sair</Button>
+        <nav className="max-w-5xl mx-auto px-4 flex gap-1 border-t border-border/50">
+          {[
+            { to: "/admin" as const, label: "Inventários", exact: true },
+            { to: "/admin/operadores" as const, label: "Operadores", exact: false },
+            { to: "/admin/produtos" as const, label: "Produtos", exact: false },
+          ].map(({ to, label, exact }) => (
+            <Link
+              key={to}
+              to={to}
+              activeOptions={{ exact }}
+              className="px-4 py-2.5 text-sm text-muted-foreground hover:text-foreground transition-colors [&.active]:text-primary [&.active]:border-b-2 [&.active]:border-primary"
+            >
+              {label}
+            </Link>
+          ))}
+        </nav>
       </header>
 
-      <nav className="flex gap-2 mb-6 border-b border-border">
-        <Link to="/admin" className="px-4 py-2 text-sm hover:text-primary [&.active]:text-primary [&.active]:border-b-2 [&.active]:border-primary" activeOptions={{ exact: true }}>Inventários</Link>
-        <Link to="/admin/operadores" className="px-4 py-2 text-sm hover:text-primary [&.active]:text-primary [&.active]:border-b-2 [&.active]:border-primary">Operadores</Link>
-        <Link to="/admin/produtos" className="px-4 py-2 text-sm hover:text-primary [&.active]:text-primary [&.active]:border-b-2 [&.active]:border-primary">Produtos</Link>
-      </nav>
-
-      <Outlet />
+      <main className="max-w-5xl mx-auto px-4 py-6">
+        <Outlet />
+      </main>
     </div>
   );
 }

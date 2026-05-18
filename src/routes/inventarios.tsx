@@ -3,7 +3,8 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { getOperador, clearOperador } from "@/lib/operador-session";
 import { Button } from "@/components/ui/button";
-import { Package, LogOut } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { LogOut, Package2, PackageOpen, ChevronRight } from "lucide-react";
 
 export const Route = createFileRoute("/inventarios")({
   component: ListaInventarios,
@@ -21,7 +22,6 @@ function ListaInventarios() {
     const o = getOperador();
     if (!o) { navigate({ to: "/" }); return; }
     setOp(o);
-
     (async () => {
       const { data, error } = await supabase
         .from("inventarios")
@@ -32,70 +32,81 @@ function ListaInventarios() {
       const ids = (data ?? []).map((d) => d.id);
       const counts: Record<string, number> = {};
       if (ids.length > 0) {
-        const { data: leituras } = await supabase
-          .from("leituras")
-          .select("inventario_id")
-          .in("inventario_id", ids);
-        for (const l of leituras ?? []) {
-          counts[l.inventario_id] = (counts[l.inventario_id] ?? 0) + 1;
-        }
+        const { data: leituras } = await supabase.from("leituras").select("inventario_id").in("inventario_id", ids);
+        for (const l of leituras ?? []) counts[l.inventario_id] = (counts[l.inventario_id] ?? 0) + 1;
       }
       setInvs((data ?? []).map((d) => ({ ...d, leituras: counts[d.id] ?? 0 })));
       setLoading(false);
     })();
   }, [navigate]);
 
-  function sair() {
-    clearOperador();
-    navigate({ to: "/" });
-  }
+  function sair() { clearOperador(); navigate({ to: "/" }); }
 
   return (
-    <div className="min-h-screen p-4 md:p-8">
-      <header className="mb-8 flex items-center justify-between">
-        <div>
-          <p className="text-sm text-muted-foreground">Operador</p>
-          <h1 className="text-2xl font-bold">{op?.nome}</h1>
+    <div className="min-h-screen bg-background">
+      <header className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b border-border">
+        <div className="max-w-lg mx-auto px-4 h-14 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Operador</p>
+            <p className="text-sm font-semibold truncate leading-tight">{op?.nome}</p>
+          </div>
+          <Button variant="ghost" size="sm" onClick={sair} className="gap-1.5 text-muted-foreground hover:text-foreground shrink-0">
+            <LogOut className="h-4 w-4" /> Trocar
+          </Button>
         </div>
-        <Button variant="ghost" size="sm" onClick={sair}><LogOut className="h-4 w-4 mr-1" /> Trocar</Button>
       </header>
 
-      <h2 className="text-xl font-semibold mb-4">Inventários abertos</h2>
+      <main className="max-w-lg mx-auto px-4 py-6">
+        <h2 className="text-base font-semibold text-muted-foreground uppercase tracking-wide mb-4">Inventários disponíveis</h2>
 
-      {loading ? (
-        <p className="text-muted-foreground">Carregando...</p>
-      ) : invs.length === 0 ? (
-        <div className="rounded-xl border border-dashed p-8 text-center">
-          <p className="text-muted-foreground">Nenhum inventário aberto no momento.</p>
-          <Link to="/admin" className="mt-3 inline-block text-primary underline text-sm">Supervisor: criar inventário</Link>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {invs.map((inv) => (
-            <Link
-              key={inv.id}
-              to="/inventario/$id/contagem"
-              params={{ id: inv.id }}
-              className="bg-card hover:bg-secondary p-5 rounded-xl border border-border transition active:scale-[0.98]"
-            >
-              <div className="flex items-start gap-3">
-                <div className="bg-primary/10 text-primary p-2 rounded-lg">
-                  <Package className="h-5 w-5" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold truncate">{inv.nome}</p>
-                  {inv.descricao && <p className="text-sm text-muted-foreground truncate">{inv.descricao}</p>}
-                  <div className="flex gap-4 mt-2 text-xs text-muted-foreground">
-                    <span>{new Date(inv.criado_em).toLocaleDateString("pt-BR")}</span>
-                    <span>{inv.leituras} leituras</span>
+        {loading ? (
+          <div className="flex justify-center py-16">
+            <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : invs.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-border p-10 text-center">
+            <PackageOpen className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
+            <p className="text-sm text-muted-foreground">Nenhum inventário aberto no momento.</p>
+            <Link to="/admin" className="mt-3 inline-block text-primary underline text-sm">
+              Supervisor: criar inventário
+            </Link>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {invs.map((inv) => (
+              <Link
+                key={inv.id}
+                to="/inventario/$id/contagem"
+                params={{ id: inv.id }}
+                className="block bg-card border border-border rounded-xl p-4 hover:border-primary/40 active:scale-[0.99] transition-all"
+              >
+                <div className="flex items-start gap-3 mb-4">
+                  <div className="bg-primary/10 text-primary p-2.5 rounded-xl shrink-0">
+                    <Package2 className="h-5 w-5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold truncate leading-tight">{inv.nome}</p>
+                    {inv.descricao && <p className="text-xs text-muted-foreground truncate mt-0.5">{inv.descricao}</p>}
+                    <div className="flex items-center gap-3 mt-2">
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(inv.criado_em).toLocaleDateString("pt-BR")}
+                      </span>
+                      {inv.leituras > 0 && (
+                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
+                          {inv.leituras} leituras
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-              <Button className="w-full mt-4 h-12 text-base" size="lg">Continuar contagem</Button>
-            </Link>
-          ))}
-        </div>
-      )}
+                <div className="flex items-center justify-center gap-2 bg-primary text-primary-foreground rounded-lg py-3 font-semibold text-sm">
+                  Iniciar contagem <ChevronRight className="h-4 w-4" />
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+      </main>
     </div>
   );
 }

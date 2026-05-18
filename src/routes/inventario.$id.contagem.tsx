@@ -115,6 +115,7 @@ function TelaContagem() {
         numero_contagem: q.numero_contagem,
         lido_em: q.lido_em,
         operador_nome: q.operador_nome ?? null,
+        operador_id: q.operador_id ?? null,
       }));
     const remotas: LeituraExistente[] = leiturasCache
       .filter((l) => l.codigo_posicao === codPos)

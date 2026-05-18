@@ -260,6 +260,9 @@ function TelaContagem() {
           scanBufferRef.current = "";
           setScanDisplay("");
           lastKeyTimeRef.current = 0;
+          // Limpa o DOM do input (necessário no Android onde o valor fica no campo)
+          if (etapa === "posicao" && refPos.current) refPos.current.value = "";
+          if (etapa === "produto" && refProd.current) refProd.current.value = "";
           if (etapa === "posicao") void confirmarPosicao(buffer);
           else void confirmarProduto(buffer);
         }
@@ -346,8 +349,12 @@ function TelaContagem() {
                 ref={refPos}
                 type="text"
                 inputMode="none"
-                value={scanDisplay}
-                onChange={() => {}}
+                onChange={(e) => {
+                  // Android: scanner injeta via IME (sem keydown por char)
+                  scanBufferRef.current = e.target.value;
+                  setScanDisplay(e.target.value);
+                  lastKeyTimeRef.current = performance.now();
+                }}
                 onBlur={(e) => {
                   const goingToDialog = e.relatedTarget instanceof Element && !!e.relatedTarget.closest('[role="dialog"]');
                   if (!goingToDialog) window.requestAnimationFrame(() => refPos.current?.focus({ preventScroll: true }));
@@ -382,8 +389,12 @@ function TelaContagem() {
                   ref={refProd}
                   type="text"
                   inputMode="none"
-                  value={scanDisplay}
-                  onChange={() => {}}
+                  onChange={(e) => {
+                    // Android: scanner injeta via IME (sem keydown por char)
+                    scanBufferRef.current = e.target.value;
+                    setScanDisplay(e.target.value);
+                    lastKeyTimeRef.current = performance.now();
+                  }}
                   onBlur={(e) => {
                     const goingToDialog = e.relatedTarget instanceof Element && !!e.relatedTarget.closest('[role="dialog"]');
                     if (!goingToDialog) window.requestAnimationFrame(() => refProd.current?.focus({ preventScroll: true }));

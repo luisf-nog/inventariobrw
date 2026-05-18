@@ -395,37 +395,41 @@ function TelaContagem() {
 
       {/* Popup de confirmação */}
       <Dialog open={confirmandoLeitura} onOpenChange={(open) => !open && setConfirmandoLeitura(false)}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <PackageCheck className="h-5 w-5 text-primary" /> Confirmar leitura
+        <DialogContent className="max-w-sm bg-popover !opacity-100 shadow-2xl gap-3 p-5">
+          <DialogHeader className="space-y-0">
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <PackageCheck className="h-5 w-5 text-primary shrink-0" /> Confirmar leitura
             </DialogTitle>
           </DialogHeader>
-          <div className="rounded-lg overflow-hidden border border-border divide-y divide-border">
-            <div className="px-4 py-3">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Endereço</p>
-              <p className="font-mono font-bold text-lg leading-tight">{formatPosicaoDisplay(posicao)}</p>
+
+          <div className="rounded-lg border border-border bg-background/40 overflow-hidden">
+            <div className="grid grid-cols-[88px_1fr] items-center gap-3 px-3 py-2.5 border-b border-border">
+              <span className="text-[10px] text-muted-foreground uppercase tracking-wide">Endereço</span>
+              <span className="font-mono font-bold text-base leading-tight truncate">{formatPosicaoDisplay(posicao)}</span>
             </div>
-            <div className="px-4 py-3">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Produto</p>
-              <p className="font-mono font-bold text-lg leading-tight">{produtoSku}</p>
-              {produtoDesc && <p className="text-xs text-muted-foreground mt-0.5">{produtoDesc}</p>}
+            <div className="grid grid-cols-[88px_1fr] items-center gap-3 px-3 py-2.5 border-b border-border">
+              <span className="text-[10px] text-muted-foreground uppercase tracking-wide">Produto</span>
+              <div className="min-w-0">
+                <p className="font-mono font-bold text-base leading-tight truncate">{produtoSku}</p>
+                {produtoDesc && <p className="text-[11px] text-muted-foreground leading-tight truncate">{produtoDesc}</p>}
+              </div>
             </div>
-            <div className="px-4 py-3">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Quantidade</p>
-              <p className="font-bold text-3xl text-primary leading-tight">{quantidade}</p>
+            <div className="grid grid-cols-[88px_1fr] items-center gap-3 px-3 py-3 bg-primary/5">
+              <span className="text-[10px] text-muted-foreground uppercase tracking-wide">Quantidade</span>
+              <span className="font-bold text-3xl text-primary leading-none tabular-nums">{quantidade}</span>
             </div>
           </div>
-          <DialogFooter className="flex-col gap-2 sm:flex-col">
+
+          <div className="flex flex-col gap-2 pt-1">
             <Button onClick={gravar} disabled={salvando} className="w-full h-12 text-base font-bold gap-2">
               {salvando
                 ? <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
                 : <><CheckCircle2 className="h-5 w-5" /> Confirmar</>}
             </Button>
-            <Button variant="outline" onClick={() => setConfirmandoLeitura(false)} className="w-full h-10">
+            <Button variant="outline" onClick={() => setConfirmandoLeitura(false)} className="w-full h-10 text-sm">
               Corrigir quantidade
             </Button>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 

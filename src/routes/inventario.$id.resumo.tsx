@@ -4,7 +4,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Download, FileSpreadsheet, Lock, AlertTriangle } from "lucide-react";
+import {
+  ArrowLeft, Download, FileSpreadsheet, Lock, AlertTriangle,
+  Trash2, Users, Clock, Activity, BarChart2,
+} from "lucide-react";
 import * as XLSX from "xlsx";
 import { toast } from "sonner";
 import { buscarDescricoesPorSku, traduzirEansParaSkus } from "@/lib/produtos";
@@ -31,6 +34,16 @@ type Linha = {
   lido_em: string;
 };
 
+function tempoRelativo(iso: string) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const min = Math.floor(diff / 60000);
+  if (min < 1) return "agora";
+  if (min < 60) return `${min}min atrás`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `${h}h atrás`;
+  return new Date(iso).toLocaleDateString("pt-BR");
+}
+
 function TelaResumo() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
@@ -43,6 +56,7 @@ function TelaResumo() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [confirmandoEncerrar, setConfirmandoEncerrar] = useState(false);
   const [confirmTexto, setConfirmTexto] = useState("");
+  const [deletandoId, setDeletandoId] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setIsAdmin(!!data.user));
@@ -77,6 +91,8 @@ function TelaResumo() {
     })();
   }, [id]);
 
+  /* ── Métricas derivadas ─────────────────────────────────────────── */
+
   const divergencias = useMemo(() => {
     const set = new Set<string>();
     const byPP = new Map<string, Map<number, number>>();
@@ -95,6 +111,44 @@ function TelaResumo() {
     return set;
   }, [linhas]);
 
+  const stats = useMemo(() => ({
+    posicoes: new Set(linhas.map((l) => l.codigo_posicao)).size,
+    leituras: linhas.length,
+    operadores: new Set(linhas.map((l) => l.operador_id).filter(Boolean)).size,
+    divergencias: divergencias.size,
+  }), [linhas, divergencias]);
+
+  const statsPorOperador = useMemo(() => {
+    const map = new Map<string, { nome: string; count: number; ultima: string }>();
+    for (const l of linhas) {
+      const nome = l.operador_nome ?? "Desconhecido";
+      const ex = map.get(nome) ?? { nome, count: 0, ultima: "" };
+      map.set(nome, {
+        nome,
+        count: ex.count + 1,
+        ultima: l.lido_em > ex.ultima ? l.lido_em : ex.ultima,
+      });
+    }
+    return Array.from(map.values()).sort((a, b) => b.count - a.count);
+  }, [linhas]);
+
+  const statsPorContagem = useMemo(() => {
+    const map = new Map<number, number>();
+    for (const l of linhas) map.set(l.numero_contagem, (map.get(l.numero_contagem) ?? 0) + 1);
+    return Array.from(map.entries()).sort((a, b) => a[0] - b[0]);
+  }, [linhas]);
+
+  const ultimasLeituras = useMemo(() =>
+    [...linhas].sort((a, b) => b.lido_em.localeCompare(a.lido_em)).slice(0, 15),
+  [linhas]);
+
+  const ritmoUltimaHora = useMemo(() => {
+    const corte = new Date(Date.now() - 3_600_000).toISOString();
+    return linhas.filter((l) => l.lido_em >= corte).length;
+  }, [linhas]);
+
+  /* ── Filtro ─────────────────────────────────────────────────────── */
+
   const filtrados = linhas.filter((l) => {
     const fp = filtroPos.trim().toUpperCase();
     const fr = filtroProd.trim().toUpperCase();
@@ -105,12 +159,15 @@ function TelaResumo() {
     return true;
   });
 
-  const stats = useMemo(() => ({
-    posicoes: new Set(linhas.map((l) => l.codigo_posicao)).size,
-    leituras: linhas.length,
-    operadores: new Set(linhas.map((l) => l.operador_id).filter(Boolean)).size,
-    divergencias: divergencias.size,
-  }), [linhas, divergencias]);
+  /* ── Ações ──────────────────────────────────────────────────────── */
+
+  async function deletarLeitura(leituraId: string) {
+    const { error } = await supabase.from("leituras").delete().eq("id", leituraId);
+    if (error) { toast.error(error.message); return; }
+    setLinhas((prev) => prev.filter((l) => l.id !== leituraId));
+    setDeletandoId(null);
+    toast.success("Leitura removida");
+  }
 
   function exportarCSV() {
     const header = ["posicao", "produto", "descricao", "contagem", "quantidade", "operador", "lido_em"];
@@ -153,11 +210,14 @@ function TelaResumo() {
     setInv((p) => p ? { ...p, status: "encerrado" } : p);
   }
 
+  const maxOpCount = statsPorOperador[0]?.count ?? 1;
+
+  /* ── Render ─────────────────────────────────────────────────────── */
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b border-border">
-        <div className="max-w-5xl mx-auto px-4 h-14 flex items-center gap-3">
+        <div className="max-w-6xl mx-auto px-4 h-14 flex items-center gap-3">
           <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => navigate({ to: "/inventarios" })}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
@@ -166,95 +226,251 @@ function TelaResumo() {
             {inv?.status === "encerrado" && <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">Encerrado</Badge>}
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <Button onClick={exportarXLSX} variant="outline" size="sm" className="gap-1.5">
+            <Button onClick={exportarXLSX} variant="outline" size="sm" className="gap-1.5 hidden sm:flex">
               <FileSpreadsheet className="h-4 w-4" /> XLSX
             </Button>
-            <Button onClick={exportarCSV} variant="outline" size="sm" className="gap-1.5">
+            <Button onClick={exportarCSV} variant="outline" size="sm" className="gap-1.5 hidden sm:flex">
               <Download className="h-4 w-4" /> CSV
+            </Button>
+            <Button onClick={exportarXLSX} variant="outline" size="icon" className="h-8 w-8 sm:hidden">
+              <FileSpreadsheet className="h-4 w-4" />
             </Button>
           </div>
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 py-6 space-y-5">
-        {/* Stats */}
+      <main className="max-w-6xl mx-auto px-4 py-6 space-y-6">
+
+        {/* ── KPIs ───────────────────────────────────────────────── */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {[
-            { label: "Posições", value: stats.posicoes },
-            { label: "Leituras", value: stats.leituras },
-            { label: "Operadores", value: stats.operadores },
-            { label: "Divergências", value: stats.divergencias, warn: stats.divergencias > 0 },
-          ].map(({ label, value, warn }) => (
-            <div key={label} className={`rounded-xl border p-4 bg-card ${warn && value > 0 ? "border-destructive/40 bg-destructive/5" : "border-border"}`}>
-              <p className="text-xs text-muted-foreground mb-1">{label}</p>
-              <p className={`text-2xl font-bold ${warn && value > 0 ? "text-destructive" : ""}`}>{value}</p>
-            </div>
-          ))}
-        </div>
-
-        {/* Filtros */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-          <Input placeholder="Filtrar posição" value={filtroPos} onChange={(e) => setFiltroPos(e.target.value)} />
-          <Input placeholder="Filtrar produto" value={filtroProd} onChange={(e) => setFiltroProd(e.target.value)} />
-          <Input placeholder="Filtrar operador" value={filtroOp} onChange={(e) => setFiltroOp(e.target.value)} />
-        </div>
-
-        {/* Tabela */}
-        {loading ? (
-          <div className="flex justify-center py-16">
-            <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          <div className="rounded-xl border border-border bg-card p-4">
+            <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1.5"><BarChart2 className="h-3.5 w-3.5" /> Posições</p>
+            <p className="text-3xl font-bold tabular-nums">{stats.posicoes}</p>
           </div>
-        ) : (
-          <div className="rounded-xl border border-border overflow-hidden">
+          <div className="rounded-xl border border-border bg-card p-4">
+            <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1.5"><Activity className="h-3.5 w-3.5" /> Leituras</p>
+            <p className="text-3xl font-bold tabular-nums">{stats.leituras}</p>
+            {ritmoUltimaHora > 0 && (
+              <p className="text-[10px] text-primary mt-1">{ritmoUltimaHora} na última hora</p>
+            )}
+          </div>
+          <div className="rounded-xl border border-border bg-card p-4">
+            <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1.5"><Users className="h-3.5 w-3.5" /> Operadores</p>
+            <p className="text-3xl font-bold tabular-nums">{stats.operadores}</p>
+          </div>
+          <div className={`rounded-xl border p-4 ${stats.divergencias > 0 ? "border-destructive/40 bg-destructive/5" : "border-border bg-card"}`}>
+            <p className={`text-xs mb-1 flex items-center gap-1.5 ${stats.divergencias > 0 ? "text-destructive" : "text-muted-foreground"}`}>
+              <AlertTriangle className="h-3.5 w-3.5" /> Divergências
+            </p>
+            <p className={`text-3xl font-bold tabular-nums ${stats.divergencias > 0 ? "text-destructive" : ""}`}>{stats.divergencias}</p>
+          </div>
+        </div>
+
+        {/* ── Dashboard ──────────────────────────────────────────── */}
+        {!loading && linhas.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+            {/* Por operador */}
+            <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+              <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+                <Users className="h-3.5 w-3.5" /> Por operador
+              </h3>
+              <div className="space-y-3">
+                {statsPorOperador.map((op) => (
+                  <div key={op.nome}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm font-medium truncate max-w-[60%]">{op.nome}</span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-xs text-muted-foreground">{tempoRelativo(op.ultima)}</span>
+                        <span className="text-sm font-bold tabular-nums">{op.count}</span>
+                      </div>
+                    </div>
+                    <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-primary rounded-full transition-all duration-500"
+                        style={{ width: `${Math.round((op.count / maxOpCount) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Por contagem + últimas leituras */}
+            <div className="space-y-4">
+              {/* Distribuição por contagem */}
+              <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+                <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+                  <BarChart2 className="h-3.5 w-3.5" /> Distribuição por contagem
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  {statsPorContagem.map(([ctg, count]) => (
+                    <div key={ctg} className="flex-1 min-w-[80px] rounded-lg border border-border bg-secondary/40 px-3 py-2 text-center">
+                      <p className="text-[10px] text-muted-foreground uppercase">
+                        {ctg}ª contagem
+                      </p>
+                      <p className="text-xl font-bold tabular-nums mt-0.5">{count}</p>
+                    </div>
+                  ))}
+                  {statsPorContagem.length === 0 && (
+                    <p className="text-xs text-muted-foreground">Sem dados</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Ritmo — leituras por hora (últimas 8h) */}
+              <RitmoPorHora linhas={linhas} />
+            </div>
+          </div>
+        )}
+
+        {/* ── Atividade recente ───────────────────────────────────── */}
+        {!loading && ultimasLeituras.length > 0 && (
+          <div className="rounded-xl border border-border bg-card overflow-hidden">
+            <div className="px-4 py-3 border-b border-border flex items-center gap-1.5">
+              <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+              <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Atividade recente</h3>
+              <span className="ml-auto text-[10px] text-muted-foreground">últimas {ultimasLeituras.length} leituras</span>
+            </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-secondary/50 border-b border-border">
+              <table className="w-full text-xs">
+                <thead className="bg-secondary/30 border-b border-border/50">
                   <tr>
-                    <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Posição</th>
-                    <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Produto</th>
-                    <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Descrição</th>
-                    <th className="px-3 py-2.5 text-center text-xs font-medium text-muted-foreground uppercase tracking-wide">Ctg</th>
-                    <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide">Qtd</th>
-                    <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Operador</th>
+                    <th className="px-3 py-2 text-left text-muted-foreground font-medium">Horário</th>
+                    <th className="px-3 py-2 text-left text-muted-foreground font-medium">Operador</th>
+                    <th className="px-3 py-2 text-left text-muted-foreground font-medium">Posição</th>
+                    <th className="px-3 py-2 text-left text-muted-foreground font-medium">Produto</th>
+                    <th className="px-3 py-2 text-right text-muted-foreground font-medium">Qtd</th>
+                    <th className="px-3 py-2 text-center text-muted-foreground font-medium">Ctg</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-border/50">
-                  {filtrados.map((l) => {
-                    const div = divergencias.has(`${l.codigo_posicao}|${l.sku}`);
-                    return (
-                      <tr key={l.id} className={div ? "bg-destructive/8" : "hover:bg-muted/20"}>
-                        <td className="px-3 py-2 font-mono text-xs">{formatPosicaoDisplay(l.codigo_posicao)}</td>
-                        <td className="px-3 py-2 font-mono text-xs font-medium">{l.sku}</td>
-                        <td className="px-3 py-2 text-xs max-w-[200px] truncate text-muted-foreground" title={l.descricao}>
-                          {l.descricao || <span className="italic">—</span>}
-                        </td>
-                        <td className="px-3 py-2 text-center text-xs">{l.numero_contagem}</td>
-                        <td className="px-3 py-2 text-right font-semibold">
-                          {l.quantidade}
-                          {div && <AlertTriangle className="inline h-3 w-3 ml-1 text-destructive" />}
-                        </td>
-                        <td className="px-3 py-2 text-xs text-muted-foreground">{l.operador_nome ?? "—"}</td>
-                      </tr>
-                    );
-                  })}
-                  {filtrados.length === 0 && (
-                    <tr><td colSpan={6} className="px-3 py-10 text-center text-muted-foreground text-sm">Nenhuma leitura</td></tr>
-                  )}
+                <tbody className="divide-y divide-border/40">
+                  {ultimasLeituras.map((l) => (
+                    <tr key={l.id} className="hover:bg-muted/10">
+                      <td className="px-3 py-2 tabular-nums text-muted-foreground whitespace-nowrap">
+                        {new Date(l.lido_em).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                      </td>
+                      <td className="px-3 py-2 max-w-[100px] truncate">{l.operador_nome ?? "—"}</td>
+                      <td className="px-3 py-2 font-mono whitespace-nowrap">{formatPosicaoDisplay(l.codigo_posicao)}</td>
+                      <td className="px-3 py-2 font-mono font-medium">{l.sku}</td>
+                      <td className="px-3 py-2 text-right font-bold">{l.quantidade}</td>
+                      <td className="px-3 py-2 text-center text-muted-foreground">{l.numero_contagem}ª</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
           </div>
         )}
 
-        {/* Encerrar */}
+        {/* ── Filtros + Tabela completa ───────────────────────────── */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Todas as leituras {filtrados.length !== linhas.length && `(${filtrados.length} de ${linhas.length})`}
+            </h3>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+            <Input placeholder="Filtrar posição" value={filtroPos} onChange={(e) => setFiltroPos(e.target.value)} />
+            <Input placeholder="Filtrar produto" value={filtroProd} onChange={(e) => setFiltroProd(e.target.value)} />
+            <Input placeholder="Filtrar operador" value={filtroOp} onChange={(e) => setFiltroOp(e.target.value)} />
+          </div>
+
+          {loading ? (
+            <div className="flex justify-center py-16">
+              <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : (
+            <div className="rounded-xl border border-border overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-secondary/50 border-b border-border">
+                    <tr>
+                      <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Posição</th>
+                      <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Produto</th>
+                      <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide hidden md:table-cell">Descrição</th>
+                      <th className="px-3 py-2.5 text-center text-xs font-medium text-muted-foreground uppercase tracking-wide">Ctg</th>
+                      <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide">Qtd</th>
+                      <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide hidden sm:table-cell">Operador</th>
+                      <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide hidden lg:table-cell">Horário</th>
+                      {isAdmin && <th className="px-3 py-2.5 w-10" />}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/50">
+                    {filtrados.map((l) => {
+                      const div = divergencias.has(`${l.codigo_posicao}|${l.sku}`);
+                      const confirmando = deletandoId === l.id;
+                      return (
+                        <tr key={l.id} className={`${div ? "bg-destructive/8" : "hover:bg-muted/20"} ${confirmando ? "bg-destructive/15" : ""}`}>
+                          <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{formatPosicaoDisplay(l.codigo_posicao)}</td>
+                          <td className="px-3 py-2 font-mono text-xs font-medium">{l.sku}</td>
+                          <td className="px-3 py-2 text-xs max-w-[200px] truncate text-muted-foreground hidden md:table-cell" title={l.descricao}>
+                            {l.descricao || <span className="italic">—</span>}
+                          </td>
+                          <td className="px-3 py-2 text-center text-xs">{l.numero_contagem}</td>
+                          <td className="px-3 py-2 text-right font-semibold">
+                            {l.quantidade}
+                            {div && <AlertTriangle className="inline h-3 w-3 ml-1 text-destructive" />}
+                          </td>
+                          <td className="px-3 py-2 text-xs text-muted-foreground hidden sm:table-cell">{l.operador_nome ?? "—"}</td>
+                          <td className="px-3 py-2 text-xs text-muted-foreground tabular-nums hidden lg:table-cell">
+                            {new Date(l.lido_em).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                          </td>
+                          {isAdmin && (
+                            <td className="px-2 py-1 text-right">
+                              {confirmando ? (
+                                <div className="flex items-center gap-1 justify-end">
+                                  <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    className="h-6 px-2 text-[10px]"
+                                    onClick={() => deletarLeitura(l.id)}
+                                  >
+                                    Excluir
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-6 w-6 p-0 text-muted-foreground"
+                                    onClick={() => setDeletandoId(null)}
+                                  >
+                                    ✕
+                                  </Button>
+                                </div>
+                              ) : (
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-7 w-7 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 [tr:hover_&]:opacity-100"
+                                  onClick={() => setDeletandoId(l.id)}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              )}
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
+                    {filtrados.length === 0 && (
+                      <tr>
+                        <td colSpan={isAdmin ? 8 : 7} className="px-3 py-10 text-center text-muted-foreground text-sm">
+                          Nenhuma leitura
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── Encerrar ───────────────────────────────────────────── */}
         {isAdmin && inv?.status === "aberto" && (
-          <div className="pt-2">
-            <Button
-              variant="destructive"
-              size="lg"
-              className="gap-2"
-              onClick={() => { setConfirmandoEncerrar(true); setConfirmTexto(""); }}
-            >
+          <div className="pt-2 flex items-center gap-3">
+            <Button variant="destructive" size="lg" className="gap-2"
+              onClick={() => { setConfirmandoEncerrar(true); setConfirmTexto(""); }}>
               <Lock className="h-4 w-4" /> Encerrar inventário
             </Button>
           </div>
@@ -267,6 +483,7 @@ function TelaResumo() {
         )}
       </main>
 
+      {/* AlertDialog de encerramento */}
       <AlertDialog open={confirmandoEncerrar} onOpenChange={setConfirmandoEncerrar}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -275,12 +492,7 @@ function TelaResumo() {
               Esta ação impede novas leituras. Digite <strong>ENCERRAR</strong> para confirmar.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <Input
-            value={confirmTexto}
-            onChange={(e) => setConfirmTexto(e.target.value)}
-            placeholder="ENCERRAR"
-            className="font-mono"
-          />
+          <Input value={confirmTexto} onChange={(e) => setConfirmTexto(e.target.value)} placeholder="ENCERRAR" className="font-mono" />
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={encerrar} className="bg-destructive hover:bg-destructive/90">
@@ -289,6 +501,54 @@ function TelaResumo() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  );
+}
+
+/* ── Gráfico de barras por hora ──────────────────────────────────── */
+function RitmoPorHora({ linhas }: { linhas: Linha[] }) {
+  const dados = useMemo(() => {
+    const agora = Date.now();
+    const barras: { hora: string; count: number }[] = [];
+    for (let h = 7; h >= 0; h--) {
+      const inicio = new Date(agora - (h + 1) * 3_600_000).toISOString();
+      const fim = new Date(agora - h * 3_600_000).toISOString();
+      const count = linhas.filter((l) => l.lido_em >= inicio && l.lido_em < fim).length;
+      const label = new Date(agora - h * 3_600_000).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+      barras.push({ hora: label, count });
+    }
+    return barras;
+  }, [linhas]);
+
+  const max = Math.max(...dados.map((d) => d.count), 1);
+  const total = dados.reduce((s, d) => s + d.count, 0);
+  if (total === 0) return null;
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+      <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+        <Activity className="h-3.5 w-3.5" /> Ritmo (últimas 8h)
+      </h3>
+      <div className="flex items-end gap-1 h-16">
+        {dados.map((d, i) => (
+          <div key={i} className="flex-1 flex flex-col items-center gap-1 group">
+            <div className="w-full flex items-end justify-center" style={{ height: 48 }}>
+              <div
+                className="w-full rounded-sm bg-primary/70 group-hover:bg-primary transition-all"
+                style={{ height: `${Math.max((d.count / max) * 48, d.count > 0 ? 3 : 0)}px` }}
+                title={`${d.hora}: ${d.count} leituras`}
+              />
+            </div>
+            {d.count > 0 && (
+              <span className="text-[9px] text-muted-foreground tabular-nums leading-none">{d.count}</span>
+            )}
+          </div>
+        ))}
+      </div>
+      <div className="flex justify-between text-[9px] text-muted-foreground">
+        <span>{dados[0]?.hora}</span>
+        <span>{dados[dados.length - 1]?.hora}</span>
+      </div>
     </div>
   );
 }

@@ -60,8 +60,11 @@ function TelaResumo() {
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setIsAdmin(!!data.user));
-    (async () => {
+
+    let cancelado = false;
+    const carregar = async () => {
       const { data: invData } = await supabase.from("inventarios").select("nome, status").eq("id", id).single();
+      if (cancelado) return;
       setInv(invData);
       const { data, error } = await supabase
         .from("leituras")
@@ -69,11 +72,13 @@ function TelaResumo() {
         .eq("inventario_id", id)
         .order("codigo_posicao")
         .order("lido_em", { ascending: true });
+      if (cancelado) return;
       if (error) { toast.error(error.message); setLoading(false); return; }
       const codigosLidos = Array.from(new Set((data ?? []).map((d: any) => d.codigo_produto)));
       const eanToSku = await traduzirEansParaSkus(codigosLidos);
       const skuPorCodigo = (codigo: string) => eanToSku[codigo.replace(/\D/g, "")] ?? codigo;
       const descricoes = await buscarDescricoesPorSku(codigosLidos.map(skuPorCodigo));
+      if (cancelado) return;
       const ls: Linha[] = (data ?? []).map((d: any) => ({
         id: d.id,
         codigo_posicao: d.codigo_posicao,
@@ -88,7 +93,36 @@ function TelaResumo() {
       }));
       setLinhas(ls);
       setLoading(false);
-    })();
+    };
+
+    carregar();
+
+    // Realtime: recarrega ao detectar mudanças nas leituras deste inventário
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    const agendarRecarga = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => { carregar(); }, 400);
+    };
+
+    const channel = supabase
+      .channel(`resumo-${id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "leituras", filter: `inventario_id=eq.${id}` },
+        agendarRecarga,
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "inventarios", filter: `id=eq.${id}` },
+        agendarRecarga,
+      )
+      .subscribe();
+
+    return () => {
+      cancelado = true;
+      if (debounceTimer) clearTimeout(debounceTimer);
+      supabase.removeChannel(channel);
+    };
   }, [id]);
 
   /* ── Métricas derivadas ─────────────────────────────────────────── */

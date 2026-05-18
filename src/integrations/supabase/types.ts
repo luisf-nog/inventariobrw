@@ -110,6 +110,7 @@ export type Database = {
           id: string
           nome: string
           pin: string | null
+          tem_pin: boolean | null
         }
         Insert: {
           ativo?: boolean
@@ -117,6 +118,7 @@ export type Database = {
           id?: string
           nome: string
           pin?: string | null
+          tem_pin?: boolean | null
         }
         Update: {
           ativo?: boolean
@@ -124,6 +126,7 @@ export type Database = {
           id?: string
           nome?: string
           pin?: string | null
+          tem_pin?: boolean | null
         }
         Relationships: []
       }
@@ -205,6 +208,10 @@ export type Database = {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
+        Returns: boolean
+      }
+      verificar_pin_operador: {
+        Args: { p_operador_id: string; p_pin: string }
         Returns: boolean
       }
     }

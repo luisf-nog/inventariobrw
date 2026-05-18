@@ -78,9 +78,6 @@ export function PosicaoJaContadaModal({ open, posicao, contagemAtual, leituras, 
           <Button size="lg" variant="default" className="h-12 justify-start gap-3 text-sm font-semibold" onClick={() => onEscolher("nova_contagem")}>
             <span className="text-base">🔄</span> Iniciar {contagemAtual + 1}ª contagem
           </Button>
-          <Button size="lg" variant="secondary" className="h-12 justify-start gap-3 text-sm" onClick={() => onEscolher("adicionar")}>
-            <span className="text-base">➕</span> Adicionar à {contagemAtual}ª contagem
-          </Button>
           <Button size="lg" variant="ghost" className="h-10 justify-start gap-3 text-sm text-muted-foreground" onClick={() => onEscolher("pular")}>
             <span className="text-base">⏭</span> Pular esta posição
           </Button>

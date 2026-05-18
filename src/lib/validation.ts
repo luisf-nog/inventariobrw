@@ -5,7 +5,13 @@ export function normalizeCode(raw: string): string {
 export function formatPosicaoDisplay(codigo: string): string {
   const c = codigo.trim();
   if (c.length === 10) return `${c.slice(0,2)}.${c.slice(2,5)}.${c.slice(5,7)}.${c.slice(7,10)}`;
-  if (c.length === 12) return `${c.slice(0,2)}.${c.slice(2,5)}.${c.slice(5,8)}.${c.slice(8,12)}`;
+  if (c.length === 12) {
+    // WMS pads with a leading zero on segment 3 and a zero in the penultimate position of segment 4
+    // e.g. 019950011305 → 01.995.01.135
+    const seg3 = c.slice(6, 8);           // skip structural zero at c[5]
+    const seg4 = c.slice(8, 10) + c[11]; // skip structural zero at c[10]
+    return `${c.slice(0,2)}.${c.slice(2,5)}.${seg3}.${seg4}`;
+  }
   return c;
 }
 

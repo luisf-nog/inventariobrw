@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { getOperador, clearOperador } from "@/lib/operador-session";
 import { beepSuccess, beepWarn, beepError } from "@/lib/feedback";
@@ -22,7 +22,7 @@ export const Route = createFileRoute("/inventario/$id/contagem")({
 });
 
 type Etapa = "posicao" | "produto" | "quantidade";
-type LeituraCache = LeituraExistente & { codigo_posicao: string };
+type LeituraCache = LeituraExistente & { codigo_posicao: string; operador_id: string | null };
 
 function TelaContagem() {
   const { id: inventarioId } = Route.useParams();
@@ -53,6 +53,18 @@ function TelaContagem() {
   const lastKeyTimeRef = useRef(0);
   const [scanDisplay, setScanDisplay] = useState("");
 
+  const minhaPos = useMemo(() => {
+    if (!op || leiturasCache.length === 0) return null;
+    const counts = new Map<string, number>();
+    for (const l of leiturasCache) {
+      if (!l.operador_id) continue;
+      counts.set(l.operador_id, (counts.get(l.operador_id) ?? 0) + 1);
+    }
+    if (!counts.has(op.id)) return null;
+    const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+    return sorted.findIndex(([id]) => id === op.id) + 1;
+  }, [leiturasCache, op]);
+
   const carregarLeiturasExistentes = useCallback(async () => {
     if (!navigator.onLine) return;
     const { data, error } = await supabase
@@ -68,6 +80,7 @@ function TelaContagem() {
       numero_contagem: d.numero_contagem,
       lido_em: d.lido_em,
       operador_nome: d.operadores?.nome ?? null,
+      operador_id: d.operador_id ?? null,
     })));
   }, [inventarioId]);
 
@@ -182,7 +195,7 @@ function TelaContagem() {
     }
     setSalvando(false);
     if (!offline) {
-      setLeiturasCache((prev) => [{ codigo_posicao: posicao, codigo_produto: produtoSku, quantidade: qtd, numero_contagem: numeroContagem, operador_nome: op.nome, lido_em: lidoEm }, ...prev]);
+      setLeiturasCache((prev) => [{ codigo_posicao: posicao, codigo_produto: produtoSku, quantidade: qtd, numero_contagem: numeroContagem, operador_nome: op.nome, operador_id: op.id, lido_em: lidoEm }, ...prev]);
     }
     beepSuccess();
     setUltima({ posicao, sku: produtoSku, desc: produtoDesc, qtd, contagem: numeroContagem });
@@ -209,6 +222,20 @@ function TelaContagem() {
             <p className="text-sm font-semibold truncate leading-tight mt-0.5">{op?.nome}</p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            {minhaPos !== null && (
+              <div className={`flex items-center gap-1 text-[11px] px-2 py-1 rounded-full border font-bold ${
+                minhaPos === 1
+                  ? "text-yellow-400 border-yellow-400/40 bg-yellow-400/10"
+                  : minhaPos === 2
+                  ? "text-slate-300 border-slate-400/30 bg-slate-400/10"
+                  : minhaPos === 3
+                  ? "text-amber-600 border-amber-600/30 bg-amber-600/10"
+                  : "text-muted-foreground border-border/50 bg-muted/20"
+              }`}>
+                {minhaPos === 1 ? "🏆" : minhaPos === 2 ? "🥈" : minhaPos === 3 ? "🥉" : null}
+                {minhaPos}°
+              </div>
+            )}
             <div className={`flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full border font-medium ${
               online
                 ? "text-success border-success/30 bg-success/10"

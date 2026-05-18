@@ -6,11 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { LogOut, Package2, PackageOpen, ChevronRight } from "lucide-react";
 
+type RankEntry = { id: string; nome: string; count: number };
+
 export const Route = createFileRoute("/inventarios")({
   component: ListaInventarios,
 });
 
-type Inv = { id: string; nome: string; descricao: string | null; criado_em: string; leituras: number };
+type Inv = { id: string; nome: string; descricao: string | null; criado_em: string; leituras: number; ranking: RankEntry[] };
 
 function ListaInventarios() {
   const navigate = useNavigate();
@@ -31,11 +33,27 @@ function ListaInventarios() {
       if (error) { console.error(error); setLoading(false); return; }
       const ids = (data ?? []).map((d) => d.id);
       const counts: Record<string, number> = {};
+      const rankMap: Record<string, Map<string, RankEntry>> = {};
       if (ids.length > 0) {
-        const { data: leituras } = await supabase.from("leituras").select("inventario_id").in("inventario_id", ids);
-        for (const l of leituras ?? []) counts[l.inventario_id] = (counts[l.inventario_id] ?? 0) + 1;
+        const { data: leituras } = await supabase
+          .from("leituras")
+          .select("inventario_id, operador_id, operadores(nome)")
+          .in("inventario_id", ids);
+        for (const l of (leituras ?? []) as any[]) {
+          counts[l.inventario_id] = (counts[l.inventario_id] ?? 0) + 1;
+          const opId = l.operador_id as string | null;
+          if (!opId) continue;
+          if (!rankMap[l.inventario_id]) rankMap[l.inventario_id] = new Map();
+          const ex = rankMap[l.inventario_id].get(opId) ?? { id: opId, nome: l.operadores?.nome ?? "?", count: 0 };
+          ex.count++;
+          rankMap[l.inventario_id].set(opId, ex);
+        }
       }
-      setInvs((data ?? []).map((d) => ({ ...d, leituras: counts[d.id] ?? 0 })));
+      setInvs((data ?? []).map((d) => ({
+        ...d,
+        leituras: counts[d.id] ?? 0,
+        ranking: Array.from(rankMap[d.id]?.values() ?? []).sort((a, b) => b.count - a.count),
+      })));
       setLoading(false);
     })();
   }, [navigate]);
@@ -102,6 +120,37 @@ function ListaInventarios() {
                 <div className="flex items-center justify-center gap-2 bg-primary text-primary-foreground rounded-lg py-3 font-semibold text-sm">
                   Iniciar contagem <ChevronRight className="h-4 w-4" />
                 </div>
+
+                {inv.ranking.length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-border/50 space-y-1.5">
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1.5">Ranking</p>
+                    {inv.ranking.slice(0, 3).map((r, i) => {
+                      const medals = ["🥇", "🥈", "🥉"];
+                      const isMe = r.id === op?.id;
+                      return (
+                        <div key={r.id} className={`flex items-center gap-2 text-xs ${isMe ? "font-bold text-primary" : "text-muted-foreground"}`}>
+                          <span className="w-5 shrink-0 text-center text-sm">{medals[i]}</span>
+                          <span className="flex-1 truncate">{r.nome}{isMe ? " (você)" : ""}</span>
+                          <span className="tabular-nums font-semibold text-foreground/60">{r.count}</span>
+                        </div>
+                      );
+                    })}
+                    {(() => {
+                      const myIdx = inv.ranking.findIndex((r) => r.id === op?.id);
+                      if (myIdx >= 3) {
+                        const me = inv.ranking[myIdx];
+                        return (
+                          <div className="pt-1 mt-0.5 border-t border-border/30 flex items-center gap-2 text-xs text-primary">
+                            <span className="w-5 shrink-0 text-center font-bold text-sm">{myIdx + 1}°</span>
+                            <span className="flex-1 truncate font-semibold">{me.nome} (você)</span>
+                            <span className="tabular-nums font-bold">{me.count}</span>
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
+                  </div>
+                )}
               </Link>
             ))}
           </div>

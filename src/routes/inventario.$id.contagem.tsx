@@ -86,11 +86,8 @@ function TelaContagem() {
     lastKeyTimeRef.current = 0;
     if (etapa === "quantidade") {
       window.requestAnimationFrame(() => refQtd.current?.focus({ preventScroll: true }));
-    } else if (etapa === "posicao") {
-      window.requestAnimationFrame(() => refPos.current?.focus({ preventScroll: true }));
-    } else if (etapa === "produto") {
-      window.requestAnimationFrame(() => refProd.current?.focus({ preventScroll: true }));
     }
+    // posicao e produto usam autoFocus nativo no input — mais confiável em Android
   }, [etapa]);
 
   const checarPosicao = useCallback(async (codPos: string): Promise<LeituraExistente[] | null> => {
@@ -234,59 +231,7 @@ function TelaContagem() {
     setEtapa("posicao");
   }
 
-  useEffect(() => {
-    if (modalDup || (etapa !== "posicao" && etapa !== "produto")) return;
-
-    const SCANNER_GAP_MS = 50; // intervalo máximo entre teclas pra considerar scanner
-    const MIN_SCAN_LEN = 2;
-
-    const onScannerKey = (e: globalThis.KeyboardEvent) => {
-      if (e.ctrlKey || e.altKey || e.metaKey) return;
-
-      // Ignora se foco está num campo de quantidade ou em outro input editável
-      const ae = document.activeElement as HTMLElement | null;
-      if (ae && (ae.tagName === "TEXTAREA" || (ae.tagName === "INPUT" && ae !== refPos.current && ae !== refProd.current))) {
-        return;
-      }
-
-      const now = performance.now();
-      const delta = now - lastKeyTimeRef.current;
-
-      if (e.key === "Enter" || e.key === "Tab") {
-        const buffer = scanBufferRef.current;
-        if (buffer.length >= MIN_SCAN_LEN) {
-          e.preventDefault();
-          e.stopPropagation();
-          scanBufferRef.current = "";
-          setScanDisplay("");
-          lastKeyTimeRef.current = 0;
-          // Limpa o DOM do input (necessário no Android onde o valor fica no campo)
-          if (etapa === "posicao" && refPos.current) refPos.current.value = "";
-          if (etapa === "produto" && refProd.current) refProd.current.value = "";
-          if (etapa === "posicao") void confirmarPosicao(buffer);
-          else void confirmarProduto(buffer);
-        }
-        return;
-      }
-
-      if (e.key.length === 1) {
-        // Reseta buffer se intervalo grande (digitação humana ou nova leitura)
-        if (delta > SCANNER_GAP_MS && scanBufferRef.current.length > 0) {
-          scanBufferRef.current = "";
-        }
-        scanBufferRef.current += e.key;
-        setScanDisplay(scanBufferRef.current);
-        lastKeyTimeRef.current = now;
-        e.preventDefault();
-      } else if (e.key === "Backspace") {
-        scanBufferRef.current = scanBufferRef.current.slice(0, -1);
-        setScanDisplay(scanBufferRef.current);
-      }
-    };
-
-    window.addEventListener("keydown", onScannerKey, true);
-    return () => window.removeEventListener("keydown", onScannerKey, true);
-  }, [etapa, modalDup, confirmarPosicao, confirmarProduto]);
+  // Inputs de posicao e produto têm autoFocus + onKeyDown próprios — sem listener global necessário
 
   function sair() {
     clearOperador();
@@ -340,41 +285,29 @@ function TelaContagem() {
             )}
           </label>
           {etapa === "posicao" ? (
-            <div
-              ref={(el) => { /* visual only */ }}
-              className="h-12 px-3 rounded-md border border-input bg-background flex items-center text-xl font-mono tracking-wider"
-              aria-label="Aguardando leitura da posição"
-            >
-              <input
-                ref={refPos}
-                type="text"
-                onChange={(e) => {
-                  scanBufferRef.current = e.target.value;
-                  setScanDisplay(e.target.value);
-                  lastKeyTimeRef.current = performance.now();
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === "Tab") {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    const buffer = (refPos.current?.value ?? scanBufferRef.current).trim();
-                    if (refPos.current) refPos.current.value = "";
-                    scanBufferRef.current = "";
-                    setScanDisplay("");
-                    if (buffer.length >= 2) void confirmarPosicao(buffer);
-                  }
-                }}
-                onBlur={(e) => {
-                  const goingToDialog = e.relatedTarget instanceof Element && !!e.relatedTarget.closest('[role="dialog"]');
-                  if (!goingToDialog) window.requestAnimationFrame(() => refPos.current?.focus({ preventScroll: true }));
-                }}
-                className="sr-only"
-                tabIndex={0}
-                aria-label="Scanner de posição"
-              />
-              {scanDisplay || <span className="text-muted-foreground/60 text-base">Bipe o endereço…</span>}
-              {scanDisplay && <span className="ml-1 animate-pulse">|</span>}
-            </div>
+            <input
+              ref={refPos}
+              type="text"
+              // eslint-disable-next-line jsx-a11y/no-autofocus
+              autoFocus
+              onChange={(e) => setScanDisplay(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === "Tab") {
+                  e.preventDefault();
+                  const val = (refPos.current?.value ?? "").trim();
+                  if (refPos.current) refPos.current.value = "";
+                  setScanDisplay("");
+                  scanBufferRef.current = "";
+                  if (val.length >= 2) void confirmarPosicao(val);
+                }
+              }}
+              onBlur={(e) => {
+                const goingToDialog = e.relatedTarget instanceof Element && !!e.relatedTarget.closest('[role="dialog"]');
+                if (!goingToDialog) window.requestAnimationFrame(() => refPos.current?.focus({ preventScroll: true }));
+              }}
+              placeholder="Bipe o endereço…"
+              className="h-12 px-3 rounded-md border border-input bg-background text-xl font-mono tracking-wider w-full placeholder:text-muted-foreground/60 placeholder:text-base focus-visible:ring-1 focus-visible:ring-primary focus-visible:outline-none"
+            />
           ) : (
             <button onClick={trocarPosicao} className="w-full text-left text-lg font-mono font-bold leading-tight hover:text-primary">
               {posicao}
@@ -390,40 +323,29 @@ function TelaContagem() {
               <Barcode className="h-3 w-3" /> Produto
             </label>
             {etapa === "produto" ? (
-              <div
-                className="h-12 px-3 rounded-md border border-input bg-background flex items-center text-xl font-mono tracking-wider"
-                aria-label="Aguardando leitura do produto"
-              >
-                <input
-                  ref={refProd}
-                  type="text"
-                  onChange={(e) => {
-                    scanBufferRef.current = e.target.value;
-                    setScanDisplay(e.target.value);
-                    lastKeyTimeRef.current = performance.now();
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === "Tab") {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      const buffer = (refProd.current?.value ?? scanBufferRef.current).trim();
-                      if (refProd.current) refProd.current.value = "";
-                      scanBufferRef.current = "";
-                      setScanDisplay("");
-                      if (buffer.length >= 2) void confirmarProduto(buffer);
-                    }
-                  }}
-                  onBlur={(e) => {
-                    const goingToDialog = e.relatedTarget instanceof Element && !!e.relatedTarget.closest('[role="dialog"]');
-                    if (!goingToDialog) window.requestAnimationFrame(() => refProd.current?.focus({ preventScroll: true }));
-                  }}
-                  className="sr-only"
-                  tabIndex={0}
-                  aria-label="Scanner de produto"
-                />
-                {scanDisplay || <span className="text-muted-foreground/60 text-base">Bipe o código…</span>}
-                {scanDisplay && <span className="ml-1 animate-pulse">|</span>}
-              </div>
+              <input
+                ref={refProd}
+                type="text"
+                // eslint-disable-next-line jsx-a11y/no-autofocus
+                autoFocus
+                onChange={(e) => setScanDisplay(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === "Tab") {
+                    e.preventDefault();
+                    const val = (refProd.current?.value ?? "").trim();
+                    if (refProd.current) refProd.current.value = "";
+                    setScanDisplay("");
+                    scanBufferRef.current = "";
+                    if (val.length >= 2) void confirmarProduto(val);
+                  }
+                }}
+                onBlur={(e) => {
+                  const goingToDialog = e.relatedTarget instanceof Element && !!e.relatedTarget.closest('[role="dialog"]');
+                  if (!goingToDialog) window.requestAnimationFrame(() => refProd.current?.focus({ preventScroll: true }));
+                }}
+                placeholder="Bipe o código…"
+                className="h-12 px-3 rounded-md border border-input bg-background text-xl font-mono tracking-wider w-full placeholder:text-muted-foreground/60 placeholder:text-base focus-visible:ring-1 focus-visible:ring-primary focus-visible:outline-none"
+              />
             ) : (
               <div>
                 <p className="text-lg font-mono font-bold leading-tight">{produtoSku}</p>

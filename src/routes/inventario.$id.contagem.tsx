@@ -348,12 +348,21 @@ function TelaContagem() {
               <input
                 ref={refPos}
                 type="text"
-                inputMode="none"
                 onChange={(e) => {
-                  // Android: scanner injeta via IME (sem keydown por char)
                   scanBufferRef.current = e.target.value;
                   setScanDisplay(e.target.value);
                   lastKeyTimeRef.current = performance.now();
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === "Tab") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const buffer = (refPos.current?.value ?? scanBufferRef.current).trim();
+                    if (refPos.current) refPos.current.value = "";
+                    scanBufferRef.current = "";
+                    setScanDisplay("");
+                    if (buffer.length >= 2) void confirmarPosicao(buffer);
+                  }
                 }}
                 onBlur={(e) => {
                   const goingToDialog = e.relatedTarget instanceof Element && !!e.relatedTarget.closest('[role="dialog"]');
@@ -388,12 +397,21 @@ function TelaContagem() {
                 <input
                   ref={refProd}
                   type="text"
-                  inputMode="none"
                   onChange={(e) => {
-                    // Android: scanner injeta via IME (sem keydown por char)
                     scanBufferRef.current = e.target.value;
                     setScanDisplay(e.target.value);
                     lastKeyTimeRef.current = performance.now();
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === "Tab") {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      const buffer = (refProd.current?.value ?? scanBufferRef.current).trim();
+                      if (refProd.current) refProd.current.value = "";
+                      scanBufferRef.current = "";
+                      setScanDisplay("");
+                      if (buffer.length >= 2) void confirmarProduto(buffer);
+                    }
                   }}
                   onBlur={(e) => {
                     const goingToDialog = e.relatedTarget instanceof Element && !!e.relatedTarget.closest('[role="dialog"]');

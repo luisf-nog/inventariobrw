@@ -77,8 +77,24 @@ export function PosicaoJaContadaModal({ open, posicao, contagemAtual, leituras, 
           )}
         </div>
 
+        {jaContouEsteOperador && (
+          <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-xs leading-relaxed text-destructive">
+            <p className="font-semibold mb-1">Nova contagem bloqueada</p>
+            <p className="text-destructive/90">
+              Você já contou esta posição. A {contagemAtual + 1}ª contagem precisa ser feita por
+              <strong> outro operador</strong> para garantir auditoria independente.
+            </p>
+          </div>
+        )}
+
         <div className="flex flex-col gap-2 pt-1">
-          <Button size="lg" variant="default" className="h-12 justify-start gap-3 text-sm font-semibold" onClick={() => onEscolher("nova_contagem")}>
+          <Button
+            size="lg"
+            variant="default"
+            className="h-12 justify-start gap-3 text-sm font-semibold"
+            disabled={jaContouEsteOperador}
+            onClick={() => !jaContouEsteOperador && onEscolher("nova_contagem")}
+          >
             <span className="text-base">🔄</span> Iniciar {contagemAtual + 1}ª contagem
           </Button>
           <Button size="lg" variant="ghost" className="h-10 justify-start gap-3 text-sm text-muted-foreground" onClick={() => onEscolher("pular")}>

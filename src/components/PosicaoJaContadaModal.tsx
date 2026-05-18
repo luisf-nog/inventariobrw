@@ -10,6 +10,7 @@ export type LeituraExistente = {
   numero_contagem: number;
   lido_em: string;
   operador_nome: string | null;
+  operador_id: string | null;
 };
 
 export type AcaoPosicao = "pular" | "nova_contagem";
@@ -19,6 +20,7 @@ type Props = {
   posicao: string;
   contagemAtual: number;
   leituras: LeituraExistente[];
+  operadorAtualId: string | null;
   onClose: () => void;
   onEscolher: (acao: AcaoPosicao) => void;
 };

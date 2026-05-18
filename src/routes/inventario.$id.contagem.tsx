@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { getOperador, clearOperador } from "@/lib/operador-session";
 import { beepSuccess, beepWarn, beepError } from "@/lib/feedback";
-import { normalizeCode, isValidCode, parseQuantidade } from "@/lib/validation";
+import { normalizeCode, isValidCode, parseQuantidade, formatPosicaoDisplay } from "@/lib/validation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -278,7 +278,7 @@ function TelaContagem() {
             <CheckCircle2 className="h-4 w-4 text-success shrink-0 mt-0.5" />
             <div className="min-w-0 flex-1">
               <p className="font-mono text-xs leading-tight">
-                <span className="text-muted-foreground">{ultima.posicao}</span>
+                <span className="text-muted-foreground">{formatPosicaoDisplay(ultima.posicao)}</span>
                 <span className="mx-1 text-muted-foreground/50">›</span>
                 <span className="font-bold">{ultima.sku}</span>
                 <span className="ml-1.5 font-bold text-success">{ultima.qtd}</span>
@@ -323,7 +323,7 @@ function TelaContagem() {
             />
           ) : (
             <button onClick={trocarPosicao} className="w-full text-left text-lg font-mono font-bold leading-tight hover:text-primary">
-              {posicao}
+              {formatPosicaoDisplay(posicao)}
               <span className="ml-2 text-[10px] text-muted-foreground font-sans">(trocar)</span>
             </button>
           )}
@@ -417,7 +417,7 @@ function TelaContagem() {
           <div className="space-y-3 py-1">
             <div className="rounded-lg bg-muted px-3 py-2 space-y-1">
               <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Endereço</p>
-              <p className="font-mono font-bold text-base">{posicao}</p>
+              <p className="font-mono font-bold text-base">{formatPosicaoDisplay(posicao)}</p>
             </div>
             <div className="rounded-lg bg-muted px-3 py-2 space-y-1">
               <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Produto</p>

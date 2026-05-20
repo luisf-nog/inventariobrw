@@ -117,7 +117,7 @@ function TelaResumo() {
       }
       setWmsMap(wm);
 
-      const codigosLidos = Array.from(new Set((data ?? []).map((d: any) => d.codigo_produto)));
+      const codigosLidos: string[] = Array.from(new Set(((data ?? []) as any[]).map((d: any) => d.codigo_produto as string)));
       const eanToSku = await traduzirEansParaSkus(codigosLidos);
       const skuPorCodigo = (codigo: string) => eanToSku[codigo.replace(/\D/g, "")] ?? codigo;
       const descricoes = await buscarDescricoesPorSku(codigosLidos.map(skuPorCodigo));

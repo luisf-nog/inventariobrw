@@ -110,13 +110,18 @@ function TelaResumo() {
       if (cancelado) return;
       if (error) { toast.error(error.message); setLoading(false); return; }
 
-      // Agrega WMS por (posicao, sku)
+      // Agrega WMS por (posicao, sku) e indexa sku -> posições
       const wm = new Map<string, number>();
+      const sp = new Map<string, Set<string>>();
       for (const w of wmsData) {
         const k = `${w.codigo_posicao}|${w.sku}`;
         wm.set(k, (wm.get(k) ?? 0) + Number(w.qtde_unidades ?? 0));
+        const set = sp.get(w.sku) ?? new Set<string>();
+        set.add(w.codigo_posicao);
+        sp.set(w.sku, set);
       }
       setWmsMap(wm);
+      setSkuPositions(sp);
 
       const codigosLidos: string[] = Array.from(new Set(((data ?? []) as any[]).map((d: any) => d.codigo_produto as string)));
       const eanToSku = await traduzirEansParaSkus(codigosLidos);

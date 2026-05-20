@@ -408,6 +408,30 @@ function TelaContagem() {
           </div>
         )}
 
+        {/* Alerta persistente: produto fora do lugar */}
+        {wmsAlerta && etapa === "quantidade" && (
+          <div className="rounded-xl border-2 border-violet-500 bg-violet-500/15 p-4 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+            <div className="w-9 h-9 rounded-full bg-violet-500 flex items-center justify-center shrink-0">
+              <MapPin className="h-5 w-5 text-white" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold text-violet-700 dark:text-violet-200 uppercase tracking-wide">
+                Produto fora do lugar
+              </p>
+              <p className="text-xs text-violet-700/90 dark:text-violet-200/90 leading-relaxed mt-1">
+                Segundo o WMS, <span className="font-mono font-bold">{produtoSku}</span> deveria estar em:
+              </p>
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {wmsAlerta.posicoesCorretas.map((p) => (
+                  <span key={p} className="px-2 py-1 rounded bg-violet-600 text-white text-xs font-mono font-bold">
+                    {formatPosicaoDisplay(p)}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* QUANTIDADE */}
         {etapa === "quantidade" && (
           <div className="rounded-xl overflow-hidden border border-primary bg-card">

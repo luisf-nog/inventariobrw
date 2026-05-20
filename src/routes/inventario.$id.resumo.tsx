@@ -291,7 +291,7 @@ function TelaResumo() {
     if (fo && !(l.operador_nome ?? "").toLowerCase().includes(fo)) return false;
     if (soDivergentes) {
       const k = `${l.codigo_posicao}|${l.sku}`;
-      if (!divergencias.has(k) && !divergenciasWms.has(k)) return false;
+      if (!divergencias.has(k) && !divergenciasWms.has(k) && !foraDoLugar.has(k)) return false;
     }
     return true;
   });

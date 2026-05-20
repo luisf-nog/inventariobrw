@@ -14,6 +14,62 @@ export type Database = {
   }
   public: {
     Tables: {
+      estoque_wms_snapshot: {
+        Row: {
+          capturado_em: string
+          codigo_posicao: string
+          descricao: string | null
+          dt_validade: string | null
+          ean: string | null
+          id: string
+          inventario_id: string
+          lote: string | null
+          qtde_embal: number | null
+          qtde_estoque: number | null
+          qtde_unidades: number
+          raw: Json | null
+          sku: string
+        }
+        Insert: {
+          capturado_em?: string
+          codigo_posicao: string
+          descricao?: string | null
+          dt_validade?: string | null
+          ean?: string | null
+          id?: string
+          inventario_id: string
+          lote?: string | null
+          qtde_embal?: number | null
+          qtde_estoque?: number | null
+          qtde_unidades?: number
+          raw?: Json | null
+          sku: string
+        }
+        Update: {
+          capturado_em?: string
+          codigo_posicao?: string
+          descricao?: string | null
+          dt_validade?: string | null
+          ean?: string | null
+          id?: string
+          inventario_id?: string
+          lote?: string | null
+          qtde_embal?: number | null
+          qtde_estoque?: number | null
+          qtde_unidades?: number
+          raw?: Json | null
+          sku?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "estoque_wms_snapshot_inventario_id_fkey"
+            columns: ["inventario_id"]
+            isOneToOne: false
+            referencedRelation: "inventarios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inventarios: {
         Row: {
           criado_em: string
@@ -23,6 +79,7 @@ export type Database = {
           id: string
           nome: string
           status: string
+          wms_sincronizado_em: string | null
         }
         Insert: {
           criado_em?: string
@@ -32,6 +89,7 @@ export type Database = {
           id?: string
           nome: string
           status?: string
+          wms_sincronizado_em?: string | null
         }
         Update: {
           criado_em?: string
@@ -41,6 +99,7 @@ export type Database = {
           id?: string
           nome?: string
           status?: string
+          wms_sincronizado_em?: string | null
         }
         Relationships: [
           {

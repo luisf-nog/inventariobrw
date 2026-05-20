@@ -240,6 +240,7 @@ function TelaContagem() {
 
   function trocarPosicao() {
     scanBufferRef.current = "";
+    setWmsAlerta(null);
     setPosicao(""); setProdutoInput(""); setProdutoSku(""); setProdutoDesc(null); setQuantidade(""); setNumeroContagem(1);
     setEtapa("posicao");
   }

@@ -178,12 +178,24 @@ function TelaContagem() {
         .select("codigo_posicao")
         .eq("inventario_id", inventarioId)
         .eq("sku", sku);
-      const posicoesWms = new Set((wmsRows ?? []).map((r: any) => r.codigo_posicao as string));
-      if (posicoesWms.size > 1) {
-        if (!posicoesWms.has(posicao)) {
-          // SKU está em outra(s) posição(ões) — fora do lugar
-          const corretas = Array.from(posicoesWms).sort();
-          setWmsAlerta({ posicoesCorretas: corretas });
+      // Considera somente posições do flowrack (01.995.*)
+      const posicoesWms = new Set(
+        (wmsRows ?? [])
+          .map((r: any) => r.codigo_posicao as string)
+          .filter((p) => p.startsWith("01995")),
+      );
+      if (posicoesWms.size > 0 && !posicoesWms.has(posicao)) {
+        // Remove sugestões de posições que já foram contadas neste inventário
+        const { data: jaContadas } = await supabase
+          .from("leituras")
+          .select("codigo_posicao")
+          .eq("inventario_id", inventarioId)
+          .eq("codigo_produto", sku)
+          .in("codigo_posicao", Array.from(posicoesWms));
+        const contadas = new Set((jaContadas ?? []).map((r: any) => r.codigo_posicao as string));
+        const pendentes = Array.from(posicoesWms).filter((p) => !contadas.has(p)).sort();
+        if (pendentes.length > 0) {
+          setWmsAlerta({ posicoesCorretas: pendentes });
           beepWarn();
         } else {
           setWmsAlerta(null);

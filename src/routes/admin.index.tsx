@@ -1,6 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
+import { sincronizarEstoqueWms } from "@/lib/wms.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,6 +24,7 @@ function AdminInventarios() {
   const [nome, setNome] = useState("");
   const [descricao, setDescricao] = useState("");
   const [saving, setSaving] = useState(false);
+  const sincronizar = useServerFn(sincronizarEstoqueWms);
 
   async function carregar() {
     const { data } = await supabase.from("inventarios").select("*").order("criado_em", { ascending: false });
@@ -33,13 +36,29 @@ function AdminInventarios() {
     e.preventDefault();
     if (!nome.trim()) return;
     setSaving(true);
-    const { error } = await supabase.from("inventarios").insert({ nome: nome.trim(), descricao: descricao.trim() || null });
-    setSaving(false);
-    if (error) { toast.error(error.message); return; }
-    toast.success("Inventário criado");
+    const { data: novo, error } = await supabase
+      .from("inventarios")
+      .insert({ nome: nome.trim(), descricao: descricao.trim() || null })
+      .select("id")
+      .single();
+    if (error || !novo) {
+      setSaving(false);
+      toast.error(error?.message ?? "Erro ao criar inventário");
+      return;
+    }
+    toast.success("Inventário criado — sincronizando estoque do WMS…");
     setNome(""); setDescricao(""); setOpen(false);
     carregar();
+    try {
+      const r = await sincronizar({ data: { inventarioId: novo.id } });
+      toast.success(`WMS sincronizado: ${r.posicoes} posições, ${r.total_inserido} registros`);
+    } catch (err: any) {
+      toast.error(`Falha ao sincronizar WMS: ${err.message ?? err}`);
+    } finally {
+      setSaving(false);
+    }
   }
+
 
   return (
     <div className="space-y-5">

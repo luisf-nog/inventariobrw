@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
   ArrowLeft, Download, FileSpreadsheet, Lock, AlertTriangle,
-  Trash2, Users, Clock, Activity, BarChart2, RefreshCw,
+  Trash2, Users, Clock, Activity, BarChart2, RefreshCw, MapPin,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { toast } from "sonner";
@@ -71,6 +71,7 @@ function TelaResumo() {
   const [inv, setInv] = useState<{ nome: string; status: string; wms_sincronizado_em: string | null } | null>(null);
   const [linhas, setLinhas] = useState<Linha[]>([]);
   const [wmsMap, setWmsMap] = useState<Map<string, number>>(new Map()); // key = "pos|sku" => qtde WMS
+  const [skuPositions, setSkuPositions] = useState<Map<string, Set<string>>>(new Map()); // sku => Set<posições no WMS>
   const [loading, setLoading] = useState(true);
   const [sincronizando, setSincronizando] = useState(false);
   const [filtroPos, setFiltroPos] = useState("");
@@ -109,13 +110,18 @@ function TelaResumo() {
       if (cancelado) return;
       if (error) { toast.error(error.message); setLoading(false); return; }
 
-      // Agrega WMS por (posicao, sku)
+      // Agrega WMS por (posicao, sku) e indexa sku -> posições
       const wm = new Map<string, number>();
+      const sp = new Map<string, Set<string>>();
       for (const w of wmsData) {
         const k = `${w.codigo_posicao}|${w.sku}`;
         wm.set(k, (wm.get(k) ?? 0) + Number(w.qtde_unidades ?? 0));
+        const set = sp.get(w.sku) ?? new Set<string>();
+        set.add(w.codigo_posicao);
+        sp.set(w.sku, set);
       }
       setWmsMap(wm);
+      setSkuPositions(sp);
 
       const codigosLidos: string[] = Array.from(new Set(((data ?? []) as any[]).map((d: any) => d.codigo_produto as string)));
       const eanToSku = await traduzirEansParaSkus(codigosLidos);
@@ -219,13 +225,30 @@ function TelaResumo() {
     return set;
   }, [contadoPorPS, wmsMap]);
 
+  // "Fora do lugar": SKU bipado em uma posição onde o WMS NÃO tem este SKU,
+  // mas o WMS conhece este SKU em outra(s) posição(ões).
+  const foraDoLugar = useMemo(() => {
+    const map = new Map<string, string[]>(); // key "pos|sku" => posições corretas no WMS
+    if (skuPositions.size === 0) return map;
+    for (const [k, info] of contadoPorPS) {
+      const [pos, sku] = k.split("|");
+      const wmsPosicoes = skuPositions.get(sku);
+      if (!wmsPosicoes || wmsPosicoes.size === 0) continue; // SKU nunca visto no WMS → cai em "vs WMS"
+      if (wmsPosicoes.has(pos)) continue; // está no lugar certo
+      if (info.qtd === 0) continue;
+      map.set(k, Array.from(wmsPosicoes).sort());
+    }
+    return map;
+  }, [contadoPorPS, skuPositions]);
+
   const stats = useMemo(() => ({
     posicoes: new Set(linhas.map((l) => l.codigo_posicao)).size,
     leituras: linhas.length,
     operadores: new Set(linhas.map((l) => l.operador_id).filter(Boolean)).size,
     divergencias: divergencias.size,
     divergenciasWms: divergenciasWms.size,
-  }), [linhas, divergencias, divergenciasWms]);
+    foraDoLugar: foraDoLugar.size,
+  }), [linhas, divergencias, divergenciasWms, foraDoLugar]);
 
 
   const statsPorOperador = useMemo(() => {
@@ -268,7 +291,7 @@ function TelaResumo() {
     if (fo && !(l.operador_nome ?? "").toLowerCase().includes(fo)) return false;
     if (soDivergentes) {
       const k = `${l.codigo_posicao}|${l.sku}`;
-      if (!divergencias.has(k) && !divergenciasWms.has(k)) return false;
+      if (!divergencias.has(k) && !divergenciasWms.has(k) && !foraDoLugar.has(k)) return false;
     }
     return true;
   });
@@ -284,11 +307,16 @@ function TelaResumo() {
       // Recarrega snapshot
       const wmsData = await fetchWmsSnapshot(id);
       const wm = new Map<string, number>();
+      const sp = new Map<string, Set<string>>();
       for (const w of wmsData) {
         const k = `${w.codigo_posicao}|${w.sku}`;
         wm.set(k, (wm.get(k) ?? 0) + Number(w.qtde_unidades ?? 0));
+        const set = sp.get(w.sku) ?? new Set<string>();
+        set.add(w.codigo_posicao);
+        sp.set(w.sku, set);
       }
       setWmsMap(wm);
+      setSkuPositions(sp);
       setInv((p) => p ? { ...p, wms_sincronizado_em: r.sincronizado_em } : p);
     } catch (err: any) {
       toast.error(`Falha ao sincronizar WMS: ${err.message ?? err}`);
@@ -342,6 +370,7 @@ function TelaResumo() {
         Operador: l.operador_nome ?? "",
         "Lido em": new Date(l.lido_em).toLocaleString("pt-BR"),
         "Divergência entre contagens": divergencias.has(k) ? "Sim" : "",
+        "Fora do lugar (posição correta WMS)": foraDoLugar.get(k)?.map(formatPosicaoDisplay).join(" | ") ?? "",
       };
     });
     const ws = XLSX.utils.json_to_sheet(dados);
@@ -413,7 +442,7 @@ function TelaResumo() {
       <main className="max-w-6xl mx-auto px-4 py-6 space-y-6">
 
         {/* ── KPIs ───────────────────────────────────────────────── */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
           <div className="rounded-xl border border-border bg-card p-4">
             <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1.5"><BarChart2 className="h-3.5 w-3.5" /> Posições</p>
             <p className="text-3xl font-bold tabular-nums">{stats.posicoes}</p>
@@ -441,6 +470,14 @@ function TelaResumo() {
             </p>
             <p className={`text-3xl font-bold tabular-nums ${stats.divergenciasWms > 0 ? "text-amber-600 dark:text-amber-400" : ""}`}>
               {wmsMap.size === 0 ? "—" : stats.divergenciasWms}
+            </p>
+          </div>
+          <div className={`rounded-xl border p-4 ${stats.foraDoLugar > 0 ? "border-violet-500/40 bg-violet-500/5" : "border-border bg-card"}`}>
+            <p className={`text-xs mb-1 flex items-center gap-1.5 ${stats.foraDoLugar > 0 ? "text-violet-600 dark:text-violet-400" : "text-muted-foreground"}`}>
+              <MapPin className="h-3.5 w-3.5" /> Fora do lugar
+            </p>
+            <p className={`text-3xl font-bold tabular-nums ${stats.foraDoLugar > 0 ? "text-violet-600 dark:text-violet-400" : ""}`}>
+              {wmsMap.size === 0 ? "—" : stats.foraDoLugar}
             </p>
           </div>
         </div>
@@ -595,11 +632,25 @@ function TelaResumo() {
                       const wms = wmsMap.get(k);
                       const dif = wms !== undefined ? l.quantidade - wms : null;
                       const divWms = divergenciasWms.has(k);
+                      const posCorretas = foraDoLugar.get(k);
+                      const fora = !!posCorretas;
                       const confirmando = deletandoId === l.id;
                       return (
-                        <tr key={l.id} className={`${div ? "bg-destructive/8" : divWms ? "bg-amber-500/8" : "hover:bg-muted/20"} ${confirmando ? "bg-destructive/15" : ""}`}>
+                        <tr key={l.id} className={`${div ? "bg-destructive/8" : fora ? "bg-violet-500/8" : divWms ? "bg-amber-500/8" : "hover:bg-muted/20"} ${confirmando ? "bg-destructive/15" : ""}`}>
                           <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{formatPosicaoDisplay(l.codigo_posicao)}</td>
-                          <td className="px-3 py-2 font-mono text-xs font-medium">{l.sku}</td>
+                          <td className="px-3 py-2 font-mono text-xs font-medium">
+                            <div className="flex items-center gap-1">
+                              <span>{l.sku}</span>
+                              {fora && (
+                                <span
+                                  className="inline-flex items-center gap-0.5 text-[9px] px-1 py-0.5 rounded bg-violet-500/15 text-violet-700 dark:text-violet-300 font-sans font-medium cursor-help"
+                                  title={`WMS diz que este SKU está em: ${posCorretas!.map(formatPosicaoDisplay).join(", ")}`}
+                                >
+                                  <MapPin className="h-2.5 w-2.5" /> fora do lugar
+                                </span>
+                              )}
+                            </div>
+                          </td>
                           <td className="px-3 py-2 text-xs max-w-[200px] truncate text-muted-foreground hidden md:table-cell" title={l.descricao}>
                             {l.descricao || <span className="italic">—</span>}
                           </td>

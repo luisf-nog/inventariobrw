@@ -174,12 +174,44 @@ function TelaResumo() {
     return set;
   }, [linhas]);
 
+  // Quantidade convergente por (posicao, sku) — soma da última contagem se convergir
+  const contadoPorPS = useMemo(() => {
+    const byPP = new Map<string, Map<number, number>>();
+    for (const l of linhas) {
+      const k = `${l.codigo_posicao}|${l.sku}`;
+      const m = byPP.get(k) ?? new Map();
+      m.set(l.numero_contagem, (m.get(l.numero_contagem) ?? 0) + l.quantidade);
+      byPP.set(k, m);
+    }
+    const out = new Map<string, { qtd: number; convergente: boolean }>();
+    for (const [k, m] of byPP) {
+      const vals = Array.from(m.values());
+      const convergente = vals.every((v) => v === vals[0]);
+      out.set(k, { qtd: vals[0] ?? 0, convergente });
+    }
+    return out;
+  }, [linhas]);
+
+  // Divergências WMS: contado convergente ≠ WMS, OU posição contada não existe no WMS
+  const divergenciasWms = useMemo(() => {
+    const set = new Set<string>();
+    if (wmsMap.size === 0) return set;
+    for (const [k, info] of contadoPorPS) {
+      const wms = wmsMap.get(k);
+      if (wms === undefined) { set.add(k); continue; }
+      if (info.convergente && info.qtd !== wms) set.add(k);
+    }
+    return set;
+  }, [contadoPorPS, wmsMap]);
+
   const stats = useMemo(() => ({
     posicoes: new Set(linhas.map((l) => l.codigo_posicao)).size,
     leituras: linhas.length,
     operadores: new Set(linhas.map((l) => l.operador_id).filter(Boolean)).size,
     divergencias: divergencias.size,
-  }), [linhas, divergencias]);
+    divergenciasWms: divergenciasWms.size,
+  }), [linhas, divergencias, divergenciasWms]);
+
 
   const statsPorOperador = useMemo(() => {
     const map = new Map<string, { nome: string; count: number; ultima: string }>();

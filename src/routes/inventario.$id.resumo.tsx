@@ -71,6 +71,7 @@ function TelaResumo() {
   const [inv, setInv] = useState<{ nome: string; status: string; wms_sincronizado_em: string | null } | null>(null);
   const [linhas, setLinhas] = useState<Linha[]>([]);
   const [wmsMap, setWmsMap] = useState<Map<string, number>>(new Map()); // key = "pos|sku" => qtde WMS
+  const [skuPositions, setSkuPositions] = useState<Map<string, Set<string>>>(new Map()); // sku => Set<posições no WMS>
   const [loading, setLoading] = useState(true);
   const [sincronizando, setSincronizando] = useState(false);
   const [filtroPos, setFiltroPos] = useState("");

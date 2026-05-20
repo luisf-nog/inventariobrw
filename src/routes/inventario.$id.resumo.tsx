@@ -49,16 +49,21 @@ function tempoRelativo(iso: string) {
 function TelaResumo() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
-  const [inv, setInv] = useState<{ nome: string; status: string } | null>(null);
+  const sincronizarWms = useServerFn(sincronizarEstoqueWms);
+  const [inv, setInv] = useState<{ nome: string; status: string; wms_sincronizado_em: string | null } | null>(null);
   const [linhas, setLinhas] = useState<Linha[]>([]);
+  const [wmsMap, setWmsMap] = useState<Map<string, number>>(new Map()); // key = "pos|sku" => qtde WMS
   const [loading, setLoading] = useState(true);
+  const [sincronizando, setSincronizando] = useState(false);
   const [filtroPos, setFiltroPos] = useState("");
   const [filtroProd, setFiltroProd] = useState("");
   const [filtroOp, setFiltroOp] = useState("");
+  const [soDivergentes, setSoDivergentes] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [confirmandoEncerrar, setConfirmandoEncerrar] = useState(false);
   const [confirmTexto, setConfirmTexto] = useState("");
   const [deletandoId, setDeletandoId] = useState<string | null>(null);
+
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setIsAdmin(!!data.user));

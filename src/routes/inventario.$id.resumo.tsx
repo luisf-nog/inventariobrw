@@ -264,14 +264,11 @@ function TelaResumo() {
       const r = await sincronizarWms({ data: { inventarioId: id } });
       toast.success(`WMS sincronizado: ${r.posicoes} posições, ${r.total_inserido} registros`);
       // Recarrega snapshot
-      const { data: wmsData } = await supabase
-        .from("estoque_wms_snapshot")
-        .select("codigo_posicao, sku, qtde_unidades")
-        .eq("inventario_id", id);
+      const wmsData = await fetchWmsSnapshot(id);
       const wm = new Map<string, number>();
-      for (const w of wmsData ?? []) {
-        const k = `${(w as any).codigo_posicao}|${(w as any).sku}`;
-        wm.set(k, (wm.get(k) ?? 0) + Number((w as any).qtde_unidades ?? 0));
+      for (const w of wmsData) {
+        const k = `${w.codigo_posicao}|${w.sku}`;
+        wm.set(k, (wm.get(k) ?? 0) + Number(w.qtde_unidades ?? 0));
       }
       setWmsMap(wm);
       setInv((p) => p ? { ...p, wms_sincronizado_em: r.sincronizado_em } : p);

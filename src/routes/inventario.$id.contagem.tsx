@@ -38,6 +38,7 @@ function TelaContagem() {
   const [produtoDesc, setProdutoDesc] = useState<string | null>(null);
   const [quantidade, setQuantidade] = useState("");
   const [numeroContagem, setNumeroContagem] = useState(1);
+  const [wmsAlerta, setWmsAlerta] = useState<{ posicoesCorretas: string[] } | null>(null);
 
   const [salvando, setSalvando] = useState(false);
   const [ultima, setUltima] = useState<{ posicao: string; sku: string; desc: string | null; qtd: number; contagem: number } | null>(null);
@@ -169,11 +170,38 @@ function TelaContagem() {
       beepWarn();
       toast.warning(`Produto ${sku} não cadastrado — será gravado mesmo assim`);
     }
+
+    // Verifica WMS: SKU está na posição certa?
+    if (navigator.onLine) {
+      const { data: wmsRows } = await supabase
+        .from("estoque_wms_snapshot")
+        .select("codigo_posicao")
+        .eq("inventario_id", inventarioId)
+        .eq("sku", sku);
+      const posicoesWms = new Set((wmsRows ?? []).map((r: any) => r.codigo_posicao as string));
+      if (posicoesWms.size > 1) {
+        if (!posicoesWms.has(posicao)) {
+          // SKU está em outra(s) posição(ões) — fora do lugar
+          const corretas = Array.from(posicoesWms).sort();
+          setWmsAlerta({ posicoesCorretas: corretas });
+          beepWarn();
+          toast.warning(`Produto fora do lugar! WMS: ${corretas.map(formatPosicaoDisplay).join(", ")}`, {
+            duration: 6000,
+            position: "top-center",
+          });
+        } else {
+          setWmsAlerta(null);
+        }
+      } else {
+        setWmsAlerta(null);
+      }
+    }
+
     setProdutoSku(sku);
     setProdutoDesc(desc);
     setQuantidade("");
     setEtapa("quantidade");
-  }, [produtoInput]);
+  }, [produtoInput, posicao, inventarioId]);
 
   function pedirConfirmacao() {
     const qtd = parseQuantidade(quantidade);
@@ -206,12 +234,14 @@ function TelaContagem() {
     beepSuccess();
     setUltima({ posicao, sku: produtoSku, desc: produtoDesc, qtd, contagem: numeroContagem });
     if (offline) toast.warning("Salvo offline — será sincronizado");
+    setWmsAlerta(null);
     setPosicao(""); setProdutoInput(""); setProdutoSku(""); setProdutoDesc(null); setQuantidade(""); setNumeroContagem(1);
     setEtapa("posicao");
   }
 
   function trocarPosicao() {
     scanBufferRef.current = "";
+    setWmsAlerta(null);
     setPosicao(""); setProdutoInput(""); setProdutoSku(""); setProdutoDesc(null); setQuantidade(""); setNumeroContagem(1);
     setEtapa("posicao");
   }
@@ -427,7 +457,7 @@ function TelaContagem() {
       </main>
 
       {/* Popup de confirmação */}
-      <Dialog open={confirmandoLeitura} onOpenChange={(open) => !open && setConfirmandoLeitura(false)}>
+      <Dialog open={confirmandoLeitura} onOpenChange={(open) => { if (!open) { setConfirmandoLeitura(false); setWmsAlerta(null); } }}>
         <DialogContent className="max-w-sm bg-popover !opacity-100 shadow-2xl gap-3 p-5">
           <DialogHeader className="space-y-0">
             <DialogTitle className="flex items-center gap-2 text-base">
@@ -452,6 +482,18 @@ function TelaContagem() {
               <span className="font-bold text-3xl text-primary leading-none tabular-nums">{quantidade}</span>
             </div>
           </div>
+
+          {wmsAlerta && (
+            <div className="rounded-lg border border-violet-500/30 bg-violet-500/10 p-3 flex items-start gap-2.5">
+              <MapPin className="h-4 w-4 text-violet-600 dark:text-violet-400 shrink-0 mt-0.5" />
+              <div className="min-w-1">
+                <p className="text-xs font-semibold text-violet-700 dark:text-violet-300">Produto fora do lugar</p>
+                <p className="text-[11px] text-violet-600/90 dark:text-violet-400/90 leading-relaxed mt-0.5">
+                  WMS diz que este SKU deveria estar em: <strong className="font-mono">{wmsAlerta.posicoesCorretas.map(formatPosicaoDisplay).join(", ")}</strong>
+                </p>
+              </div>
+            </div>
+          )}
 
           <div className="flex flex-col gap-2 pt-1">
             <Button onClick={gravar} disabled={salvando} className="w-full h-12 text-base font-bold gap-2">

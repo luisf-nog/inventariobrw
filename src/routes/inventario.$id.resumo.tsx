@@ -251,10 +251,40 @@ function TelaResumo() {
     if (fp && !l.codigo_posicao.includes(fp)) return false;
     if (fr && !(l.sku.includes(fr) || l.descricao.toUpperCase().includes(fr) || l.codigo_produto.includes(fr))) return false;
     if (fo && !(l.operador_nome ?? "").toLowerCase().includes(fo)) return false;
+    if (soDivergentes) {
+      const k = `${l.codigo_posicao}|${l.sku}`;
+      if (!divergencias.has(k) && !divergenciasWms.has(k)) return false;
+    }
     return true;
   });
 
   /* ── Ações ──────────────────────────────────────────────────────── */
+
+  async function sincronizar() {
+    if (sincronizando) return;
+    setSincronizando(true);
+    try {
+      const r = await sincronizarWms({ data: { inventarioId: id } });
+      toast.success(`WMS sincronizado: ${r.posicoes} posições, ${r.total_inserido} registros`);
+      // Recarrega snapshot
+      const { data: wmsData } = await supabase
+        .from("estoque_wms_snapshot")
+        .select("codigo_posicao, sku, qtde_unidades")
+        .eq("inventario_id", id);
+      const wm = new Map<string, number>();
+      for (const w of wmsData ?? []) {
+        const k = `${(w as any).codigo_posicao}|${(w as any).sku}`;
+        wm.set(k, (wm.get(k) ?? 0) + Number((w as any).qtde_unidades ?? 0));
+      }
+      setWmsMap(wm);
+      setInv((p) => p ? { ...p, wms_sincronizado_em: r.sincronizado_em } : p);
+    } catch (err: any) {
+      toast.error(`Falha ao sincronizar WMS: ${err.message ?? err}`);
+    } finally {
+      setSincronizando(false);
+    }
+  }
+
 
   async function deletarLeitura(leituraId: string) {
     const { error } = await supabase.from("leituras").delete().eq("id", leituraId);

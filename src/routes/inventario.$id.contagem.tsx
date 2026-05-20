@@ -456,7 +456,7 @@ function TelaContagem() {
       </main>
 
       {/* Popup de confirmação */}
-      <Dialog open={confirmandoLeitura} onOpenChange={(open) => !open && setConfirmandoLeitura(false)}>
+      <Dialog open={confirmandoLeitura} onOpenChange={(open) => { if (!open) { setConfirmandoLeitura(false); setWmsAlerta(null); } }}>
         <DialogContent className="max-w-sm bg-popover !opacity-100 shadow-2xl gap-3 p-5">
           <DialogHeader className="space-y-0">
             <DialogTitle className="flex items-center gap-2 text-base">

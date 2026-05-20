@@ -569,6 +569,8 @@ function TelaResumo() {
                       <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide hidden md:table-cell">Descrição</th>
                       <th className="px-3 py-2.5 text-center text-xs font-medium text-muted-foreground uppercase tracking-wide">Ctg</th>
                       <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide">Qtd</th>
+                      <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide">WMS</th>
+                      <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide">Δ</th>
                       <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide hidden sm:table-cell">Operador</th>
                       <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide hidden lg:table-cell">Horário</th>
                       <th className="px-3 py-2.5 w-10" />
@@ -576,10 +578,14 @@ function TelaResumo() {
                   </thead>
                   <tbody className="divide-y divide-border/50">
                     {filtrados.map((l) => {
-                      const div = divergencias.has(`${l.codigo_posicao}|${l.sku}`);
+                      const k = `${l.codigo_posicao}|${l.sku}`;
+                      const div = divergencias.has(k);
+                      const wms = wmsMap.get(k);
+                      const dif = wms !== undefined ? l.quantidade - wms : null;
+                      const divWms = divergenciasWms.has(k);
                       const confirmando = deletandoId === l.id;
                       return (
-                        <tr key={l.id} className={`${div ? "bg-destructive/8" : "hover:bg-muted/20"} ${confirmando ? "bg-destructive/15" : ""}`}>
+                        <tr key={l.id} className={`${div ? "bg-destructive/8" : divWms ? "bg-amber-500/8" : "hover:bg-muted/20"} ${confirmando ? "bg-destructive/15" : ""}`}>
                           <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{formatPosicaoDisplay(l.codigo_posicao)}</td>
                           <td className="px-3 py-2 font-mono text-xs font-medium">{l.sku}</td>
                           <td className="px-3 py-2 text-xs max-w-[200px] truncate text-muted-foreground hidden md:table-cell" title={l.descricao}>
@@ -589,6 +595,14 @@ function TelaResumo() {
                           <td className="px-3 py-2 text-right font-semibold">
                             {l.quantidade}
                             {div && <AlertTriangle className="inline h-3 w-3 ml-1 text-destructive" />}
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">
+                            {wmsMap.size === 0 ? <span className="text-[10px]">—</span> : wms === undefined ? <span className="text-[10px] italic">não há</span> : wms}
+                          </td>
+                          <td className={`px-3 py-2 text-right tabular-nums font-medium ${
+                            dif === null ? "" : dif === 0 ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"
+                          }`}>
+                            {dif === null ? "" : dif > 0 ? `+${dif}` : dif}
                           </td>
                           <td className="px-3 py-2 text-xs text-muted-foreground hidden sm:table-cell">{l.operador_nome ?? "—"}</td>
                           <td className="px-3 py-2 text-xs text-muted-foreground tabular-nums hidden lg:table-cell">
@@ -637,13 +651,14 @@ function TelaResumo() {
                     })}
                     {filtrados.length === 0 && (
                       <tr>
-                        <td colSpan={8} className="px-3 py-10 text-center text-muted-foreground text-sm">
+                        <td colSpan={10} className="px-3 py-10 text-center text-muted-foreground text-sm">
                           Nenhuma leitura
                         </td>
                       </tr>
                     )}
                   </tbody>
                 </table>
+
               </div>
             </div>
           )}

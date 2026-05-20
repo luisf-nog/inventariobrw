@@ -234,6 +234,7 @@ function TelaContagem() {
     beepSuccess();
     setUltima({ posicao, sku: produtoSku, desc: produtoDesc, qtd, contagem: numeroContagem });
     if (offline) toast.warning("Salvo offline — será sincronizado");
+    setWmsAlerta(null);
     setPosicao(""); setProdutoInput(""); setProdutoSku(""); setProdutoDesc(null); setQuantidade(""); setNumeroContagem(1);
     setEtapa("posicao");
   }

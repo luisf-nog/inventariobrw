@@ -50,15 +50,22 @@ export function PosicaoJaContadaModal({ open, posicao, contagemAtual, leituras, 
             {leituras.length} leitura(s) registradas
           </p>
           <div className="space-y-1">
-            {visible.map((l, i) => (
-              <div key={i} className="flex items-center justify-between gap-2 text-xs font-mono py-0.5">
-                <span className="truncate text-foreground/90">{l.codigo_produto}</span>
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className="font-bold tabular-nums">{l.quantidade}</span>
-                  <span className="text-muted-foreground text-[10px] px-1.5 py-0.5 rounded bg-muted/60">c{l.numero_contagem}</span>
+            {visible.map((l, i) => {
+              const podeVerQtd = operadorAtualId != null && l.operador_id === operadorAtualId;
+              return (
+                <div key={i} className="flex items-center justify-between gap-2 text-xs font-mono py-0.5">
+                  <span className="truncate text-foreground/90">{l.codigo_produto}</span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {podeVerQtd ? (
+                      <span className="font-bold tabular-nums">{l.quantidade}</span>
+                    ) : (
+                      <span className="text-muted-foreground tabular-nums" title="Apenas o operador que contou pode ver a quantidade">•••</span>
+                    )}
+                    <span className="text-muted-foreground text-[10px] px-1.5 py-0.5 rounded bg-muted/60">c{l.numero_contagem}</span>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
           {leituras.length > 3 && (
             <button

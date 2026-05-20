@@ -46,6 +46,24 @@ function tempoRelativo(iso: string) {
   return new Date(iso).toLocaleDateString("pt-BR");
 }
 
+type WmsRow = { codigo_posicao: string; sku: string; qtde_unidades: number };
+async function fetchWmsSnapshot(inventarioId: string): Promise<WmsRow[]> {
+  const PAGE = 1000;
+  const out: WmsRow[] = [];
+  for (let offset = 0; ; offset += PAGE) {
+    const { data, error } = await supabase
+      .from("estoque_wms_snapshot")
+      .select("codigo_posicao, sku, qtde_unidades")
+      .eq("inventario_id", inventarioId)
+      .range(offset, offset + PAGE - 1);
+    if (error) throw error;
+    const rows = (data ?? []) as WmsRow[];
+    out.push(...rows);
+    if (rows.length < PAGE) break;
+  }
+  return out;
+}
+
 function TelaResumo() {
   const { id } = Route.useParams();
   const navigate = useNavigate();

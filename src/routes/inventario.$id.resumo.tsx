@@ -78,17 +78,14 @@ function TelaResumo() {
       if (cancelado) return;
       setInv(invData as any);
 
-      const [{ data, error }, { data: wmsData }] = await Promise.all([
+      const [{ data, error }, wmsData] = await Promise.all([
         supabase
           .from("leituras")
           .select("id, codigo_posicao, codigo_produto, numero_contagem, quantidade, operador_id, lido_em, operadores(nome)")
           .eq("inventario_id", id)
           .order("codigo_posicao")
           .order("lido_em", { ascending: true }),
-        supabase
-          .from("estoque_wms_snapshot")
-          .select("codigo_posicao, sku, qtde_unidades")
-          .eq("inventario_id", id),
+        fetchWmsSnapshot(id),
       ]);
 
       if (cancelado) return;
@@ -96,9 +93,9 @@ function TelaResumo() {
 
       // Agrega WMS por (posicao, sku)
       const wm = new Map<string, number>();
-      for (const w of wmsData ?? []) {
-        const k = `${(w as any).codigo_posicao}|${(w as any).sku}`;
-        wm.set(k, (wm.get(k) ?? 0) + Number((w as any).qtde_unidades ?? 0));
+      for (const w of wmsData) {
+        const k = `${w.codigo_posicao}|${w.sku}`;
+        wm.set(k, (wm.get(k) ?? 0) + Number(w.qtde_unidades ?? 0));
       }
       setWmsMap(wm);
 

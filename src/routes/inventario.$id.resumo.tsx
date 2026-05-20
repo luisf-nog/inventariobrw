@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
   ArrowLeft, Download, FileSpreadsheet, Lock, AlertTriangle,
-  Trash2, Users, Clock, Activity, BarChart2, RefreshCw,
+  Trash2, Users, Clock, Activity, BarChart2, RefreshCw, MapPin,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { toast } from "sonner";

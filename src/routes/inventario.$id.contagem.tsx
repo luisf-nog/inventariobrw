@@ -482,6 +482,18 @@ function TelaContagem() {
             </div>
           </div>
 
+          {wmsAlerta && (
+            <div className="rounded-lg border border-violet-500/30 bg-violet-500/10 p-3 flex items-start gap-2.5">
+              <MapPin className="h-4 w-4 text-violet-600 dark:text-violet-400 shrink-0 mt-0.5" />
+              <div className="min-w-1">
+                <p className="text-xs font-semibold text-violet-700 dark:text-violet-300">Produto fora do lugar</p>
+                <p className="text-[11px] text-violet-600/90 dark:text-violet-400/90 leading-relaxed mt-0.5">
+                  WMS diz que este SKU deveria estar em: <strong className="font-mono">{wmsAlerta.posicoesCorretas.map(formatPosicaoDisplay).join(", ")}</strong>
+                </p>
+              </div>
+            </div>
+          )}
+
           <div className="flex flex-col gap-2 pt-1">
             <Button onClick={gravar} disabled={salvando} className="w-full h-12 text-base font-bold gap-2">
               {salvando

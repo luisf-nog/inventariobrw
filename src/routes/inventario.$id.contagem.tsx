@@ -170,11 +170,38 @@ function TelaContagem() {
       beepWarn();
       toast.warning(`Produto ${sku} não cadastrado — será gravado mesmo assim`);
     }
+
+    // Verifica WMS: SKU está na posição certa?
+    if (navigator.onLine) {
+      const { data: wmsRows } = await supabase
+        .from("estoque_wms_snapshot")
+        .select("codigo_posicao")
+        .eq("inventario_id", inventarioId)
+        .eq("sku", sku);
+      const posicoesWms = new Set((wmsRows ?? []).map((r: any) => r.codigo_posicao as string));
+      if (posicoesWms.size > 1) {
+        if (!posicoesWms.has(posicao)) {
+          // SKU está em outra(s) posição(ões) — fora do lugar
+          const corretas = Array.from(posicoesWms).sort();
+          setWmsAlerta({ posicoesCorretas: corretas });
+          beepWarn();
+          toast.warning(`Produto fora do lugar! WMS: ${corretas.map(formatPosicaoDisplay).join(", ")}`, {
+            duration: 6000,
+            position: "top-center",
+          });
+        } else {
+          setWmsAlerta(null);
+        }
+      } else {
+        setWmsAlerta(null);
+      }
+    }
+
     setProdutoSku(sku);
     setProdutoDesc(desc);
     setQuantidade("");
     setEtapa("quantidade");
-  }, [produtoInput]);
+  }, [produtoInput, posicao, inventarioId]);
 
   function pedirConfirmacao() {
     const qtd = parseQuantidade(quantidade);

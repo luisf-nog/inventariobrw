@@ -38,6 +38,7 @@ function TelaContagem() {
   const [produtoDesc, setProdutoDesc] = useState<string | null>(null);
   const [quantidade, setQuantidade] = useState("");
   const [numeroContagem, setNumeroContagem] = useState(1);
+  const [wmsAlerta, setWmsAlerta] = useState<{ posicoesCorretas: string[] } | null>(null);
 
   const [salvando, setSalvando] = useState(false);
   const [ultima, setUltima] = useState<{ posicao: string; sku: string; desc: string | null; qtd: number; contagem: number } | null>(null);

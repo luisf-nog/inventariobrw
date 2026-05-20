@@ -361,9 +361,29 @@ function TelaResumo() {
           </Button>
           <div className="flex-1 min-w-0">
             <p className="font-semibold truncate leading-tight">{inv?.nome}</p>
-            {inv?.status === "encerrado" && <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">Encerrado</Badge>}
+            <div className="flex items-center gap-2">
+              {inv?.status === "encerrado" && <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">Encerrado</Badge>}
+              {inv?.wms_sincronizado_em && (
+                <span className="text-[10px] text-muted-foreground">
+                  WMS: {new Date(inv.wms_sincronizado_em).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                </span>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            {isAdmin && (
+              <Button
+                onClick={sincronizar}
+                disabled={sincronizando}
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                title="Sincronizar estoque do WMS"
+              >
+                <RefreshCw className={`h-4 w-4 ${sincronizando ? "animate-spin" : ""}`} />
+                <span className="hidden sm:inline">WMS</span>
+              </Button>
+            )}
             <Button onClick={exportarXLSX} variant="outline" size="sm" className="gap-1.5 hidden sm:flex">
               <FileSpreadsheet className="h-4 w-4" /> XLSX
             </Button>
@@ -374,6 +394,7 @@ function TelaResumo() {
               <FileSpreadsheet className="h-4 w-4" />
             </Button>
           </div>
+
         </div>
       </header>
 

@@ -295,8 +295,13 @@ function TelaResumo() {
   }
 
   function exportarCSV() {
-    const header = ["posicao", "produto", "descricao", "contagem", "quantidade", "operador", "lido_em"];
-    const rows = filtrados.map((l) => [l.codigo_posicao, l.sku, l.descricao, l.numero_contagem, l.quantidade, l.operador_nome ?? "", l.lido_em]);
+    const header = ["posicao", "produto", "descricao", "contagem", "quantidade", "qtd_wms", "diferenca", "operador", "lido_em"];
+    const rows = filtrados.map((l) => {
+      const k = `${l.codigo_posicao}|${l.sku}`;
+      const wms = wmsMap.get(k);
+      const dif = wms !== undefined ? l.quantidade - wms : "";
+      return [l.codigo_posicao, l.sku, l.descricao, l.numero_contagem, l.quantidade, wms ?? "", dif, l.operador_nome ?? "", l.lido_em];
+    });
     const csv = [header, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
     const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -309,22 +314,30 @@ function TelaResumo() {
 
   function exportarXLSX() {
     const nome = `inventario-${inv?.nome ?? id}-${new Date().toISOString().slice(0, 10)}`;
-    const dados = filtrados.map((l) => ({
-      Posição: l.codigo_posicao,
-      "Posição (formatada)": formatPosicaoDisplay(l.codigo_posicao),
-      Produto: l.sku,
-      Descrição: l.descricao,
-      Contagem: l.numero_contagem,
-      Quantidade: l.quantidade,
-      Operador: l.operador_nome ?? "",
-      "Lido em": new Date(l.lido_em).toLocaleString("pt-BR"),
-      Divergência: divergencias.has(`${l.codigo_posicao}|${l.sku}`) ? "Sim" : "",
-    }));
+    const dados = filtrados.map((l) => {
+      const k = `${l.codigo_posicao}|${l.sku}`;
+      const wms = wmsMap.get(k);
+      return {
+        Posição: l.codigo_posicao,
+        "Posição (formatada)": formatPosicaoDisplay(l.codigo_posicao),
+        Produto: l.sku,
+        Descrição: l.descricao,
+        Contagem: l.numero_contagem,
+        Quantidade: l.quantidade,
+        "Qtd WMS": wms ?? "",
+        Diferença: wms !== undefined ? l.quantidade - wms : "",
+        "Status WMS": wms === undefined ? "Não está no WMS" : wms === l.quantidade ? "OK" : l.quantidade > wms ? "Sobra" : "Falta",
+        Operador: l.operador_nome ?? "",
+        "Lido em": new Date(l.lido_em).toLocaleString("pt-BR"),
+        "Divergência entre contagens": divergencias.has(k) ? "Sim" : "",
+      };
+    });
     const ws = XLSX.utils.json_to_sheet(dados);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Leituras");
     XLSX.writeFile(wb, `${nome}.xlsx`);
   }
+
 
   async function encerrar() {
     if (confirmTexto.trim().toUpperCase() !== "ENCERRAR") { toast.error("Digite ENCERRAR para confirmar"); return; }

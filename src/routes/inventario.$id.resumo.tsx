@@ -533,16 +533,26 @@ function TelaResumo() {
 
         {/* ── Filtros + Tabela completa ───────────────────────────── */}
         <div className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
             <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               Todas as leituras {filtrados.length !== linhas.length && `(${filtrados.length} de ${linhas.length})`}
             </h3>
+            <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={soDivergentes}
+                onChange={(e) => setSoDivergentes(e.target.checked)}
+                className="h-3.5 w-3.5 accent-destructive"
+              />
+              Só divergentes
+            </label>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
             <Input placeholder="Filtrar posição" value={filtroPos} onChange={(e) => setFiltroPos(e.target.value)} />
             <Input placeholder="Filtrar produto" value={filtroProd} onChange={(e) => setFiltroProd(e.target.value)} />
             <Input placeholder="Filtrar operador" value={filtroOp} onChange={(e) => setFiltroOp(e.target.value)} />
           </div>
+
 
           {loading ? (
             <div className="flex justify-center py-16">

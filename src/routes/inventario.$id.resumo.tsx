@@ -370,6 +370,7 @@ function TelaResumo() {
         Operador: l.operador_nome ?? "",
         "Lido em": new Date(l.lido_em).toLocaleString("pt-BR"),
         "Divergência entre contagens": divergencias.has(k) ? "Sim" : "",
+        "Fora do lugar (posição correta WMS)": foraDoLugar.get(k)?.map(formatPosicaoDisplay).join(" | ") ?? "",
       };
     });
     const ws = XLSX.utils.json_to_sheet(dados);

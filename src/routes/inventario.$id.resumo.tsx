@@ -70,17 +70,38 @@ function TelaResumo() {
 
     let cancelado = false;
     const carregar = async () => {
-      const { data: invData } = await supabase.from("inventarios").select("nome, status").eq("id", id).single();
+      const { data: invData } = await supabase
+        .from("inventarios")
+        .select("nome, status, wms_sincronizado_em")
+        .eq("id", id)
+        .single();
       if (cancelado) return;
-      setInv(invData);
-      const { data, error } = await supabase
-        .from("leituras")
-        .select("id, codigo_posicao, codigo_produto, numero_contagem, quantidade, operador_id, lido_em, operadores(nome)")
-        .eq("inventario_id", id)
-        .order("codigo_posicao")
-        .order("lido_em", { ascending: true });
+      setInv(invData as any);
+
+      const [{ data, error }, { data: wmsData }] = await Promise.all([
+        supabase
+          .from("leituras")
+          .select("id, codigo_posicao, codigo_produto, numero_contagem, quantidade, operador_id, lido_em, operadores(nome)")
+          .eq("inventario_id", id)
+          .order("codigo_posicao")
+          .order("lido_em", { ascending: true }),
+        supabase
+          .from("estoque_wms_snapshot")
+          .select("codigo_posicao, sku, qtde_unidades")
+          .eq("inventario_id", id),
+      ]);
+
       if (cancelado) return;
       if (error) { toast.error(error.message); setLoading(false); return; }
+
+      // Agrega WMS por (posicao, sku)
+      const wm = new Map<string, number>();
+      for (const w of wmsData ?? []) {
+        const k = `${(w as any).codigo_posicao}|${(w as any).sku}`;
+        wm.set(k, (wm.get(k) ?? 0) + Number((w as any).qtde_unidades ?? 0));
+      }
+      setWmsMap(wm);
+
       const codigosLidos = Array.from(new Set((data ?? []).map((d: any) => d.codigo_produto)));
       const eanToSku = await traduzirEansParaSkus(codigosLidos);
       const skuPorCodigo = (codigo: string) => eanToSku[codigo.replace(/\D/g, "")] ?? codigo;
@@ -101,6 +122,7 @@ function TelaResumo() {
       setLinhas(ls);
       setLoading(false);
     };
+
 
     carregar();
 

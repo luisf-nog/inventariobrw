@@ -471,6 +471,14 @@ function TelaResumo() {
               {wmsMap.size === 0 ? "—" : stats.divergenciasWms}
             </p>
           </div>
+          <div className={`rounded-xl border p-4 ${stats.foraDoLugar > 0 ? "border-violet-500/40 bg-violet-500/5" : "border-border bg-card"}`}>
+            <p className={`text-xs mb-1 flex items-center gap-1.5 ${stats.foraDoLugar > 0 ? "text-violet-600 dark:text-violet-400" : "text-muted-foreground"}`}>
+              <MapPin className="h-3.5 w-3.5" /> Fora do lugar
+            </p>
+            <p className={`text-3xl font-bold tabular-nums ${stats.foraDoLugar > 0 ? "text-violet-600 dark:text-violet-400" : ""}`}>
+              {wmsMap.size === 0 ? "—" : stats.foraDoLugar}
+            </p>
+          </div>
         </div>
 
 

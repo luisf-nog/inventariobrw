@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const WMS_BASE = "https://apiwms.flsoft.com.br/brwdados";
 const WMS_TOKEN = "QlJXX1dNUw==";

@@ -631,11 +631,25 @@ function TelaResumo() {
                       const wms = wmsMap.get(k);
                       const dif = wms !== undefined ? l.quantidade - wms : null;
                       const divWms = divergenciasWms.has(k);
+                      const posCorretas = foraDoLugar.get(k);
+                      const fora = !!posCorretas;
                       const confirmando = deletandoId === l.id;
                       return (
-                        <tr key={l.id} className={`${div ? "bg-destructive/8" : divWms ? "bg-amber-500/8" : "hover:bg-muted/20"} ${confirmando ? "bg-destructive/15" : ""}`}>
+                        <tr key={l.id} className={`${div ? "bg-destructive/8" : fora ? "bg-violet-500/8" : divWms ? "bg-amber-500/8" : "hover:bg-muted/20"} ${confirmando ? "bg-destructive/15" : ""}`}>
                           <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{formatPosicaoDisplay(l.codigo_posicao)}</td>
-                          <td className="px-3 py-2 font-mono text-xs font-medium">{l.sku}</td>
+                          <td className="px-3 py-2 font-mono text-xs font-medium">
+                            <div className="flex items-center gap-1">
+                              <span>{l.sku}</span>
+                              {fora && (
+                                <span
+                                  className="inline-flex items-center gap-0.5 text-[9px] px-1 py-0.5 rounded bg-violet-500/15 text-violet-700 dark:text-violet-300 font-sans font-medium cursor-help"
+                                  title={`WMS diz que este SKU está em: ${posCorretas!.map(formatPosicaoDisplay).join(", ")}`}
+                                >
+                                  <MapPin className="h-2.5 w-2.5" /> fora do lugar
+                                </span>
+                              )}
+                            </div>
+                          </td>
                           <td className="px-3 py-2 text-xs max-w-[200px] truncate text-muted-foreground hidden md:table-cell" title={l.descricao}>
                             {l.descricao || <span className="italic">—</span>}
                           </td>

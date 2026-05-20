@@ -290,11 +290,16 @@ function TelaResumo() {
       // Recarrega snapshot
       const wmsData = await fetchWmsSnapshot(id);
       const wm = new Map<string, number>();
+      const sp = new Map<string, Set<string>>();
       for (const w of wmsData) {
         const k = `${w.codigo_posicao}|${w.sku}`;
         wm.set(k, (wm.get(k) ?? 0) + Number(w.qtde_unidades ?? 0));
+        const set = sp.get(w.sku) ?? new Set<string>();
+        set.add(w.codigo_posicao);
+        sp.set(w.sku, set);
       }
       setWmsMap(wm);
+      setSkuPositions(sp);
       setInv((p) => p ? { ...p, wms_sincronizado_em: r.sincronizado_em } : p);
     } catch (err: any) {
       toast.error(`Falha ao sincronizar WMS: ${err.message ?? err}`);

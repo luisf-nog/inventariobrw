@@ -185,10 +185,6 @@ function TelaContagem() {
           const corretas = Array.from(posicoesWms).sort();
           setWmsAlerta({ posicoesCorretas: corretas });
           beepWarn();
-          toast.warning(`Produto fora do lugar! WMS: ${corretas.map(formatPosicaoDisplay).join(", ")}`, {
-            duration: 6000,
-            position: "top-center",
-          });
         } else {
           setWmsAlerta(null);
         }

@@ -225,13 +225,30 @@ function TelaResumo() {
     return set;
   }, [contadoPorPS, wmsMap]);
 
+  // "Fora do lugar": SKU bipado em uma posição onde o WMS NÃO tem este SKU,
+  // mas o WMS conhece este SKU em outra(s) posição(ões).
+  const foraDoLugar = useMemo(() => {
+    const map = new Map<string, string[]>(); // key "pos|sku" => posições corretas no WMS
+    if (skuPositions.size === 0) return map;
+    for (const [k, info] of contadoPorPS) {
+      const [pos, sku] = k.split("|");
+      const wmsPosicoes = skuPositions.get(sku);
+      if (!wmsPosicoes || wmsPosicoes.size === 0) continue; // SKU nunca visto no WMS → cai em "vs WMS"
+      if (wmsPosicoes.has(pos)) continue; // está no lugar certo
+      if (info.qtd === 0) continue;
+      map.set(k, Array.from(wmsPosicoes).sort());
+    }
+    return map;
+  }, [contadoPorPS, skuPositions]);
+
   const stats = useMemo(() => ({
     posicoes: new Set(linhas.map((l) => l.codigo_posicao)).size,
     leituras: linhas.length,
     operadores: new Set(linhas.map((l) => l.operador_id).filter(Boolean)).size,
     divergencias: divergencias.size,
     divergenciasWms: divergenciasWms.size,
-  }), [linhas, divergencias, divergenciasWms]);
+    foraDoLugar: foraDoLugar.size,
+  }), [linhas, divergencias, divergenciasWms, foraDoLugar]);
 
 
   const statsPorOperador = useMemo(() => {

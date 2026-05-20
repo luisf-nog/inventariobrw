@@ -46,6 +46,24 @@ function tempoRelativo(iso: string) {
   return new Date(iso).toLocaleDateString("pt-BR");
 }
 
+type WmsRow = { codigo_posicao: string; sku: string; qtde_unidades: number };
+async function fetchWmsSnapshot(inventarioId: string): Promise<WmsRow[]> {
+  const PAGE = 1000;
+  const out: WmsRow[] = [];
+  for (let offset = 0; ; offset += PAGE) {
+    const { data, error } = await supabase
+      .from("estoque_wms_snapshot")
+      .select("codigo_posicao, sku, qtde_unidades")
+      .eq("inventario_id", inventarioId)
+      .range(offset, offset + PAGE - 1);
+    if (error) throw error;
+    const rows = (data ?? []) as WmsRow[];
+    out.push(...rows);
+    if (rows.length < PAGE) break;
+  }
+  return out;
+}
+
 function TelaResumo() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
@@ -78,17 +96,14 @@ function TelaResumo() {
       if (cancelado) return;
       setInv(invData as any);
 
-      const [{ data, error }, { data: wmsData }] = await Promise.all([
+      const [{ data, error }, wmsData] = await Promise.all([
         supabase
           .from("leituras")
           .select("id, codigo_posicao, codigo_produto, numero_contagem, quantidade, operador_id, lido_em, operadores(nome)")
           .eq("inventario_id", id)
           .order("codigo_posicao")
           .order("lido_em", { ascending: true }),
-        supabase
-          .from("estoque_wms_snapshot")
-          .select("codigo_posicao, sku, qtde_unidades")
-          .eq("inventario_id", id),
+        fetchWmsSnapshot(id),
       ]);
 
       if (cancelado) return;
@@ -96,13 +111,13 @@ function TelaResumo() {
 
       // Agrega WMS por (posicao, sku)
       const wm = new Map<string, number>();
-      for (const w of wmsData ?? []) {
-        const k = `${(w as any).codigo_posicao}|${(w as any).sku}`;
-        wm.set(k, (wm.get(k) ?? 0) + Number((w as any).qtde_unidades ?? 0));
+      for (const w of wmsData) {
+        const k = `${w.codigo_posicao}|${w.sku}`;
+        wm.set(k, (wm.get(k) ?? 0) + Number(w.qtde_unidades ?? 0));
       }
       setWmsMap(wm);
 
-      const codigosLidos = Array.from(new Set((data ?? []).map((d: any) => d.codigo_produto)));
+      const codigosLidos: string[] = Array.from(new Set(((data ?? []) as any[]).map((d: any) => d.codigo_produto as string)));
       const eanToSku = await traduzirEansParaSkus(codigosLidos);
       const skuPorCodigo = (codigo: string) => eanToSku[codigo.replace(/\D/g, "")] ?? codigo;
       const descricoes = await buscarDescricoesPorSku(codigosLidos.map(skuPorCodigo));
@@ -267,14 +282,11 @@ function TelaResumo() {
       const r = await sincronizarWms({ data: { inventarioId: id } });
       toast.success(`WMS sincronizado: ${r.posicoes} posições, ${r.total_inserido} registros`);
       // Recarrega snapshot
-      const { data: wmsData } = await supabase
-        .from("estoque_wms_snapshot")
-        .select("codigo_posicao, sku, qtde_unidades")
-        .eq("inventario_id", id);
+      const wmsData = await fetchWmsSnapshot(id);
       const wm = new Map<string, number>();
-      for (const w of wmsData ?? []) {
-        const k = `${(w as any).codigo_posicao}|${(w as any).sku}`;
-        wm.set(k, (wm.get(k) ?? 0) + Number((w as any).qtde_unidades ?? 0));
+      for (const w of wmsData) {
+        const k = `${w.codigo_posicao}|${w.sku}`;
+        wm.set(k, (wm.get(k) ?? 0) + Number(w.qtde_unidades ?? 0));
       }
       setWmsMap(wm);
       setInv((p) => p ? { ...p, wms_sincronizado_em: r.sincronizado_em } : p);

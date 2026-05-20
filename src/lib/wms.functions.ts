@@ -21,10 +21,12 @@ type WmsRow = {
 };
 
 export const sincronizarEstoqueWms = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((input) =>
     z.object({ inventarioId: z.string().uuid() }).parse(input),
   )
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
+    const supabaseAdmin = context.supabase;
     const url = `${WMS_BASE}/consultaEstoque?codProprietario=${COD_PROPRIETARIO}`;
     const res = await fetch(url, {
       headers: {

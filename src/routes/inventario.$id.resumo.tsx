@@ -1,12 +1,14 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
+import { sincronizarEstoqueWms } from "@/lib/wms.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
   ArrowLeft, Download, FileSpreadsheet, Lock, AlertTriangle,
-  Trash2, Users, Clock, Activity, BarChart2,
+  Trash2, Users, Clock, Activity, BarChart2, RefreshCw,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { toast } from "sonner";

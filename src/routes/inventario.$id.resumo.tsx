@@ -401,7 +401,7 @@ function TelaResumo() {
       <main className="max-w-6xl mx-auto px-4 py-6 space-y-6">
 
         {/* ── KPIs ───────────────────────────────────────────────── */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           <div className="rounded-xl border border-border bg-card p-4">
             <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1.5"><BarChart2 className="h-3.5 w-3.5" /> Posições</p>
             <p className="text-3xl font-bold tabular-nums">{stats.posicoes}</p>
@@ -419,11 +419,20 @@ function TelaResumo() {
           </div>
           <div className={`rounded-xl border p-4 ${stats.divergencias > 0 ? "border-destructive/40 bg-destructive/5" : "border-border bg-card"}`}>
             <p className={`text-xs mb-1 flex items-center gap-1.5 ${stats.divergencias > 0 ? "text-destructive" : "text-muted-foreground"}`}>
-              <AlertTriangle className="h-3.5 w-3.5" /> Divergências
+              <AlertTriangle className="h-3.5 w-3.5" /> Entre contagens
             </p>
             <p className={`text-3xl font-bold tabular-nums ${stats.divergencias > 0 ? "text-destructive" : ""}`}>{stats.divergencias}</p>
           </div>
+          <div className={`rounded-xl border p-4 ${stats.divergenciasWms > 0 ? "border-amber-500/40 bg-amber-500/5" : "border-border bg-card"}`}>
+            <p className={`text-xs mb-1 flex items-center gap-1.5 ${stats.divergenciasWms > 0 ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`}>
+              <AlertTriangle className="h-3.5 w-3.5" /> vs WMS
+            </p>
+            <p className={`text-3xl font-bold tabular-nums ${stats.divergenciasWms > 0 ? "text-amber-600 dark:text-amber-400" : ""}`}>
+              {wmsMap.size === 0 ? "—" : stats.divergenciasWms}
+            </p>
+          </div>
         </div>
+
 
         {/* ── Dashboard ──────────────────────────────────────────── */}
         {!loading && linhas.length > 0 && (

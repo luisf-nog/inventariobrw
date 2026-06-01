@@ -509,6 +509,16 @@ function TelaResumo() {
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            <Button
+              onClick={() => navigate({ to: "/inventario/$id/analise", params: { id } })}
+              variant="default"
+              size="sm"
+              className="gap-1.5"
+              title="Análise final por posição"
+            >
+              <ClipboardCheck className="h-4 w-4" />
+              <span className="hidden sm:inline">Análise</span>
+            </Button>
             {isAdmin && (
               <Button
                 onClick={sincronizar}

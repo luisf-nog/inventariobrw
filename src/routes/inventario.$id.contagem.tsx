@@ -196,6 +196,22 @@ function TelaContagem() {
       });
   }, [inventarioId, navigate, carregarLeiturasExistentes]);
 
+  // Realtime: recarrega quando solicitações de recontagem ou leituras mudam
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const agendar = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => { void carregarLeiturasExistentes(); }, 400);
+    };
+    const channel = supabase
+      .channel(`contagem-${inventarioId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "recontagens_solicitadas", filter: `inventario_id=eq.${inventarioId}` }, agendar)
+      .on("postgres_changes", { event: "*", schema: "public", table: "leituras", filter: `inventario_id=eq.${inventarioId}` }, agendar)
+      .subscribe();
+    return () => { if (timer) clearTimeout(timer); supabase.removeChannel(channel); };
+  }, [inventarioId, carregarLeiturasExistentes]);
+
+
   useEffect(() => {
     scanBufferRef.current = "";
     lastKeyTimeRef.current = 0;

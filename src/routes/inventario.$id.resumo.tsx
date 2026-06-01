@@ -244,26 +244,25 @@ function TelaResumo() {
 
   // "Fora do lugar": SKU bipado em uma posição onde o WMS NÃO tem este SKU,
   // mas o WMS conhece este SKU em outra(s) posição(ões) COMPATÍVEIS.
-  // Regras de compatibilidade da sugestão:
-  //   - Posição contada PBL (12 chars iniciando "01995") → só sugere PBL.
-  //   - Picking normal (12 chars, não-PBL) → só sugere posições normais de
-  //     nível 1 (os 2 dígitos antes dos 2 últimos == "01") e nunca PBL.
+  // Compatibilidade:
+  //   - Contada PBL (rua 995) → só sugere PBL nível 1.
+  //   - Picking normal (rua 001/002) → só sugere normal nível 1 (chars 8-9 == "01")
+  //     e nunca PBL nem outras ruas (997 avarias etc.).
   const foraDoLugar = useMemo(() => {
-    const isPbl = (c: string) => c.length === 12 && c.startsWith("01995");
-    const isPickingNivel1 = (c: string) =>
-      c.length === 12 && !isPbl(c) && c.slice(8, 10) === "01";
+    const isNivel1Normal = (c: string) => isPosicaoNormal(c) && c.slice(8, 10) === "01";
+    const isPblValida = (c: string) => isPosicaoPbl(c);
 
-    const map = new Map<string, string[]>(); // key "pos|sku" => posições corretas no WMS
+    const map = new Map<string, string[]>();
     if (skuPositions.size === 0) return map;
     for (const [k, info] of contadoPorPS) {
       const [pos, sku] = k.split("|");
       const wmsPosicoes = skuPositions.get(sku);
-      if (!wmsPosicoes || wmsPosicoes.size === 0) continue; // SKU nunca visto no WMS → cai em "vs WMS"
-      if (wmsPosicoes.has(pos)) continue; // está no lugar certo
+      if (!wmsPosicoes || wmsPosicoes.size === 0) continue;
+      if (wmsPosicoes.has(pos)) continue;
       if (info.qtd === 0) continue;
-      const contadaPbl = isPbl(pos);
+      const contadaPbl = isPosicaoPbl(pos);
       const compativeis = Array.from(wmsPosicoes).filter((p) =>
-        contadaPbl ? isPbl(p) : isPickingNivel1(p),
+        contadaPbl ? isPblValida(p) : isNivel1Normal(p),
       );
       if (compativeis.length === 0) continue;
       map.set(k, compativeis.sort());

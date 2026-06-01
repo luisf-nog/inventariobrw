@@ -158,11 +158,17 @@ function TelaContagem() {
 
   const carregarLeiturasExistentes = useCallback(async () => {
     if (!navigator.onLine) return;
-    const { data, error } = await supabase
-      .from("leituras")
-      .select("codigo_posicao, codigo_produto, quantidade, numero_contagem, lido_em, operador_id, operadores(nome)")
-      .eq("inventario_id", inventarioId)
-      .order("lido_em", { ascending: false });
+    const [{ data, error }, { data: recData }] = await Promise.all([
+      supabase
+        .from("leituras")
+        .select("codigo_posicao, codigo_produto, quantidade, numero_contagem, lido_em, operador_id, operadores(nome)")
+        .eq("inventario_id", inventarioId)
+        .order("lido_em", { ascending: false }),
+      supabase
+        .from("recontagens_solicitadas")
+        .select("id, codigo_posicao, codigo_produto, numero_contagem_origem")
+        .eq("inventario_id", inventarioId),
+    ]);
     if (error) return;
     setLeiturasCache((data ?? []).map((d: any) => ({
       codigo_posicao: d.codigo_posicao,
@@ -173,7 +179,9 @@ function TelaContagem() {
       operador_nome: d.operadores?.nome ?? null,
       operador_id: d.operador_id ?? null,
     })));
+    setRecontagens((recData ?? []) as any);
   }, [inventarioId]);
+
 
   useEffect(() => {
     const o = getOperador();

@@ -287,7 +287,7 @@ function TelaContagem() {
         (wmsRows ?? []).map((r: any) => r.codigo_posicao as string),
       );
       if (posicoesWms.size > 0 && !posicoesWms.has(posicao)) {
-        // Remove sugestões de posições que já foram contadas neste inventário
+        // Remove sugestões de posições já contadas
         const { data: jaContadas } = await supabase
           .from("leituras")
           .select("codigo_posicao")
@@ -295,7 +295,21 @@ function TelaContagem() {
           .eq("codigo_produto", sku)
           .in("codigo_posicao", Array.from(posicoesWms));
         const contadas = new Set((jaContadas ?? []).map((r: any) => r.codigo_posicao as string));
-        const pendentes = Array.from(posicoesWms).filter((p) => !contadas.has(p)).sort();
+        // Filtra por compatibilidade de rua:
+        //   - posicao contada PBL (rua 995) → só sugere PBL
+        //   - posicao normal (rua 001/002) → só sugere normal nível 1 (chars 8-9 == "01")
+        //   - qualquer outra rua (ex.: 997 avarias) é descartada
+        const contadaPbl = posicao.length === 12 && posicao.slice(2, 5) === "995";
+        const ruasNormais = new Set(["001", "002"]);
+        const compativel = (p: string) => {
+          if (p.length !== 12) return false;
+          const rua = p.slice(2, 5);
+          if (contadaPbl) return rua === "995";
+          return ruasNormais.has(rua) && p.slice(8, 10) === "01";
+        };
+        const pendentes = Array.from(posicoesWms)
+          .filter((p) => !contadas.has(p) && compativel(p))
+          .sort();
         if (pendentes.length > 0) {
           setWmsAlerta({ posicoesCorretas: pendentes });
           beepWarn();

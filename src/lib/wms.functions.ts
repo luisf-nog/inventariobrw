@@ -56,8 +56,6 @@ export const sincronizarEstoqueWms = createServerFn({ method: "POST" })
       const codigo_posicao = String(r.COD_ENDERECO ?? "").trim().toUpperCase();
       const sku = String(r.COD_PROD_ERP ?? r.COD_PRODUTO ?? "").trim().toUpperCase();
       if (!codigo_posicao || !sku) continue;
-      // Filtra somente posições do flowrack (01.995.*)
-      if (!codigo_posicao.startsWith("01995")) continue;
       const lote = r.NUM_LOTE ? String(r.NUM_LOTE).trim() : "";
       const k = `${codigo_posicao}|${sku}|${lote}`;
       const qtd = Number(r.QTDE_UNIDADES ?? 0);

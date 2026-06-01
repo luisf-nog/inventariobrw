@@ -283,11 +283,8 @@ function TelaContagem() {
         .select("codigo_posicao")
         .eq("inventario_id", inventarioId)
         .eq("sku", sku);
-      // Considera somente posições do flowrack (01.995.*)
       const posicoesWms = new Set(
-        (wmsRows ?? [])
-          .map((r: any) => r.codigo_posicao as string)
-          .filter((p) => p.startsWith("01995")),
+        (wmsRows ?? []).map((r: any) => r.codigo_posicao as string),
       );
       if (posicoesWms.size > 0 && !posicoesWms.has(posicao)) {
         // Remove sugestões de posições que já foram contadas neste inventário

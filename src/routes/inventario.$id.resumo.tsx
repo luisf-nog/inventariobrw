@@ -705,7 +705,7 @@ function TelaResumo() {
                       <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide">Δ</th>
                       <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide hidden sm:table-cell">Operador</th>
                       <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide hidden lg:table-cell">Horário</th>
-                      <th className="px-3 py-2.5 w-10" />
+                      <th className="px-3 py-2.5 w-20" />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/50">

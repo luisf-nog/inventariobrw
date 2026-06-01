@@ -105,18 +105,18 @@ function SelecaoOperador() {
   }
 
   return (
-    <main className="collector-home min-h-screen flex flex-col bg-background">
+    <main className="collector-home min-h-screen flex flex-col bg-background" style={homeStyle}>
       {/* Branding */}
-      <div className="collector-branding pt-14 pb-8 px-6 text-center">
-        <div className="collector-logo inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 mb-5">
-          <Package className="h-8 w-8 text-primary" />
+      <div className="collector-branding pt-14 pb-8 px-6 text-center" style={brandingStyle}>
+        <div className="collector-logo inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 mb-5" style={logoStyle}>
+          <Package className="h-8 w-8 text-primary" style={{ width: 32, height: 32, marginTop: 12 }} />
         </div>
-        <h1 className="collector-title text-2xl font-bold tracking-tight">Inventário</h1>
-        <p className="collector-subtitle text-sm text-muted-foreground mt-1">Selecione seu nome para começar</p>
+        <h1 className="collector-title text-2xl font-bold tracking-tight" style={titleStyle}>Inventário</h1>
+        <p className="collector-subtitle text-sm text-muted-foreground mt-1" style={subtitleStyle}>Selecione seu nome para começar</p>
       </div>
 
       {/* Operador grid */}
-      <div className="collector-content flex-1 px-4 pb-6">
+      <div className="collector-content flex-1 px-4 pb-6" style={contentStyle}>
         {loading ? (
           <div className="flex justify-center py-16">
             <div className="collector-loader w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -129,19 +129,20 @@ function SelecaoOperador() {
             </Link>
           </div>
         ) : (
-          <div className="collector-grid grid grid-cols-2 gap-3 max-w-sm mx-auto">
+          <div className="collector-grid grid grid-cols-2 gap-3 max-w-sm mx-auto" style={gridStyle}>
             {operadores.map((op) => (
               <button
                 key={op.id}
                 onClick={() => escolher(op)}
                 className="collector-operator-card flex flex-col items-center gap-3 bg-card hover:bg-secondary active:scale-[0.97] border border-border rounded-xl p-5 transition-all"
+                style={cardStyle}
               >
-                <div className="collector-initials w-14 h-14 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold text-xl">
+                <div className="collector-initials w-14 h-14 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold text-xl" style={initialsStyle}>
                   {initials(op.nome)}
                 </div>
                 <div className="text-center min-w-0 w-full">
-                  <p className="collector-operator-name text-sm font-semibold truncate">{op.nome}</p>
-                  {op.tem_pin && <p className="collector-pin text-[10px] text-muted-foreground mt-0.5">PIN ●●●●</p>}
+                  <p className="collector-operator-name text-sm font-semibold truncate" style={nameStyle}>{op.nome}</p>
+                  {op.tem_pin && <p className="collector-pin text-[10px] text-muted-foreground mt-0.5" style={pinStyle}>PIN ●●●●</p>}
                 </div>
               </button>
             ))}
@@ -150,8 +151,8 @@ function SelecaoOperador() {
       </div>
 
       {/* Footer */}
-      <div className="collector-footer pb-10 text-center">
-        <Link to="/admin" className="collector-admin-link inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
+      <div className="collector-footer pb-10 text-center" style={footerStyle}>
+        <Link to="/admin" className="collector-admin-link inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors" style={adminLinkStyle}>
           <Settings className="h-3.5 w-3.5" /> Supervisor
         </Link>
       </div>
@@ -172,10 +173,12 @@ function SelecaoOperador() {
               onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
               onKeyDown={(e) => { if (e.key === "Enter" && selecionado) void confirmar(selecionado, pin); }}
               className="text-center text-4xl h-16 tracking-[0.6em] font-mono border-border/60"
+              style={pinInputStyle}
             />
             <Button
               size="lg"
               className="w-full h-12 text-base font-semibold"
+              style={confirmButtonStyle}
               disabled={validando || pin.length < 4}
               onClick={() => selecionado && void confirmar(selecionado, pin)}
             >

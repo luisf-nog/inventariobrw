@@ -158,19 +158,25 @@ function TelaContagem() {
 
   const carregarLeiturasExistentes = useCallback(async () => {
     if (!navigator.onLine) return;
-    const [{ data, error }, { data: recData }] = await Promise.all([
-      supabase
+    const PAGE = 1000;
+    const todas: any[] = [];
+    for (let offset = 0; ; offset += PAGE) {
+      const { data, error } = await supabase
         .from("leituras")
         .select("codigo_posicao, codigo_produto, quantidade, numero_contagem, lido_em, operador_id, operadores(nome)")
         .eq("inventario_id", inventarioId)
-        .order("lido_em", { ascending: false }),
-      supabase
-        .from("recontagens_solicitadas")
-        .select("id, codigo_posicao, codigo_produto, numero_contagem_origem")
-        .eq("inventario_id", inventarioId),
-    ]);
-    if (error) return;
-    setLeiturasCache((data ?? []).map((d: any) => ({
+        .order("lido_em", { ascending: false })
+        .range(offset, offset + PAGE - 1);
+      if (error) return;
+      const rows = data ?? [];
+      todas.push(...rows);
+      if (rows.length < PAGE) break;
+    }
+    const { data: recData } = await supabase
+      .from("recontagens_solicitadas")
+      .select("id, codigo_posicao, codigo_produto, numero_contagem_origem")
+      .eq("inventario_id", inventarioId);
+    setLeiturasCache(todas.map((d: any) => ({
       codigo_posicao: d.codigo_posicao,
       codigo_produto: d.codigo_produto,
       quantidade: Number(d.quantidade),

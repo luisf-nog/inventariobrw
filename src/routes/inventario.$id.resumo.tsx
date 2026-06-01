@@ -718,11 +718,13 @@ function TelaResumo() {
                       const posCorretas = foraDoLugar.get(k);
                       const fora = !!posCorretas;
                       const confirmando = deletandoId === l.id;
+                      const recPend = recontagensPendentes.has(k);
+                      const solicitando = solicitandoId === l.id;
                       return (
-                        <tr key={l.id} className={`${div ? "bg-destructive/8" : fora ? "bg-violet-500/8" : divWms ? "bg-amber-500/8" : "hover:bg-muted/20"} ${confirmando ? "bg-destructive/15" : ""}`}>
+                        <tr key={l.id} className={`${div ? "bg-destructive/8" : fora ? "bg-violet-500/8" : divWms ? "bg-amber-500/8" : "hover:bg-muted/20"} ${confirmando ? "bg-destructive/15" : ""} ${recPend ? "ring-1 ring-inset ring-sky-500/30" : ""}`}>
                           <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{formatPosicaoDisplay(l.codigo_posicao)}</td>
                           <td className="px-3 py-2 font-mono text-xs font-medium">
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center gap-1 flex-wrap">
                               <span>{l.sku}</span>
                               {fora && (
                                 <span
@@ -730,6 +732,11 @@ function TelaResumo() {
                                   title={`WMS diz que este SKU está em: ${posCorretas!.map(formatPosicaoDisplay).join(", ")}`}
                                 >
                                   <MapPin className="h-2.5 w-2.5" /> fora do lugar
+                                </span>
+                              )}
+                              {recPend && (
+                                <span className="inline-flex items-center gap-0.5 text-[9px] px-1 py-0.5 rounded bg-sky-500/15 text-sky-700 dark:text-sky-300 font-sans font-medium">
+                                  <RotateCcw className="h-2.5 w-2.5" /> recontagem pedida
                                 </span>
                               )}
                             </div>

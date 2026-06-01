@@ -34,8 +34,11 @@ const AlertDialogContent = React.forwardRef<
         left: "50%",
         top: "50%",
         zIndex: 99,
-        width: "calc(100% - 24px)",
+        width: "min(calc(100vw - 24px), 420px)",
         maxWidth: 420,
+        maxHeight: "calc(100dvh - 24px)",
+        overflowY: "auto",
+        overscrollBehavior: "contain",
         transform: "translate(-50%, -50%)",
         boxSizing: "border-box",
         borderRadius: 12,
@@ -45,7 +48,7 @@ const AlertDialogContent = React.forwardRef<
         boxShadow: "0 24px 60px rgba(0,0,0,0.55)",
         ...style,
       }}
-      className={cn("grid gap-4 p-6", className)}
+      className={cn("grid gap-4 p-6 outline-none", className)}
       {...props}
     />
   </AlertDialogPortal>

@@ -17,6 +17,7 @@ import { Route as AdminProdutosRouteImport } from './routes/admin.produtos'
 import { Route as AdminOperadoresRouteImport } from './routes/admin.operadores'
 import { Route as InventarioIdResumoRouteImport } from './routes/inventario.$id.resumo'
 import { Route as InventarioIdContagemRouteImport } from './routes/inventario.$id.contagem'
+import { Route as InventarioIdAnaliseRouteImport } from './routes/inventario.$id.analise'
 
 const InventariosRoute = InventariosRouteImport.update({
   id: '/inventarios',
@@ -58,6 +59,11 @@ const InventarioIdContagemRoute = InventarioIdContagemRouteImport.update({
   path: '/inventario/$id/contagem',
   getParentRoute: () => rootRouteImport,
 } as any)
+const InventarioIdAnaliseRoute = InventarioIdAnaliseRouteImport.update({
+  id: '/inventario/$id/analise',
+  path: '/inventario/$id/analise',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -66,6 +72,7 @@ export interface FileRoutesByFullPath {
   '/admin/operadores': typeof AdminOperadoresRoute
   '/admin/produtos': typeof AdminProdutosRoute
   '/admin/': typeof AdminIndexRoute
+  '/inventario/$id/analise': typeof InventarioIdAnaliseRoute
   '/inventario/$id/contagem': typeof InventarioIdContagemRoute
   '/inventario/$id/resumo': typeof InventarioIdResumoRoute
 }
@@ -75,6 +82,7 @@ export interface FileRoutesByTo {
   '/admin/operadores': typeof AdminOperadoresRoute
   '/admin/produtos': typeof AdminProdutosRoute
   '/admin': typeof AdminIndexRoute
+  '/inventario/$id/analise': typeof InventarioIdAnaliseRoute
   '/inventario/$id/contagem': typeof InventarioIdContagemRoute
   '/inventario/$id/resumo': typeof InventarioIdResumoRoute
 }
@@ -86,6 +94,7 @@ export interface FileRoutesById {
   '/admin/operadores': typeof AdminOperadoresRoute
   '/admin/produtos': typeof AdminProdutosRoute
   '/admin/': typeof AdminIndexRoute
+  '/inventario/$id/analise': typeof InventarioIdAnaliseRoute
   '/inventario/$id/contagem': typeof InventarioIdContagemRoute
   '/inventario/$id/resumo': typeof InventarioIdResumoRoute
 }
@@ -98,6 +107,7 @@ export interface FileRouteTypes {
     | '/admin/operadores'
     | '/admin/produtos'
     | '/admin/'
+    | '/inventario/$id/analise'
     | '/inventario/$id/contagem'
     | '/inventario/$id/resumo'
   fileRoutesByTo: FileRoutesByTo
@@ -107,6 +117,7 @@ export interface FileRouteTypes {
     | '/admin/operadores'
     | '/admin/produtos'
     | '/admin'
+    | '/inventario/$id/analise'
     | '/inventario/$id/contagem'
     | '/inventario/$id/resumo'
   id:
@@ -117,6 +128,7 @@ export interface FileRouteTypes {
     | '/admin/operadores'
     | '/admin/produtos'
     | '/admin/'
+    | '/inventario/$id/analise'
     | '/inventario/$id/contagem'
     | '/inventario/$id/resumo'
   fileRoutesById: FileRoutesById
@@ -125,6 +137,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRouteWithChildren
   InventariosRoute: typeof InventariosRoute
+  InventarioIdAnaliseRoute: typeof InventarioIdAnaliseRoute
   InventarioIdContagemRoute: typeof InventarioIdContagemRoute
   InventarioIdResumoRoute: typeof InventarioIdResumoRoute
 }
@@ -187,6 +200,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof InventarioIdContagemRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/inventario/$id/analise': {
+      id: '/inventario/$id/analise'
+      path: '/inventario/$id/analise'
+      fullPath: '/inventario/$id/analise'
+      preLoaderRoute: typeof InventarioIdAnaliseRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -208,6 +228,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRouteWithChildren,
   InventariosRoute: InventariosRoute,
+  InventarioIdAnaliseRoute: InventarioIdAnaliseRoute,
   InventarioIdContagemRoute: InventarioIdContagemRoute,
   InventarioIdResumoRoute: InventarioIdResumoRoute,
 }

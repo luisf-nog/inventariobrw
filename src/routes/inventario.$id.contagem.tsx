@@ -357,11 +357,10 @@ function TelaContagem() {
               </span>
             )}
             <span style={{ ...pillStyle, borderColor: online ? "rgba(34,195,154,0.55)" : "rgba(226,59,59,0.65)", color: online ? "#22e6b3" : "#ff8a8a" }}>
-              {online ? <Wifi size={13} style={{ width: 13, height: 13, verticalAlign: -2, marginRight: 4 }} /> : <WifiOff size={13} style={{ width: 13, height: 13, verticalAlign: -2, marginRight: 4 }} />}
-              {pending > 0 ? `${pending}` : online ? "on" : "off"}
+              {pending > 0 ? `${pending} pend.` : online ? "online" : "offline"}
             </span>
             <button type="button" style={logoutButtonStyle} onClick={sair} aria-label="Sair">
-              <LogOut size={17} style={{ width: 17, height: 17, marginTop: 2 }} />
+              sair
             </button>
           </div>
         </div>
@@ -371,7 +370,7 @@ function TelaContagem() {
       {ultima && (
         <div style={lastReadStyle}>
           <div style={lastReadInnerStyle}>
-            <CheckCircle2 size={15} style={{ width: 15, height: 15, verticalAlign: -3, marginRight: 5, color: "#22e6b3" }} />
+            <span style={{ color: "#22e6b3", marginRight: 5, fontWeight: 900 }}>✓</span>
             <span style={{ color: "#aab2c4", fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" }}>{formatPosicaoDisplay(ultima.posicao)}</span>
             <span style={{ margin: "0 6px", color: "#697386" }}>›</span>
             <strong style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" }}>{ultima.sku}</strong>
@@ -388,7 +387,7 @@ function TelaContagem() {
         <div className={`collector-count-card rounded-xl overflow-hidden border bg-card ${etapa === "posicao" ? "border-primary" : "border-border"}`} style={stepCardStyle(etapa === "posicao")}>
           <div className="collector-count-card-header" style={stepHeaderStyle(etapa === "posicao")}>
             <span style={stepNumberStyle(etapa === "posicao", etapa !== "posicao")}>{etapa === "posicao" ? "1" : "✓"}</span>
-            <MapPin size={15} style={{ width: 15, height: 15, verticalAlign: -3, marginRight: 5 }} />
+            <span style={{ display: "inline-block", marginRight: 5, fontWeight: 900 }}>⌖</span>
             <span style={stepLabelStyle(etapa === "posicao")}>Endereço</span>
             {numeroContagem > 1 && etapa !== "posicao" && (
               <Badge className="ml-auto bg-warning/15 text-warning border-warning/25 text-[10px] px-1.5 py-0 h-5" style={{ float: "right", background: "rgba(245,181,61,0.18)", color: "#f5d36b", border: "1px solid rgba(245,181,61,0.45)" }}>{numeroContagem}ª</Badge>
@@ -439,7 +438,7 @@ function TelaContagem() {
           <div className={`collector-count-card rounded-xl overflow-hidden border bg-card ${etapa === "produto" ? "border-primary" : "border-border"}`} style={stepCardStyle(etapa === "produto")}>
             <div className="collector-count-card-header" style={stepHeaderStyle(etapa === "produto")}>
               <span style={stepNumberStyle(etapa === "produto", etapa === "quantidade")}>{etapa === "produto" ? "2" : "✓"}</span>
-              <Barcode size={15} style={{ width: 15, height: 15, verticalAlign: -3, marginRight: 5 }} />
+              <span style={{ display: "inline-block", marginRight: 5, fontWeight: 900 }}>▦</span>
               <span style={stepLabelStyle(etapa === "produto")}>Produto</span>
             </div>
             <div className="collector-count-card-body px-4 py-3" style={cardBodyStyle}>
@@ -479,7 +478,7 @@ function TelaContagem() {
         {/* Alerta persistente: produto fora do lugar */}
         {wmsAlerta && etapa === "quantidade" && (
           <div className="rounded-xl border-2 border-violet-500 bg-violet-500/15 p-4 flex items-start gap-3 animate-in fade-in slide-in-from-top-2" style={alertStyle}>
-            <MapPin size={20} style={{ width: 20, height: 20, verticalAlign: -4, marginRight: 7, color: "#c4b5fd" }} />
+            <span style={{ display: "inline-block", marginRight: 7, color: "#c4b5fd", fontSize: 18, fontWeight: 900 }}>!</span>
             <div>
               <p className="text-sm font-bold text-violet-700 dark:text-violet-200 uppercase tracking-wide" style={{ margin: 0, color: "#ddd6fe", fontSize: 14, fontWeight: 900, textTransform: "uppercase" }}>
                 Produto fora do lugar
@@ -503,7 +502,7 @@ function TelaContagem() {
           <div className="collector-count-card rounded-xl overflow-hidden border border-primary bg-card" style={stepCardStyle(true)}>
             <div className="collector-count-card-header px-4 py-2.5 border-b border-border/50 flex items-center gap-2 bg-primary/5" style={stepHeaderStyle(true)}>
               <span style={stepNumberStyle(true, false)}>3</span>
-              <Hash size={15} style={{ width: 15, height: 15, verticalAlign: -3, marginRight: 5 }} />
+              <span style={{ display: "inline-block", marginRight: 5, fontWeight: 900 }}>#</span>
               <span style={stepLabelStyle(true)}>Quantidade</span>
             </div>
             <div className="collector-count-card-body px-4 py-4 space-y-3" style={{ ...cardBodyStyle, paddingTop: 14 }}>
@@ -537,7 +536,7 @@ function TelaContagem() {
                 className="w-full h-14 text-base font-bold gap-2"
                 style={confirmMainStyle}
               >
-                <PackageCheck size={19} style={{ width: 19, height: 19, verticalAlign: -4, marginRight: 6 }} /> Confirmar
+                Confirmar
               </Button>
             </div>
           </div>
@@ -549,7 +548,7 @@ function TelaContagem() {
         <DialogContent className="max-w-sm bg-popover !opacity-100 shadow-2xl gap-3 p-5" style={{ background: "#1c2b47", color: "#f1f3f7", border: "1px solid #2d4070", maxWidth: 360, padding: 18 }}>
           <DialogHeader className="space-y-0">
             <DialogTitle className="flex items-center gap-2 text-base" style={{ color: "#f1f3f7", fontSize: 17, fontWeight: 900 }}>
-              <PackageCheck size={19} style={{ width: 19, height: 19, verticalAlign: -4, marginRight: 6, color: "#22e6b3" }} /> Confirmar leitura
+              Confirmar leitura
             </DialogTitle>
           </DialogHeader>
 
@@ -573,7 +572,7 @@ function TelaContagem() {
 
           {wmsAlerta && (
             <div className="rounded-lg border border-violet-500/30 bg-violet-500/10 p-3 flex items-start gap-2.5" style={{ marginTop: 12, padding: 10, borderRadius: 8, border: "1px solid #a78bfa", background: "#2d2446", color: "#f1f3f7" }}>
-              <MapPin size={16} style={{ width: 16, height: 16, verticalAlign: -3, marginRight: 5, color: "#c4b5fd" }} />
+              <span style={{ display: "inline-block", marginRight: 5, color: "#c4b5fd", fontWeight: 900 }}>!</span>
               <div>
                 <p className="text-xs font-semibold text-violet-700 dark:text-violet-300" style={{ margin: 0, color: "#ddd6fe", fontSize: 12, fontWeight: 900 }}>Produto fora do lugar</p>
                 <p className="text-[11px] text-violet-600/90 dark:text-violet-400/90 leading-relaxed mt-0.5" style={{ margin: "4px 0 0", color: "#f1f3f7", fontSize: 11 }}>
@@ -587,7 +586,7 @@ function TelaContagem() {
             <Button onClick={gravar} disabled={salvando} className="w-full h-12 text-base font-bold gap-2" style={{ ...confirmMainStyle, height: 48, marginTop: 0 }}>
               {salvando
                 ? <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                : <><CheckCircle2 size={18} style={{ width: 18, height: 18, verticalAlign: -4, marginRight: 6 }} /> Confirmar</>}
+                : "Confirmar"}
             </Button>
             <Button variant="outline" onClick={() => setConfirmandoLeitura(false)} className="w-full h-10 text-sm" style={{ width: "100%", height: 42, marginTop: 8, borderRadius: 8, border: "1px solid #4b5875", background: "#172033", color: "#f1f3f7", fontSize: 14, fontWeight: 800 }}>
               Corrigir quantidade

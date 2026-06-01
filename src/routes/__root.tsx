@@ -9,6 +9,7 @@ import {
 } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { Toaster } from "@/components/ui/sonner";
+import { FullscreenToggle } from "@/components/FullscreenToggle";
 import { supabase } from "@/integrations/supabase/client";
 
 import appCss from "../styles.css?url";

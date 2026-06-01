@@ -628,7 +628,82 @@ function TelaContagem() {
             </div>
           </div>
         )}
+
+        {/* Recontagens solicitadas pelo supervisor */}
+        {etapa === "posicao" && recontagensPendentes.length > 0 && (
+          <div
+            style={{
+              marginTop: 16,
+              borderRadius: 10,
+              border: "1px solid rgba(56,189,248,0.35)",
+              background: "rgba(14,165,233,0.08)",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                padding: "9px 12px",
+                borderBottom: "1px solid rgba(56,189,248,0.25)",
+                background: "rgba(14,165,233,0.12)",
+                color: "#7dd3fc",
+                fontSize: 12,
+                fontWeight: 900,
+                textTransform: "uppercase",
+                letterSpacing: 0.5,
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+              }}
+            >
+              ↻ Recontagens solicitadas ({recontagensPendentes.length})
+            </div>
+            <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+              {recontagensPendentes.map((r) => (
+                <li key={r.id} style={{ borderBottom: "1px solid rgba(56,189,248,0.15)" }}>
+                  <button
+                    type="button"
+                    onClick={() => void iniciarRecontagem(r)}
+                    style={{
+                      display: "flex",
+                      width: "100%",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "11px 12px",
+                      background: "transparent",
+                      border: 0,
+                      color: "#f1f3f7",
+                      textAlign: "left",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <span style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+                      <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace", fontSize: 13, fontWeight: 800 }}>
+                        {formatPosicaoDisplay(r.codigo_posicao)}
+                      </span>
+                      <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace", fontSize: 12, color: "#aab2c4" }}>
+                        {r.codigo_produto} · {r.numero_contagem_origem + 1}ª contagem
+                      </span>
+                    </span>
+                    <span
+                      style={{
+                        padding: "6px 10px",
+                        borderRadius: 8,
+                        background: "#38bdf8",
+                        color: "#0c1729",
+                        fontSize: 12,
+                        fontWeight: 900,
+                      }}
+                    >
+                      Recontar
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </main>
+
 
       {/* Popup de confirmação */}
       <Dialog open={confirmandoLeitura} onOpenChange={(open) => { if (!open) { setConfirmandoLeitura(false); setWmsAlerta(null); } }}>

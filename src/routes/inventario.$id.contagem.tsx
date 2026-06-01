@@ -134,6 +134,9 @@ function TelaContagem() {
 
   const [modalDup, setModalDup] = useState<{ leituras: LeituraExistente[]; contagemAtual: number } | null>(null);
   const [leiturasCache, setLeiturasCache] = useState<LeituraCache[]>([]);
+  const [recontagens, setRecontagens] = useState<Array<{ id: string; codigo_posicao: string; codigo_produto: string; numero_contagem_origem: number }>>([]);
+
+
 
   const refPos = useRef<HTMLInputElement>(null);
   const refProd = useRef<HTMLInputElement>(null);

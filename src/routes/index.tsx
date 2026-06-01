@@ -54,43 +54,43 @@ function SelecaoOperador() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <main className="collector-home min-h-screen flex flex-col bg-background">
       {/* Branding */}
-      <div className="pt-14 pb-8 px-6 text-center">
-        <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 mb-5">
+      <div className="collector-branding pt-14 pb-8 px-6 text-center">
+        <div className="collector-logo inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 mb-5">
           <Package className="h-8 w-8 text-primary" />
         </div>
-        <h1 className="text-2xl font-bold tracking-tight">Inventário</h1>
-        <p className="text-sm text-muted-foreground mt-1">Selecione seu nome para começar</p>
+        <h1 className="collector-title text-2xl font-bold tracking-tight">Inventário</h1>
+        <p className="collector-subtitle text-sm text-muted-foreground mt-1">Selecione seu nome para começar</p>
       </div>
 
       {/* Operador grid */}
-      <div className="flex-1 px-4 pb-6">
+      <div className="collector-content flex-1 px-4 pb-6">
         {loading ? (
           <div className="flex justify-center py-16">
-            <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            <div className="collector-loader w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
           </div>
         ) : operadores.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-border p-10 text-center max-w-sm mx-auto">
+          <div className="collector-empty rounded-xl border border-dashed border-border p-10 text-center max-w-sm mx-auto">
             <p className="text-muted-foreground text-sm">Nenhum operador cadastrado.</p>
             <Link to="/admin" className="mt-3 inline-block text-primary text-sm underline">
               Acessar painel do supervisor
             </Link>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-3 max-w-sm mx-auto">
+          <div className="collector-grid grid grid-cols-2 gap-3 max-w-sm mx-auto">
             {operadores.map((op) => (
               <button
                 key={op.id}
                 onClick={() => escolher(op)}
-                className="flex flex-col items-center gap-3 bg-card hover:bg-secondary active:scale-[0.97] border border-border rounded-xl p-5 transition-all"
+                className="collector-operator-card flex flex-col items-center gap-3 bg-card hover:bg-secondary active:scale-[0.97] border border-border rounded-xl p-5 transition-all"
               >
-                <div className="w-14 h-14 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold text-xl">
+                <div className="collector-initials w-14 h-14 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold text-xl">
                   {initials(op.nome)}
                 </div>
                 <div className="text-center min-w-0 w-full">
-                  <p className="text-sm font-semibold truncate">{op.nome}</p>
-                  {op.tem_pin && <p className="text-[10px] text-muted-foreground mt-0.5">PIN ●●●●</p>}
+                  <p className="collector-operator-name text-sm font-semibold truncate">{op.nome}</p>
+                  {op.tem_pin && <p className="collector-pin text-[10px] text-muted-foreground mt-0.5">PIN ●●●●</p>}
                 </div>
               </button>
             ))}
@@ -99,8 +99,8 @@ function SelecaoOperador() {
       </div>
 
       {/* Footer */}
-      <div className="pb-10 text-center">
-        <Link to="/admin" className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
+      <div className="collector-footer pb-10 text-center">
+        <Link to="/admin" className="collector-admin-link inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
           <Settings className="h-3.5 w-3.5" /> Supervisor
         </Link>
       </div>
@@ -135,6 +135,6 @@ function SelecaoOperador() {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </main>
   );
 }

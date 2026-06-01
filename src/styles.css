@@ -70,15 +70,193 @@
    Se o navegador não entender Tailwind v4 (cascade layers, @property,
    color-mix, etc), pelo menos o body e os textos básicos ficam legíveis. */
 html, body {
+  margin: 0;
+  min-height: 100%;
   background-color: #11141c;
   color: #f1f3f7;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
 }
+body { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 a { color: #22c39a; }
 input, button, select, textarea {
   background-color: #1d2230;
   color: #f1f3f7;
   border: 1px solid #2b3142;
+}
+
+.collector-home {
+  min-height: 100vh;
+  background: #11141c;
+  color: #f1f3f7;
+  display: -webkit-box;
+  display: -ms-flexbox;
+  display: flex;
+  -webkit-box-orient: vertical;
+  -webkit-box-direction: normal;
+  -ms-flex-direction: column;
+  flex-direction: column;
+}
+.collector-branding {
+  padding: 56px 24px 32px;
+  text-align: center;
+}
+.collector-logo {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 20px;
+  border-radius: 16px;
+  background: rgba(34, 195, 154, 0.16);
+  border: 1px solid rgba(34, 195, 154, 0.35);
+  color: #22c39a;
+  display: -webkit-inline-box;
+  display: -ms-inline-flexbox;
+  display: inline-flex;
+  -webkit-box-align: center;
+  -ms-flex-align: center;
+  align-items: center;
+  -webkit-box-pack: center;
+  -ms-flex-pack: center;
+  justify-content: center;
+}
+.collector-title {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.15;
+  font-weight: 800;
+  color: #f1f3f7;
+}
+.collector-subtitle {
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 1.35;
+  font-weight: 600;
+  color: #f1f3f7;
+}
+.collector-content {
+  -webkit-box-flex: 1;
+  -ms-flex: 1 1 auto;
+  flex: 1 1 auto;
+  padding: 0 16px 24px;
+}
+.collector-grid {
+  width: 100%;
+  max-width: 384px;
+  margin: 0 auto;
+  display: -ms-grid;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.collector-operator-card {
+  min-height: 150px;
+  padding: 20px 10px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.14);
+  color: #f1f3f7;
+  display: -webkit-box;
+  display: -ms-flexbox;
+  display: flex;
+  -webkit-box-orient: vertical;
+  -webkit-box-direction: normal;
+  -ms-flex-direction: column;
+  flex-direction: column;
+  -webkit-box-align: center;
+  -ms-flex-align: center;
+  align-items: center;
+  -webkit-box-pack: center;
+  -ms-flex-pack: center;
+  justify-content: center;
+  gap: 12px;
+}
+.collector-operator-card:active { -webkit-transform: scale(0.97); transform: scale(0.97); }
+.collector-initials {
+  width: 56px;
+  height: 56px;
+  border-radius: 999px;
+  background: rgba(34, 195, 154, 0.24);
+  border: 1px solid rgba(34, 195, 154, 0.45);
+  color: #22e6b3;
+  display: -webkit-box;
+  display: -ms-flexbox;
+  display: flex;
+  -webkit-box-align: center;
+  -ms-flex-align: center;
+  align-items: center;
+  -webkit-box-pack: center;
+  -ms-flex-pack: center;
+  justify-content: center;
+  font-size: 22px;
+  font-weight: 800;
+}
+.collector-operator-name {
+  width: 100%;
+  margin: 0;
+  color: #fff1bb;
+  font-size: 14px;
+  line-height: 1.2;
+  font-weight: 800;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.collector-pin {
+  margin: 6px 0 0;
+  color: #f1f3f7;
+  font-size: 11px;
+  line-height: 1.2;
+  font-weight: 800;
+  text-align: center;
+}
+.collector-footer {
+  padding: 0 16px 40px;
+  text-align: center;
+}
+.collector-admin-link {
+  color: #22c39a;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: underline;
+  display: -webkit-inline-box;
+  display: -ms-inline-flexbox;
+  display: inline-flex;
+  -webkit-box-align: center;
+  -ms-flex-align: center;
+  align-items: center;
+  gap: 6px;
+}
+.collector-empty {
+  max-width: 320px;
+  margin: 0 auto;
+  padding: 40px 16px;
+  border: 1px dashed #2b3142;
+  border-radius: 12px;
+  text-align: center;
+  color: #8a93a6;
+}
+.collector-loader {
+  width: 24px;
+  height: 24px;
+  margin: 64px auto;
+  border: 2px solid #22c39a;
+  border-top-color: transparent;
+  border-radius: 999px;
+  -webkit-animation: collector-spin 900ms linear infinite;
+  animation: collector-spin 900ms linear infinite;
+}
+@-webkit-keyframes collector-spin { to { -webkit-transform: rotate(360deg); transform: rotate(360deg); } }
+@keyframes collector-spin { to { -webkit-transform: rotate(360deg); transform: rotate(360deg); } }
+
+@media (max-width: 360px) {
+  .collector-branding { padding-top: 34px; padding-bottom: 22px; }
+  .collector-logo { width: 48px; height: 48px; margin-bottom: 14px; }
+  .collector-title { font-size: 24px; }
+  .collector-grid { gap: 8px; }
+  .collector-operator-card { min-height: 118px; padding: 12px 6px; gap: 8px; border-radius: 10px; }
+  .collector-initials { width: 42px; height: 42px; font-size: 18px; }
+  .collector-operator-name { font-size: 12px; }
+  .collector-pin { font-size: 10px; }
 }
 
 @layer base {

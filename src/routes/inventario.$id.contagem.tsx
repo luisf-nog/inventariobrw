@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { type CSSProperties, useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { getOperador, clearOperador } from "@/lib/operador-session";
 import { beepSuccess, beepWarn, beepError } from "@/lib/feedback";
@@ -23,6 +23,95 @@ export const Route = createFileRoute("/inventario/$id/contagem")({
 
 type Etapa = "posicao" | "produto" | "quantidade";
 type LeituraCache = LeituraExistente & { codigo_posicao: string; operador_id: string | null };
+
+const pageStyle: CSSProperties = {
+  minHeight: "100vh",
+  background: "#11141c",
+  color: "#f1f3f7",
+  fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif',
+};
+const headerStyle: CSSProperties = {
+  position: "sticky",
+  top: 0,
+  zIndex: 20,
+  background: "#11141c",
+  borderBottom: "1px solid #2b3142",
+  padding: "10px 10px 9px",
+};
+const headerInnerStyle: CSSProperties = { maxWidth: 520, margin: "0 auto" };
+const headerTitleStyle: CSSProperties = { margin: 0, color: "#f1f3f7", fontSize: 13, lineHeight: 1.2, fontWeight: 800 };
+const headerOpStyle: CSSProperties = { margin: "5px 0 0", color: "#f1f3f7", fontSize: 17, lineHeight: 1.15, fontWeight: 800 };
+const headerActionsStyle: CSSProperties = { marginTop: 9, whiteSpace: "nowrap" };
+const pillStyle: CSSProperties = {
+  display: "inline-block",
+  verticalAlign: "middle",
+  marginRight: 8,
+  padding: "5px 9px",
+  borderRadius: 999,
+  border: "1px solid #2b3142",
+  background: "#1b1f2a",
+  color: "#f1f3f7",
+  fontSize: 12,
+  lineHeight: 1,
+  fontWeight: 800,
+};
+const logoutButtonStyle: CSSProperties = {
+  display: "inline-block",
+  verticalAlign: "middle",
+  width: 36,
+  height: 34,
+  padding: 0,
+  borderRadius: 8,
+  border: "1px solid #2b3142",
+  background: "#1b1f2a",
+  color: "#f1f3f7",
+};
+const mainStyle: CSSProperties = { maxWidth: 520, margin: "0 auto", padding: "12px 10px 80px", boxSizing: "border-box" };
+const lastReadStyle: CSSProperties = { background: "rgba(34,195,154,0.12)", borderBottom: "1px solid rgba(34,195,154,0.35)", padding: "9px 10px" };
+const lastReadInnerStyle: CSSProperties = { maxWidth: 520, margin: "0 auto", color: "#f1f3f7", fontSize: 12, lineHeight: 1.35 };
+const cardBaseStyle: CSSProperties = { marginBottom: 12, overflow: "hidden", borderRadius: 10, background: "#1b1f2a", color: "#f1f3f7" };
+const cardBodyStyle: CSSProperties = { padding: "12px 12px 13px" };
+const scanInputStyle: CSSProperties = {
+  display: "block",
+  width: "100%",
+  height: 58,
+  padding: "0 2px",
+  boxSizing: "border-box",
+  background: "transparent",
+  color: "#f1f3f7",
+  border: 0,
+  outline: "none",
+  fontSize: 24,
+  lineHeight: "58px",
+  fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+  letterSpacing: 1.5,
+};
+const readonlyValueStyle: CSSProperties = { margin: 0, color: "#f1f3f7", fontSize: 22, lineHeight: 1.2, fontWeight: 800, fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" };
+const secondaryTextStyle: CSSProperties = { margin: "5px 0 0", color: "#aab2c4", fontSize: 12, lineHeight: 1.25 };
+const smallButtonStyle: CSSProperties = { float: "right", marginLeft: 8, padding: "7px 9px", borderRadius: 8, border: "1px solid #2b3142", background: "#232838", color: "#22c39a", fontSize: 12, fontWeight: 800 };
+const alertStyle: CSSProperties = { marginBottom: 12, padding: 12, borderRadius: 10, border: "2px solid #a78bfa", background: "#2d2446", color: "#f1f3f7" };
+const qtyInputStyle: CSSProperties = { height: 64, textAlign: "center", fontSize: 36, fontWeight: 800, fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace", letterSpacing: 1, background: "#111827", color: "#f1f3f7", border: "1px solid #4b5875" };
+const quickButtonsStyle: CSSProperties = { marginTop: 12, whiteSpace: "nowrap" };
+const quickButtonStyle: CSSProperties = { display: "inline-block", width: "23%", height: 42, marginRight: "2%", padding: 0, borderRadius: 8, border: "1px solid #2b3142", background: "#232838", color: "#f1f3f7", fontSize: 14, fontWeight: 800 };
+const confirmMainStyle: CSSProperties = { width: "100%", height: 56, marginTop: 12, borderRadius: 8, border: "1px solid #22c39a", background: "#22c39a", color: "#11141c", fontSize: 17, fontWeight: 900 };
+const dialogRowStyle: CSSProperties = { padding: "10px 12px", borderBottom: "1px solid #2b3142", background: "#172033" };
+const dialogLabelStyle: CSSProperties = { display: "block", marginBottom: 4, color: "#aab2c4", fontSize: 10, textTransform: "uppercase", fontWeight: 800 };
+
+function stepCardStyle(active: boolean): CSSProperties {
+  return { ...cardBaseStyle, border: active ? "2px solid #22c39a" : "1px solid #2b3142" };
+}
+
+function stepHeaderStyle(active: boolean): CSSProperties {
+  return { padding: "10px 12px", borderBottom: "1px solid #2b3142", background: active ? "rgba(34,195,154,0.12)" : "#1b1f2a", color: active ? "#22e6b3" : "#aab2c4" };
+}
+
+function stepNumberStyle(active: boolean, done: boolean): CSSProperties {
+  return { display: "inline-block", verticalAlign: "middle", width: 22, height: 22, lineHeight: "22px", marginRight: 7, borderRadius: 99, background: active ? "#22c39a" : done ? "rgba(34,195,154,0.22)" : "#2b3142", color: active ? "#11141c" : "#22e6b3", textAlign: "center", fontSize: 11, fontWeight: 900 };
+}
+
+function stepLabelStyle(active: boolean): CSSProperties {
+  return { display: "inline-block", verticalAlign: "middle", color: active ? "#22e6b3" : "#aab2c4", fontSize: 13, lineHeight: 1, fontWeight: 900, textTransform: "uppercase" };
+}
 
 function TelaContagem() {
   const { id: inventarioId } = Route.useParams();

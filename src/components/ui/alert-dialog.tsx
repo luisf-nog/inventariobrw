@@ -32,7 +32,7 @@ const AlertDialogContent = React.forwardRef<
       style={{
         position: "fixed",
         left: "50%",
-        top: "50%",
+        top: "50dvh",
         zIndex: 99,
         width: "min(calc(100vw - 24px), 420px)",
         maxWidth: 420,

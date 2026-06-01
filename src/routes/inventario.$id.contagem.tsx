@@ -401,13 +401,11 @@ function TelaContagem() {
                 type="text"
                 // eslint-disable-next-line jsx-a11y/no-autofocus
                 autoFocus
-                onChange={(e) => setScanDisplay(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === "Tab") {
                     e.preventDefault();
                     const val = (refPos.current?.value ?? "").trim();
                     if (refPos.current) refPos.current.value = "";
-                    setScanDisplay("");
                     scanBufferRef.current = "";
                     if (val.length >= 2) void confirmarPosicao(val);
                   }
@@ -451,13 +449,11 @@ function TelaContagem() {
                   type="text"
                   // eslint-disable-next-line jsx-a11y/no-autofocus
                   autoFocus
-                  onChange={(e) => setScanDisplay(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === "Tab") {
                       e.preventDefault();
                       const val = (refProd.current?.value ?? "").trim();
                       if (refProd.current) refProd.current.value = "";
-                      setScanDisplay("");
                       scanBufferRef.current = "";
                       if (val.length >= 2) void confirmarProduto(val);
                     }

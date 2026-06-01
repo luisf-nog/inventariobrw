@@ -236,6 +236,39 @@ export type Database = {
         }
         Relationships: []
       }
+      recontagens_solicitadas: {
+        Row: {
+          codigo_posicao: string
+          codigo_produto: string
+          id: string
+          inventario_id: string
+          numero_contagem_origem: number
+          observacao: string | null
+          solicitado_em: string
+          solicitado_por: string | null
+        }
+        Insert: {
+          codigo_posicao: string
+          codigo_produto: string
+          id?: string
+          inventario_id: string
+          numero_contagem_origem?: number
+          observacao?: string | null
+          solicitado_em?: string
+          solicitado_por?: string | null
+        }
+        Update: {
+          codigo_posicao?: string
+          codigo_produto?: string
+          id?: string
+          inventario_id?: string
+          numero_contagem_origem?: number
+          observacao?: string | null
+          solicitado_em?: string
+          solicitado_por?: string | null
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string

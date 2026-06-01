@@ -134,6 +134,9 @@ function TelaContagem() {
 
   const [modalDup, setModalDup] = useState<{ leituras: LeituraExistente[]; contagemAtual: number } | null>(null);
   const [leiturasCache, setLeiturasCache] = useState<LeituraCache[]>([]);
+  const [recontagens, setRecontagens] = useState<Array<{ id: string; codigo_posicao: string; codigo_produto: string; numero_contagem_origem: number }>>([]);
+
+
 
   const refPos = useRef<HTMLInputElement>(null);
   const refProd = useRef<HTMLInputElement>(null);
@@ -155,11 +158,17 @@ function TelaContagem() {
 
   const carregarLeiturasExistentes = useCallback(async () => {
     if (!navigator.onLine) return;
-    const { data, error } = await supabase
-      .from("leituras")
-      .select("codigo_posicao, codigo_produto, quantidade, numero_contagem, lido_em, operador_id, operadores(nome)")
-      .eq("inventario_id", inventarioId)
-      .order("lido_em", { ascending: false });
+    const [{ data, error }, { data: recData }] = await Promise.all([
+      supabase
+        .from("leituras")
+        .select("codigo_posicao, codigo_produto, quantidade, numero_contagem, lido_em, operador_id, operadores(nome)")
+        .eq("inventario_id", inventarioId)
+        .order("lido_em", { ascending: false }),
+      supabase
+        .from("recontagens_solicitadas")
+        .select("id, codigo_posicao, codigo_produto, numero_contagem_origem")
+        .eq("inventario_id", inventarioId),
+    ]);
     if (error) return;
     setLeiturasCache((data ?? []).map((d: any) => ({
       codigo_posicao: d.codigo_posicao,
@@ -170,7 +179,9 @@ function TelaContagem() {
       operador_nome: d.operadores?.nome ?? null,
       operador_id: d.operador_id ?? null,
     })));
+    setRecontagens((recData ?? []) as any);
   }, [inventarioId]);
+
 
   useEffect(() => {
     const o = getOperador();
@@ -184,6 +195,22 @@ function TelaContagem() {
         void carregarLeiturasExistentes();
       });
   }, [inventarioId, navigate, carregarLeiturasExistentes]);
+
+  // Realtime: recarrega quando solicitações de recontagem ou leituras mudam
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const agendar = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => { void carregarLeiturasExistentes(); }, 400);
+    };
+    const channel = supabase
+      .channel(`contagem-${inventarioId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "recontagens_solicitadas", filter: `inventario_id=eq.${inventarioId}` }, agendar)
+      .on("postgres_changes", { event: "*", schema: "public", table: "leituras", filter: `inventario_id=eq.${inventarioId}` }, agendar)
+      .subscribe();
+    return () => { if (timer) clearTimeout(timer); supabase.removeChannel(channel); };
+  }, [inventarioId, carregarLeiturasExistentes]);
+
 
   useEffect(() => {
     scanBufferRef.current = "";
@@ -209,6 +236,37 @@ function TelaContagem() {
       .map(({ codigo_posicao: _c, ...l }) => l);
     return [...locais, ...remotas].sort((a, b) => b.lido_em.localeCompare(a.lido_em));
   }, [inventarioId, leiturasCache]);
+
+  // Pendentes: recontagens sem leitura com numero_contagem > origem
+  const recontagensPendentes = useMemo(() => {
+    const maxContPorPS = new Map<string, number>();
+    for (const l of leiturasCache) {
+      const k = `${l.codigo_posicao}|${l.codigo_produto}`;
+      maxContPorPS.set(k, Math.max(maxContPorPS.get(k) ?? 0, l.numero_contagem));
+    }
+    return recontagens.filter((r) => {
+      const k = `${r.codigo_posicao}|${r.codigo_produto}`;
+      return (maxContPorPS.get(k) ?? 0) <= r.numero_contagem_origem;
+    });
+  }, [recontagens, leiturasCache]);
+
+  const iniciarRecontagem = useCallback(async (r: { codigo_posicao: string; codigo_produto: string; numero_contagem_origem: number }) => {
+    let desc: string | null = null;
+    try {
+      const p = await resolverProdutoPorCodigo(r.codigo_produto);
+      desc = p.descricao;
+    } catch { /* segue sem desc */ }
+    setPosicao(r.codigo_posicao);
+    setProdutoSku(r.codigo_produto);
+    setProdutoDesc(desc);
+    setProdutoInput(r.codigo_produto);
+    setNumeroContagem(r.numero_contagem_origem + 1);
+    setQuantidade("");
+    setWmsAlerta(null);
+    setEtapa("quantidade");
+  }, []);
+
+
 
   const confirmarPosicao = useCallback(async (valor?: string) => {
     const cod = normalizeCode(valor ?? posicao);
@@ -570,7 +628,82 @@ function TelaContagem() {
             </div>
           </div>
         )}
+
+        {/* Recontagens solicitadas pelo supervisor */}
+        {etapa === "posicao" && recontagensPendentes.length > 0 && (
+          <div
+            style={{
+              marginTop: 16,
+              borderRadius: 10,
+              border: "1px solid rgba(56,189,248,0.35)",
+              background: "rgba(14,165,233,0.08)",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                padding: "9px 12px",
+                borderBottom: "1px solid rgba(56,189,248,0.25)",
+                background: "rgba(14,165,233,0.12)",
+                color: "#7dd3fc",
+                fontSize: 12,
+                fontWeight: 900,
+                textTransform: "uppercase",
+                letterSpacing: 0.5,
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+              }}
+            >
+              ↻ Recontagens solicitadas ({recontagensPendentes.length})
+            </div>
+            <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+              {recontagensPendentes.map((r) => (
+                <li key={r.id} style={{ borderBottom: "1px solid rgba(56,189,248,0.15)" }}>
+                  <button
+                    type="button"
+                    onClick={() => void iniciarRecontagem(r)}
+                    style={{
+                      display: "flex",
+                      width: "100%",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "11px 12px",
+                      background: "transparent",
+                      border: 0,
+                      color: "#f1f3f7",
+                      textAlign: "left",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <span style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+                      <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace", fontSize: 13, fontWeight: 800 }}>
+                        {formatPosicaoDisplay(r.codigo_posicao)}
+                      </span>
+                      <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace", fontSize: 12, color: "#aab2c4" }}>
+                        {r.codigo_produto} · {r.numero_contagem_origem + 1}ª contagem
+                      </span>
+                    </span>
+                    <span
+                      style={{
+                        padding: "6px 10px",
+                        borderRadius: 8,
+                        background: "#38bdf8",
+                        color: "#0c1729",
+                        fontSize: 12,
+                        fontWeight: 900,
+                      }}
+                    >
+                      Recontar
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </main>
+
 
       {/* Popup de confirmação */}
       <Dialog open={confirmandoLeitura} onOpenChange={(open) => { if (!open) { setConfirmandoLeitura(false); setWmsAlerta(null); } }}>

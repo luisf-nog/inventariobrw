@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
   ArrowLeft, Download, FileSpreadsheet, Lock, AlertTriangle,
-  Trash2, Users, Clock, Activity, BarChart2, RefreshCw, MapPin,
+  Trash2, Users, Clock, Activity, BarChart2, RefreshCw, MapPin, RotateCcw,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { toast } from "sonner";
@@ -99,6 +99,10 @@ function TelaResumo() {
   const [confirmandoEncerrar, setConfirmandoEncerrar] = useState(false);
   const [confirmTexto, setConfirmTexto] = useState("");
   const [deletandoId, setDeletandoId] = useState<string | null>(null);
+  const [recontagens, setRecontagens] = useState<Array<{ id: string; codigo_posicao: string; codigo_produto: string; numero_contagem_origem: number }>>([]);
+  const [solicitandoId, setSolicitandoId] = useState<string | null>(null);
+
+
 
 
   useEffect(() => {
@@ -114,7 +118,7 @@ function TelaResumo() {
       if (cancelado) return;
       setInv(invData as any);
 
-      const [{ data, error }, wmsData] = await Promise.all([
+      const [{ data, error }, wmsData, { data: recData }] = await Promise.all([
         supabase
           .from("leituras")
           .select("id, codigo_posicao, codigo_produto, numero_contagem, quantidade, operador_id, lido_em, operadores(nome)")
@@ -122,7 +126,13 @@ function TelaResumo() {
           .order("codigo_posicao")
           .order("lido_em", { ascending: true }),
         fetchWmsSnapshot(id),
+        supabase
+          .from("recontagens_solicitadas")
+          .select("id, codigo_posicao, codigo_produto, numero_contagem_origem")
+          .eq("inventario_id", id),
       ]);
+      setRecontagens((recData ?? []) as any);
+
 
       if (cancelado) return;
       if (error) { toast.error(error.message); setLoading(false); return; }
@@ -181,6 +191,11 @@ function TelaResumo() {
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "inventarios", filter: `id=eq.${id}` },
+        agendarRecarga,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "recontagens_solicitadas", filter: `inventario_id=eq.${id}` },
         agendarRecarga,
       )
       .subscribe();
@@ -269,6 +284,24 @@ function TelaResumo() {
     }
     return map;
   }, [contadoPorPS, skuPositions]);
+
+  // Recontagens pendentes: solicitação ainda não atendida (sem leitura com contagem > origem)
+  const recontagensPendentes = useMemo(() => {
+    const maxContPorPS = new Map<string, number>();
+    for (const l of linhas) {
+      const k = `${l.codigo_posicao}|${l.sku}`;
+      maxContPorPS.set(k, Math.max(maxContPorPS.get(k) ?? 0, l.numero_contagem));
+    }
+    const pend = new Map<string, { id: string; numero_contagem_origem: number }>();
+    for (const r of recontagens) {
+      const k = `${r.codigo_posicao}|${r.codigo_produto}`;
+      const max = maxContPorPS.get(k) ?? 0;
+      if (max <= r.numero_contagem_origem) pend.set(k, { id: r.id, numero_contagem_origem: r.numero_contagem_origem });
+    }
+    return pend;
+  }, [recontagens, linhas]);
+
+
 
   const stats = useMemo(() => ({
     posicoes: new Set(linhas.map((l) => l.codigo_posicao)).size,
@@ -362,6 +395,27 @@ function TelaResumo() {
     setDeletandoId(null);
     toast.success("Leitura removida");
   }
+
+  async function solicitarRecontagem(l: Linha) {
+    if (!isAdmin) { toast.error("Faça login como supervisor"); return; }
+    setSolicitandoId(l.id);
+    const { data, error } = await supabase
+      .from("recontagens_solicitadas")
+      .insert({
+        inventario_id: id,
+        codigo_posicao: l.codigo_posicao,
+        codigo_produto: l.sku,
+        numero_contagem_origem: l.numero_contagem,
+      })
+      .select("id, codigo_posicao, codigo_produto, numero_contagem_origem")
+      .single();
+    setSolicitandoId(null);
+    if (error) { toast.error(error.message); return; }
+    if (data) setRecontagens((prev) => [...prev, data as any]);
+    toast.success("Recontagem solicitada — operador verá no coletor");
+  }
+
+
 
   function exportarCSV() {
     const header = ["posicao", "produto", "descricao", "contagem", "quantidade", "qtd_wms", "diferenca", "operador", "lido_em"];
@@ -651,7 +705,7 @@ function TelaResumo() {
                       <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide">Δ</th>
                       <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide hidden sm:table-cell">Operador</th>
                       <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide hidden lg:table-cell">Horário</th>
-                      <th className="px-3 py-2.5 w-10" />
+                      <th className="px-3 py-2.5 w-20" />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/50">
@@ -664,11 +718,13 @@ function TelaResumo() {
                       const posCorretas = foraDoLugar.get(k);
                       const fora = !!posCorretas;
                       const confirmando = deletandoId === l.id;
+                      const recPend = recontagensPendentes.has(k);
+                      const solicitando = solicitandoId === l.id;
                       return (
-                        <tr key={l.id} className={`${div ? "bg-destructive/8" : fora ? "bg-violet-500/8" : divWms ? "bg-amber-500/8" : "hover:bg-muted/20"} ${confirmando ? "bg-destructive/15" : ""}`}>
+                        <tr key={l.id} className={`${div ? "bg-destructive/8" : fora ? "bg-violet-500/8" : divWms ? "bg-amber-500/8" : "hover:bg-muted/20"} ${confirmando ? "bg-destructive/15" : ""} ${recPend ? "ring-1 ring-inset ring-sky-500/30" : ""}`}>
                           <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{formatPosicaoDisplay(l.codigo_posicao)}</td>
                           <td className="px-3 py-2 font-mono text-xs font-medium">
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center gap-1 flex-wrap">
                               <span>{l.sku}</span>
                               {fora && (
                                 <span
@@ -676,6 +732,11 @@ function TelaResumo() {
                                   title={`WMS diz que este SKU está em: ${posCorretas!.map(formatPosicaoDisplay).join(", ")}`}
                                 >
                                   <MapPin className="h-2.5 w-2.5" /> fora do lugar
+                                </span>
+                              )}
+                              {recPend && (
+                                <span className="inline-flex items-center gap-0.5 text-[9px] px-1 py-0.5 rounded bg-sky-500/15 text-sky-700 dark:text-sky-300 font-sans font-medium">
+                                  <RotateCcw className="h-2.5 w-2.5" /> recontagem pedida
                                 </span>
                               )}
                             </div>
@@ -721,21 +782,39 @@ function TelaResumo() {
                                 </Button>
                               </div>
                             ) : (
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                                title={isAdmin ? "Excluir leitura" : "Faça login como supervisor para excluir"}
-                                onClick={() => {
-                                  if (!isAdmin) {
-                                    toast.error("Faça login como supervisor para excluir leituras");
-                                    return;
-                                  }
-                                  setDeletandoId(l.id);
-                                }}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
+                              <div className="flex items-center gap-0.5 justify-end">
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className={`h-7 w-7 ${recPend ? "text-sky-600 dark:text-sky-400" : "text-muted-foreground hover:text-sky-600"}`}
+                                  title={recPend ? "Recontagem já solicitada (aguardando operador)" : isAdmin ? "Solicitar recontagem deste item" : "Faça login como supervisor"}
+                                  disabled={recPend || solicitando}
+                                  onClick={() => {
+                                    if (!isAdmin) {
+                                      toast.error("Faça login como supervisor para solicitar recontagem");
+                                      return;
+                                    }
+                                    void solicitarRecontagem(l);
+                                  }}
+                                >
+                                  <RotateCcw className={`h-3.5 w-3.5 ${solicitando ? "animate-spin" : ""}`} />
+                                </Button>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                  title={isAdmin ? "Excluir leitura" : "Faça login como supervisor para excluir"}
+                                  onClick={() => {
+                                    if (!isAdmin) {
+                                      toast.error("Faça login como supervisor para excluir leituras");
+                                      return;
+                                    }
+                                    setDeletandoId(l.id);
+                                  }}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
                             )}
                           </td>
                         </tr>

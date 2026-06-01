@@ -118,13 +118,27 @@ function TelaResumo() {
       if (cancelado) return;
       setInv(invData as any);
 
+      const fetchAllLeituras = async () => {
+        const PAGE = 1000;
+        const out: any[] = [];
+        for (let offset = 0; ; offset += PAGE) {
+          const { data, error } = await supabase
+            .from("leituras")
+            .select("id, codigo_posicao, codigo_produto, numero_contagem, quantidade, operador_id, lido_em, operadores(nome)")
+            .eq("inventario_id", id)
+            .order("codigo_posicao")
+            .order("lido_em", { ascending: true })
+            .range(offset, offset + PAGE - 1);
+          if (error) return { data: null as any, error };
+          const rows = data ?? [];
+          out.push(...rows);
+          if (rows.length < PAGE) break;
+        }
+        return { data: out, error: null as any };
+      };
+
       const [{ data, error }, wmsData, { data: recData }] = await Promise.all([
-        supabase
-          .from("leituras")
-          .select("id, codigo_posicao, codigo_produto, numero_contagem, quantidade, operador_id, lido_em, operadores(nome)")
-          .eq("inventario_id", id)
-          .order("codigo_posicao")
-          .order("lido_em", { ascending: true }),
+        fetchAllLeituras(),
         fetchWmsSnapshot(id),
         supabase
           .from("recontagens_solicitadas")

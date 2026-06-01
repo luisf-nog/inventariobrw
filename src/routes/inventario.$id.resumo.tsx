@@ -285,6 +285,24 @@ function TelaResumo() {
     return map;
   }, [contadoPorPS, skuPositions]);
 
+  // Recontagens pendentes: solicitação ainda não atendida (sem leitura com contagem > origem)
+  const recontagensPendentes = useMemo(() => {
+    const maxContPorPS = new Map<string, number>();
+    for (const l of linhas) {
+      const k = `${l.codigo_posicao}|${l.sku}`;
+      maxContPorPS.set(k, Math.max(maxContPorPS.get(k) ?? 0, l.numero_contagem));
+    }
+    const pend = new Map<string, { id: string; numero_contagem_origem: number }>();
+    for (const r of recontagens) {
+      const k = `${r.codigo_posicao}|${r.codigo_produto}`;
+      const max = maxContPorPS.get(k) ?? 0;
+      if (max <= r.numero_contagem_origem) pend.set(k, { id: r.id, numero_contagem_origem: r.numero_contagem_origem });
+    }
+    return pend;
+  }, [recontagens, linhas]);
+
+
+
   const stats = useMemo(() => ({
     posicoes: new Set(linhas.map((l) => l.codigo_posicao)).size,
     leituras: linhas.length,

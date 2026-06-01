@@ -782,21 +782,39 @@ function TelaResumo() {
                                 </Button>
                               </div>
                             ) : (
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                                title={isAdmin ? "Excluir leitura" : "Faça login como supervisor para excluir"}
-                                onClick={() => {
-                                  if (!isAdmin) {
-                                    toast.error("Faça login como supervisor para excluir leituras");
-                                    return;
-                                  }
-                                  setDeletandoId(l.id);
-                                }}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
+                              <div className="flex items-center gap-0.5 justify-end">
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className={`h-7 w-7 ${recPend ? "text-sky-600 dark:text-sky-400" : "text-muted-foreground hover:text-sky-600"}`}
+                                  title={recPend ? "Recontagem já solicitada (aguardando operador)" : isAdmin ? "Solicitar recontagem deste item" : "Faça login como supervisor"}
+                                  disabled={recPend || solicitando}
+                                  onClick={() => {
+                                    if (!isAdmin) {
+                                      toast.error("Faça login como supervisor para solicitar recontagem");
+                                      return;
+                                    }
+                                    void solicitarRecontagem(l);
+                                  }}
+                                >
+                                  <RotateCcw className={`h-3.5 w-3.5 ${solicitando ? "animate-spin" : ""}`} />
+                                </Button>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                  title={isAdmin ? "Excluir leitura" : "Faça login como supervisor para excluir"}
+                                  onClick={() => {
+                                    if (!isAdmin) {
+                                      toast.error("Faça login como supervisor para excluir leituras");
+                                      return;
+                                    }
+                                    setDeletandoId(l.id);
+                                  }}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
                             )}
                           </td>
                         </tr>

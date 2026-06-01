@@ -193,9 +193,9 @@ function TelaContagem() {
     }
   }, [etapa]);
 
-  const checarPosicao = useCallback(async (codPos: string): Promise<LeituraExistente[] | null> => {
+  const checarPosicao = useCallback(async (codPos: string, codSku?: string): Promise<LeituraExistente[] | null> => {
     const locais: LeituraExistente[] = getQueueForInventario(inventarioId)
-      .filter((q) => q.codigo_posicao === codPos)
+      .filter((q) => q.codigo_posicao === codPos && (!codSku || q.codigo_produto === codSku))
       .map((q) => ({
         codigo_produto: q.codigo_produto,
         quantidade: q.quantidade,
@@ -205,7 +205,7 @@ function TelaContagem() {
         operador_id: q.operador_id ?? null,
       }));
     const remotas: LeituraExistente[] = leiturasCache
-      .filter((l) => l.codigo_posicao === codPos)
+      .filter((l) => l.codigo_posicao === codPos && (!codSku || l.codigo_produto === codSku))
       .map(({ codigo_posicao: _c, ...l }) => l);
     return [...locais, ...remotas].sort((a, b) => b.lido_em.localeCompare(a.lido_em));
   }, [inventarioId, leiturasCache]);
@@ -215,13 +215,18 @@ function TelaContagem() {
     scanBufferRef.current = "";
     if (!cod) { beepError(); toast.error("Bipe a posição"); return; }
     setPosicao(cod);
-    const existentes = await checarPosicao(cod);
-    if (existentes === null) return;
-    if (existentes.length > 0) {
-      beepWarn();
-      const maxContagem = Math.max(...existentes.map((e) => e.numero_contagem));
-      setModalDup({ leituras: existentes, contagemAtual: maxContagem });
-      return;
+    // PBL (flowrack) mantém regra: 1 produto por posição → checa duplicata da posição inteira.
+    // Outras posições (caixa fechada) permitem múltiplos produtos → checagem por (posição+SKU) é feita após bipar produto.
+    const ehPbl = cod.startsWith("01995");
+    if (ehPbl) {
+      const existentes = await checarPosicao(cod);
+      if (existentes === null) return;
+      if (existentes.length > 0) {
+        beepWarn();
+        const maxContagem = Math.max(...existentes.map((e) => e.numero_contagem));
+        setModalDup({ leituras: existentes, contagemAtual: maxContagem });
+        return;
+      }
     }
     setNumeroContagem(1);
     setEtapa("produto");
@@ -236,9 +241,9 @@ function TelaContagem() {
       return;
     }
     setModalDup(null);
-    if (acao === "pular") { setPosicao(""); setEtapa("posicao"); return; }
+    if (acao === "pular") { setPosicao(""); setProdutoInput(""); setProdutoSku(""); setProdutoDesc(null); setQuantidade(""); setNumeroContagem(1); setEtapa("posicao"); return; }
     setNumeroContagem(atual + 1);
-    setEtapa("produto");
+    setEtapa(produtoSku ? "quantidade" : "produto");
   }
 
   const confirmarProduto = useCallback(async (valor?: string) => {
@@ -257,6 +262,20 @@ function TelaContagem() {
       toast.warning(`Produto ${sku} não cadastrado — será gravado mesmo assim`);
     }
 
+    // Em posições NÃO-PBL: checa duplicata por (posição + SKU) para permitir múltiplos produtos por endereço.
+    const ehPbl = posicao.startsWith("01995");
+    if (!ehPbl) {
+      const existentesPS = await checarPosicao(posicao, sku);
+      if (existentesPS && existentesPS.length > 0) {
+        beepWarn();
+        const maxContagem = Math.max(...existentesPS.map((e) => e.numero_contagem));
+        setProdutoSku(sku);
+        setProdutoDesc(desc);
+        setModalDup({ leituras: existentesPS, contagemAtual: maxContagem });
+        return;
+      }
+    }
+
     // Verifica WMS: SKU está na posição certa?
     if (navigator.onLine) {
       const { data: wmsRows } = await supabase
@@ -264,11 +283,8 @@ function TelaContagem() {
         .select("codigo_posicao")
         .eq("inventario_id", inventarioId)
         .eq("sku", sku);
-      // Considera somente posições do flowrack (01.995.*)
       const posicoesWms = new Set(
-        (wmsRows ?? [])
-          .map((r: any) => r.codigo_posicao as string)
-          .filter((p) => p.startsWith("01995")),
+        (wmsRows ?? []).map((r: any) => r.codigo_posicao as string),
       );
       if (posicoesWms.size > 0 && !posicoesWms.has(posicao)) {
         // Remove sugestões de posições que já foram contadas neste inventário
@@ -295,7 +311,7 @@ function TelaContagem() {
     setProdutoDesc(desc);
     setQuantidade("");
     setEtapa("quantidade");
-  }, [produtoInput, posicao, inventarioId]);
+  }, [produtoInput, posicao, inventarioId, checarPosicao]);
 
   function pedirConfirmacao() {
     const qtd = parseQuantidade(quantidade);

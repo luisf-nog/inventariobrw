@@ -37,32 +37,48 @@
 }
 
 /* Dark by default — galpão tem iluminação ruim.
-   HSL em vez de oklch() para suportar WebView antigo dos coletores (Android 7-9). */
+   Cores em HEX para máxima compatibilidade com WebView antigo dos coletores
+   (alguns não suportam hsl() com sintaxe sem vírgulas, oklch(), color-mix(), etc). */
 :root {
   --radius: 0.75rem;
-  --background: hsl(225 25% 9%);              /* quase preto */
-  --foreground: hsl(225 15% 96%);
-  --card: hsl(225 22% 14%);                   /* card ligeiramente mais claro */
-  --card-foreground: hsl(225 15% 96%);
-  --popover: hsl(225 20% 24%);                /* dialog/popover bem mais claro → contraste nítido */
-  --popover-foreground: hsl(225 15% 96%);
-  --primary: hsl(160 70% 45%);                /* emerald-500 */
-  --primary-foreground: hsl(225 25% 9%);
-  --secondary: hsl(225 18% 18%);
-  --secondary-foreground: hsl(225 15% 96%);
-  --muted: hsl(225 18% 16%);
-  --muted-foreground: hsl(225 10% 60%);
-  --accent: hsl(225 18% 18%);
-  --accent-foreground: hsl(225 15% 96%);
-  --destructive: hsl(0 75% 55%);
-  --destructive-foreground: hsl(225 15% 96%);
-  --warning: hsl(40 90% 60%);
-  --warning-foreground: hsl(225 25% 9%);
-  --success: hsl(160 70% 45%);
-  --success-foreground: hsl(225 25% 9%);
-  --border: hsl(225 18% 20%);
-  --input: hsl(225 18% 17%);
-  --ring: hsl(160 70% 45%);
+  --background: #11141c;              /* quase preto */
+  --foreground: #f1f3f7;
+  --card: #1b1f2a;                    /* card ligeiramente mais claro */
+  --card-foreground: #f1f3f7;
+  --popover: #2a3042;                 /* dialog/popover bem mais claro → contraste nítido */
+  --popover-foreground: #f1f3f7;
+  --primary: #22c39a;                 /* emerald */
+  --primary-foreground: #11141c;
+  --secondary: #232838;
+  --secondary-foreground: #f1f3f7;
+  --muted: #1f2330;
+  --muted-foreground: #8a93a6;
+  --accent: #232838;
+  --accent-foreground: #f1f3f7;
+  --destructive: #e23b3b;
+  --destructive-foreground: #f1f3f7;
+  --warning: #f5b53d;
+  --warning-foreground: #11141c;
+  --success: #22c39a;
+  --success-foreground: #11141c;
+  --border: #2b3142;
+  --input: #1d2230;
+  --ring: #22c39a;
+}
+
+/* ================== Fallback p/ WebView antigo ==================
+   Se o navegador não entender Tailwind v4 (cascade layers, @property,
+   color-mix, etc), pelo menos o body e os textos básicos ficam legíveis. */
+html, body {
+  background-color: #11141c;
+  color: #f1f3f7;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+}
+a { color: #22c39a; }
+input, button, select, textarea {
+  background-color: #1d2230;
+  color: #f1f3f7;
+  border: 1px solid #2b3142;
 }
 
 @layer base {
@@ -73,7 +89,8 @@
 }
 
 @keyframes flash-success {
-  0%   { background-color: hsla(160 70% 45% / 0.3); }
+  0%   { background-color: rgba(34, 195, 154, 0.3); }
   100% { background-color: transparent; }
 }
 .flash-success { animation: flash-success 500ms ease-out; }
+

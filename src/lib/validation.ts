@@ -27,6 +27,6 @@ export function parseQuantidade(raw: string): number | null {
   const cleaned = raw.replace(",", ".").trim();
   if (!cleaned) return null;
   const n = Number(cleaned);
-  if (!Number.isFinite(n) || n <= 0) return null;
+  if (!Number.isFinite(n) || n < 0) return null;
   return n;
 }

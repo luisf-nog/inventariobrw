@@ -397,7 +397,7 @@ function TelaResumo() {
     toast.success("Recontagem solicitada — operador verá no coletor");
   }
 
-  }
+
 
   function exportarCSV() {
     const header = ["posicao", "produto", "descricao", "contagem", "quantidade", "qtd_wms", "diferenca", "operador", "lido_em"];

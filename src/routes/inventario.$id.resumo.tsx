@@ -378,6 +378,27 @@ function TelaResumo() {
     toast.success("Leitura removida");
   }
 
+  async function solicitarRecontagem(l: Linha) {
+    if (!isAdmin) { toast.error("Faça login como supervisor"); return; }
+    setSolicitandoId(l.id);
+    const { data, error } = await supabase
+      .from("recontagens_solicitadas")
+      .insert({
+        inventario_id: id,
+        codigo_posicao: l.codigo_posicao,
+        codigo_produto: l.sku,
+        numero_contagem_origem: l.numero_contagem,
+      })
+      .select("id, codigo_posicao, codigo_produto, numero_contagem_origem")
+      .single();
+    setSolicitandoId(null);
+    if (error) { toast.error(error.message); return; }
+    if (data) setRecontagens((prev) => [...prev, data as any]);
+    toast.success("Recontagem solicitada — operador verá no coletor");
+  }
+
+  }
+
   function exportarCSV() {
     const header = ["posicao", "produto", "descricao", "contagem", "quantidade", "qtd_wms", "diferenca", "operador", "lido_em"];
     const rows = filtrados.map((l) => {

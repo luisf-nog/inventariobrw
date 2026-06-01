@@ -34,14 +34,14 @@ const logoStyle: CSSProperties = {
 const titleStyle: CSSProperties = { margin: 0, fontSize: 26, lineHeight: 1.15, fontWeight: 800, color: "#f1f3f7" };
 const subtitleStyle: CSSProperties = { margin: "8px 0 0", fontSize: 14, lineHeight: 1.35, fontWeight: 700, color: "#f1f3f7" };
 const contentStyle: CSSProperties = { padding: "0 10px 18px" };
-const gridStyle: CSSProperties = { maxWidth: 384, margin: "0 auto", textAlign: "center" };
+const gridStyle: CSSProperties = { maxWidth: 384, margin: "0 auto", textAlign: "center", display: "block" };
 const cardStyle: CSSProperties = {
   display: "inline-block",
   verticalAlign: "top",
   boxSizing: "border-box",
-  width: "calc(50% - 12px)",
+  width: "44%",
   minHeight: 132,
-  margin: 6,
+  margin: "6px 3%",
   padding: "18px 8px 14px",
   borderRadius: 14,
   border: "1px solid rgba(255,255,255,0.2)",
@@ -129,7 +129,7 @@ function SelecaoOperador() {
             </Link>
           </div>
         ) : (
-          <div className="collector-grid grid grid-cols-2 gap-3 max-w-sm mx-auto" style={gridStyle}>
+          <div className="collector-grid max-w-sm mx-auto" style={gridStyle}>
             {operadores.map((op) => (
               <button
                 key={op.id}

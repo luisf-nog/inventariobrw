@@ -47,6 +47,23 @@ function tempoRelativo(iso: string) {
 }
 
 type WmsRow = { codigo_posicao: string; sku: string; qtde_unidades: number };
+
+// Regras globais de classificação de posição (12 chars):
+//   rua "001" ou "002" → estoque normal (picking porta-pallet)
+//   rua "995"           → PBL (flowrack)
+//   demais ruas (ex.: 997 avarias) são IGNORADAS em todas as análises.
+export const RUA_NORMAL = new Set(["001", "002"]);
+export const RUA_PBL = "995";
+export function isPosicaoNormal(c: string) {
+  return c.length === 12 && RUA_NORMAL.has(c.slice(2, 5));
+}
+export function isPosicaoPbl(c: string) {
+  return c.length === 12 && c.slice(2, 5) === RUA_PBL;
+}
+export function isPosicaoConsiderada(c: string) {
+  return isPosicaoNormal(c) || isPosicaoPbl(c);
+}
+
 async function fetchWmsSnapshot(inventarioId: string): Promise<WmsRow[]> {
   const PAGE = 1000;
   const out: WmsRow[] = [];
@@ -61,7 +78,7 @@ async function fetchWmsSnapshot(inventarioId: string): Promise<WmsRow[]> {
     out.push(...rows);
     if (rows.length < PAGE) break;
   }
-  return out;
+  return out.filter((r) => isPosicaoConsiderada(r.codigo_posicao));
 }
 
 function TelaResumo() {

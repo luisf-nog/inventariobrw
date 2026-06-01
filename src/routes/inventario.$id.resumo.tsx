@@ -118,7 +118,7 @@ function TelaResumo() {
       if (cancelado) return;
       setInv(invData as any);
 
-      const [{ data, error }, wmsData] = await Promise.all([
+      const [{ data, error }, wmsData, { data: recData }] = await Promise.all([
         supabase
           .from("leituras")
           .select("id, codigo_posicao, codigo_produto, numero_contagem, quantidade, operador_id, lido_em, operadores(nome)")
@@ -126,7 +126,13 @@ function TelaResumo() {
           .order("codigo_posicao")
           .order("lido_em", { ascending: true }),
         fetchWmsSnapshot(id),
+        supabase
+          .from("recontagens_solicitadas")
+          .select("id, codigo_posicao, codigo_produto, numero_contagem_origem")
+          .eq("inventario_id", id),
       ]);
+      setRecontagens((recData ?? []) as any);
+
 
       if (cancelado) return;
       if (error) { toast.error(error.message); setLoading(false); return; }

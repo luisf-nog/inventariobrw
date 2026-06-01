@@ -262,6 +262,20 @@ function TelaContagem() {
       toast.warning(`Produto ${sku} não cadastrado — será gravado mesmo assim`);
     }
 
+    // Em posições NÃO-PBL: checa duplicata por (posição + SKU) para permitir múltiplos produtos por endereço.
+    const ehPbl = posicao.startsWith("01995");
+    if (!ehPbl) {
+      const existentesPS = await checarPosicao(posicao, sku);
+      if (existentesPS && existentesPS.length > 0) {
+        beepWarn();
+        const maxContagem = Math.max(...existentesPS.map((e) => e.numero_contagem));
+        setProdutoSku(sku);
+        setProdutoDesc(desc);
+        setModalDup({ leituras: existentesPS, contagemAtual: maxContagem });
+        return;
+      }
+    }
+
     // Verifica WMS: SKU está na posição certa?
     if (navigator.onLine) {
       const { data: wmsRows } = await supabase

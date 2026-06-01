@@ -5,8 +5,10 @@ import { Maximize2, Minimize2 } from "lucide-react";
  *  Usa a Fullscreen API (com fallback -webkit- pra WebView antigo). */
 export function FullscreenToggle() {
   const [isFs, setIsFs] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     const onChange = () => {
       const doc = document as Document & { webkitFullscreenElement?: Element };
       setIsFs(Boolean(document.fullscreenElement || doc.webkitFullscreenElement));
@@ -41,6 +43,7 @@ export function FullscreenToggle() {
   };
 
   // Esconde se a API não existe
+  if (!mounted) return null;
   const el = typeof document !== "undefined" ? (document.documentElement as HTMLElement & { webkitRequestFullscreen?: () => Promise<void> }) : null;
   const supported = el && (el.requestFullscreen || el.webkitRequestFullscreen);
   if (!supported) return null;

@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { type CSSProperties, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { setOperador } from "@/lib/operador-session";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,57 @@ type Operador = { id: string; nome: string; tem_pin: boolean };
 function initials(nome: string) {
   return nome.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
 }
+
+const homeStyle: CSSProperties = { minHeight: "100vh", background: "#11141c", color: "#f1f3f7" };
+const brandingStyle: CSSProperties = { padding: "42px 16px 24px", textAlign: "center" };
+const logoStyle: CSSProperties = {
+  width: 56,
+  height: 56,
+  lineHeight: "56px",
+  margin: "0 auto 16px",
+  borderRadius: 16,
+  background: "rgba(34, 195, 154, 0.18)",
+  border: "1px solid rgba(34, 195, 154, 0.42)",
+  color: "#22c39a",
+  textAlign: "center",
+};
+const titleStyle: CSSProperties = { margin: 0, fontSize: 26, lineHeight: 1.15, fontWeight: 800, color: "#f1f3f7" };
+const subtitleStyle: CSSProperties = { margin: "8px 0 0", fontSize: 14, lineHeight: 1.35, fontWeight: 700, color: "#f1f3f7" };
+const contentStyle: CSSProperties = { padding: "0 10px 18px" };
+const gridStyle: CSSProperties = { maxWidth: 384, margin: "0 auto", textAlign: "center" };
+const cardStyle: CSSProperties = {
+  display: "inline-block",
+  verticalAlign: "top",
+  boxSizing: "border-box",
+  width: "calc(50% - 12px)",
+  minHeight: 132,
+  margin: 6,
+  padding: "18px 8px 14px",
+  borderRadius: 14,
+  border: "1px solid rgba(255,255,255,0.2)",
+  background: "rgba(255,255,255,0.14)",
+  color: "#f1f3f7",
+  textAlign: "center",
+};
+const initialsStyle: CSSProperties = {
+  width: 52,
+  height: 52,
+  lineHeight: "52px",
+  margin: "0 auto 12px",
+  borderRadius: 999,
+  background: "rgba(34, 195, 154, 0.24)",
+  border: "1px solid rgba(34, 195, 154, 0.45)",
+  color: "#22e6b3",
+  textAlign: "center",
+  fontSize: 20,
+  fontWeight: 800,
+};
+const nameStyle: CSSProperties = { margin: 0, color: "#fff1bb", fontSize: 13, lineHeight: 1.2, fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" };
+const pinStyle: CSSProperties = { margin: "6px 0 0", color: "#f1f3f7", fontSize: 11, lineHeight: 1.2, fontWeight: 800 };
+const footerStyle: CSSProperties = { padding: "0 16px 34px", textAlign: "center" };
+const adminLinkStyle: CSSProperties = { color: "#22c39a", fontSize: 13, fontWeight: 800, textDecoration: "underline" };
+const pinInputStyle: CSSProperties = { height: 64, textAlign: "center", fontSize: 34, letterSpacing: "0.35em", background: "#111827", color: "#f1f3f7", border: "1px solid #4b5875" };
+const confirmButtonStyle: CSSProperties = { width: "100%", height: 48, marginTop: 16, borderRadius: 8, background: "#22c39a", color: "#11141c", fontSize: 16, fontWeight: 800 };
 
 function SelecaoOperador() {
   const navigate = useNavigate();

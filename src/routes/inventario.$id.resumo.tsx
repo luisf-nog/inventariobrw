@@ -226,8 +226,16 @@ function TelaResumo() {
   }, [contadoPorPS, wmsMap]);
 
   // "Fora do lugar": SKU bipado em uma posição onde o WMS NÃO tem este SKU,
-  // mas o WMS conhece este SKU em outra(s) posição(ões).
+  // mas o WMS conhece este SKU em outra(s) posição(ões) COMPATÍVEIS.
+  // Regras de compatibilidade da sugestão:
+  //   - Posição contada PBL (12 chars iniciando "01995") → só sugere PBL.
+  //   - Picking normal (12 chars, não-PBL) → só sugere posições normais de
+  //     nível 1 (os 2 dígitos antes dos 2 últimos == "01") e nunca PBL.
   const foraDoLugar = useMemo(() => {
+    const isPbl = (c: string) => c.length === 12 && c.startsWith("01995");
+    const isPickingNivel1 = (c: string) =>
+      c.length === 12 && !isPbl(c) && c.slice(8, 10) === "01";
+
     const map = new Map<string, string[]>(); // key "pos|sku" => posições corretas no WMS
     if (skuPositions.size === 0) return map;
     for (const [k, info] of contadoPorPS) {
@@ -236,7 +244,12 @@ function TelaResumo() {
       if (!wmsPosicoes || wmsPosicoes.size === 0) continue; // SKU nunca visto no WMS → cai em "vs WMS"
       if (wmsPosicoes.has(pos)) continue; // está no lugar certo
       if (info.qtd === 0) continue;
-      map.set(k, Array.from(wmsPosicoes).sort());
+      const contadaPbl = isPbl(pos);
+      const compativeis = Array.from(wmsPosicoes).filter((p) =>
+        contadaPbl ? isPbl(p) : isPickingNivel1(p),
+      );
+      if (compativeis.length === 0) continue;
+      map.set(k, compativeis.sort());
     }
     return map;
   }, [contadoPorPS, skuPositions]);

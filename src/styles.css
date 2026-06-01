@@ -36,32 +36,33 @@
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
-/* Dark by default — galpão tem iluminação ruim */
+/* Dark by default — galpão tem iluminação ruim.
+   HSL em vez de oklch() para suportar WebView antigo dos coletores (Android 7-9). */
 :root {
   --radius: 0.75rem;
-  --background: oklch(0.13 0.02 256);           /* quase preto */
-  --foreground: oklch(0.97 0.003 247);
-  --card: oklch(0.19 0.03 256);                  /* card ligeiramente mais claro */
-  --card-foreground: oklch(0.97 0.003 247);
-  --popover: oklch(0.30 0.04 256);               /* dialog/popover bem mais claro → contraste nítido */
-  --popover-foreground: oklch(0.97 0.003 247);
-  --primary: oklch(0.72 0.17 162);               /* emerald-500 */
-  --primary-foreground: oklch(0.13 0.02 256);
-  --secondary: oklch(0.24 0.03 256);
-  --secondary-foreground: oklch(0.97 0.003 247);
-  --muted: oklch(0.22 0.03 256);
-  --muted-foreground: oklch(0.62 0.03 256);
-  --accent: oklch(0.24 0.03 256);
-  --accent-foreground: oklch(0.97 0.003 247);
-  --destructive: oklch(0.60 0.22 25);
-  --destructive-foreground: oklch(0.97 0.003 247);
-  --warning: oklch(0.78 0.16 75);
-  --warning-foreground: oklch(0.13 0.02 256);
-  --success: oklch(0.72 0.17 162);
-  --success-foreground: oklch(0.13 0.02 256);
-  --border: oklch(0.26 0.03 256);
-  --input: oklch(0.23 0.03 256);
-  --ring: oklch(0.72 0.17 162);
+  --background: hsl(225 25% 9%);              /* quase preto */
+  --foreground: hsl(225 15% 96%);
+  --card: hsl(225 22% 14%);                   /* card ligeiramente mais claro */
+  --card-foreground: hsl(225 15% 96%);
+  --popover: hsl(225 20% 24%);                /* dialog/popover bem mais claro → contraste nítido */
+  --popover-foreground: hsl(225 15% 96%);
+  --primary: hsl(160 70% 45%);                /* emerald-500 */
+  --primary-foreground: hsl(225 25% 9%);
+  --secondary: hsl(225 18% 18%);
+  --secondary-foreground: hsl(225 15% 96%);
+  --muted: hsl(225 18% 16%);
+  --muted-foreground: hsl(225 10% 60%);
+  --accent: hsl(225 18% 18%);
+  --accent-foreground: hsl(225 15% 96%);
+  --destructive: hsl(0 75% 55%);
+  --destructive-foreground: hsl(225 15% 96%);
+  --warning: hsl(40 90% 60%);
+  --warning-foreground: hsl(225 25% 9%);
+  --success: hsl(160 70% 45%);
+  --success-foreground: hsl(225 25% 9%);
+  --border: hsl(225 18% 20%);
+  --input: hsl(225 18% 17%);
+  --ring: hsl(160 70% 45%);
 }
 
 @layer base {
@@ -72,7 +73,7 @@
 }
 
 @keyframes flash-success {
-  0%   { background-color: oklch(0.72 0.17 162 / 0.3); }
+  0%   { background-color: hsla(160 70% 45% / 0.3); }
   100% { background-color: transparent; }
 }
 .flash-success { animation: flash-success 500ms ease-out; }

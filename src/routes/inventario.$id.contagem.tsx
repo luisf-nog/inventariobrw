@@ -546,50 +546,50 @@ function TelaContagem() {
 
       {/* Popup de confirmação */}
       <Dialog open={confirmandoLeitura} onOpenChange={(open) => { if (!open) { setConfirmandoLeitura(false); setWmsAlerta(null); } }}>
-        <DialogContent className="max-w-sm bg-popover !opacity-100 shadow-2xl gap-3 p-5">
+        <DialogContent className="max-w-sm bg-popover !opacity-100 shadow-2xl gap-3 p-5" style={{ background: "#1c2b47", color: "#f1f3f7", border: "1px solid #2d4070", maxWidth: 360, padding: 18 }}>
           <DialogHeader className="space-y-0">
-            <DialogTitle className="flex items-center gap-2 text-base">
-              <PackageCheck className="h-5 w-5 text-primary shrink-0" /> Confirmar leitura
+            <DialogTitle className="flex items-center gap-2 text-base" style={{ color: "#f1f3f7", fontSize: 17, fontWeight: 900 }}>
+              <PackageCheck size={19} style={{ width: 19, height: 19, verticalAlign: -4, marginRight: 6, color: "#22e6b3" }} /> Confirmar leitura
             </DialogTitle>
           </DialogHeader>
 
-          <div className="rounded-lg border border-border bg-background/40 overflow-hidden">
-            <div className="grid grid-cols-[88px_1fr] items-center gap-3 px-3 py-2.5 border-b border-border">
-              <span className="text-[10px] text-muted-foreground uppercase tracking-wide">Endereço</span>
-              <span className="font-mono font-bold text-base leading-tight truncate">{formatPosicaoDisplay(posicao)}</span>
+          <div className="rounded-lg border border-border bg-background/40 overflow-hidden" style={{ border: "1px solid #2b3142", borderRadius: 8, overflow: "hidden", background: "#172033", marginTop: 12 }}>
+            <div className="grid grid-cols-[88px_1fr] items-center gap-3 px-3 py-2.5 border-b border-border" style={dialogRowStyle}>
+              <span className="text-[10px] text-muted-foreground uppercase tracking-wide" style={dialogLabelStyle}>Endereço</span>
+              <span className="font-mono font-bold text-base leading-tight truncate" style={{ display: "block", color: "#f1f3f7", fontSize: 16, fontWeight: 900 }}>{formatPosicaoDisplay(posicao)}</span>
             </div>
-            <div className="grid grid-cols-[88px_1fr] items-center gap-3 px-3 py-2.5 border-b border-border">
-              <span className="text-[10px] text-muted-foreground uppercase tracking-wide">Produto</span>
-              <div className="min-w-0">
-                <p className="font-mono font-bold text-base leading-tight truncate">{produtoSku}</p>
-                {produtoDesc && <p className="text-[11px] text-muted-foreground leading-tight truncate">{produtoDesc}</p>}
+            <div className="grid grid-cols-[88px_1fr] items-center gap-3 px-3 py-2.5 border-b border-border" style={dialogRowStyle}>
+              <span className="text-[10px] text-muted-foreground uppercase tracking-wide" style={dialogLabelStyle}>Produto</span>
+              <div>
+                <p className="font-mono font-bold text-base leading-tight truncate" style={{ margin: 0, color: "#f1f3f7", fontSize: 16, fontWeight: 900 }}>{produtoSku}</p>
+                {produtoDesc && <p className="text-[11px] text-muted-foreground leading-tight truncate" style={{ margin: "3px 0 0", color: "#aab2c4", fontSize: 11 }}>{produtoDesc}</p>}
               </div>
             </div>
-            <div className="grid grid-cols-[88px_1fr] items-center gap-3 px-3 py-3 bg-primary/5">
-              <span className="text-[10px] text-muted-foreground uppercase tracking-wide">Quantidade</span>
-              <span className="font-bold text-3xl text-primary leading-none tabular-nums">{quantidade}</span>
+            <div className="grid grid-cols-[88px_1fr] items-center gap-3 px-3 py-3 bg-primary/5" style={{ ...dialogRowStyle, borderBottom: 0, background: "rgba(34,195,154,0.12)" }}>
+              <span className="text-[10px] text-muted-foreground uppercase tracking-wide" style={dialogLabelStyle}>Quantidade</span>
+              <span className="font-bold text-3xl text-primary leading-none tabular-nums" style={{ display: "block", color: "#22e6b3", fontSize: 34, lineHeight: 1, fontWeight: 900 }}>{quantidade}</span>
             </div>
           </div>
 
           {wmsAlerta && (
-            <div className="rounded-lg border border-violet-500/30 bg-violet-500/10 p-3 flex items-start gap-2.5">
-              <MapPin className="h-4 w-4 text-violet-600 dark:text-violet-400 shrink-0 mt-0.5" />
-              <div className="min-w-1">
-                <p className="text-xs font-semibold text-violet-700 dark:text-violet-300">Produto fora do lugar</p>
-                <p className="text-[11px] text-violet-600/90 dark:text-violet-400/90 leading-relaxed mt-0.5">
+            <div className="rounded-lg border border-violet-500/30 bg-violet-500/10 p-3 flex items-start gap-2.5" style={{ marginTop: 12, padding: 10, borderRadius: 8, border: "1px solid #a78bfa", background: "#2d2446", color: "#f1f3f7" }}>
+              <MapPin size={16} style={{ width: 16, height: 16, verticalAlign: -3, marginRight: 5, color: "#c4b5fd" }} />
+              <div>
+                <p className="text-xs font-semibold text-violet-700 dark:text-violet-300" style={{ margin: 0, color: "#ddd6fe", fontSize: 12, fontWeight: 900 }}>Produto fora do lugar</p>
+                <p className="text-[11px] text-violet-600/90 dark:text-violet-400/90 leading-relaxed mt-0.5" style={{ margin: "4px 0 0", color: "#f1f3f7", fontSize: 11 }}>
                   WMS diz que este SKU deveria estar em: <strong className="font-mono">{wmsAlerta.posicoesCorretas.map(formatPosicaoDisplay).join(", ")}</strong>
                 </p>
               </div>
             </div>
           )}
 
-          <div className="flex flex-col gap-2 pt-1">
-            <Button onClick={gravar} disabled={salvando} className="w-full h-12 text-base font-bold gap-2">
+          <div className="flex flex-col gap-2 pt-1" style={{ marginTop: 12 }}>
+            <Button onClick={gravar} disabled={salvando} className="w-full h-12 text-base font-bold gap-2" style={{ ...confirmMainStyle, height: 48, marginTop: 0 }}>
               {salvando
                 ? <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                : <><CheckCircle2 className="h-5 w-5" /> Confirmar</>}
+                : <><CheckCircle2 size={18} style={{ width: 18, height: 18, verticalAlign: -4, marginRight: 6 }} /> Confirmar</>}
             </Button>
-            <Button variant="outline" onClick={() => setConfirmandoLeitura(false)} className="w-full h-10 text-sm">
+            <Button variant="outline" onClick={() => setConfirmandoLeitura(false)} className="w-full h-10 text-sm" style={{ width: "100%", height: 42, marginTop: 8, borderRadius: 8, border: "1px solid #4b5875", background: "#172033", color: "#f1f3f7", fontSize: 14, fontWeight: 800 }}>
               Corrigir quantidade
             </Button>
           </div>

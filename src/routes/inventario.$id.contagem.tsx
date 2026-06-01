@@ -237,6 +237,37 @@ function TelaContagem() {
     return [...locais, ...remotas].sort((a, b) => b.lido_em.localeCompare(a.lido_em));
   }, [inventarioId, leiturasCache]);
 
+  // Pendentes: recontagens sem leitura com numero_contagem > origem
+  const recontagensPendentes = useMemo(() => {
+    const maxContPorPS = new Map<string, number>();
+    for (const l of leiturasCache) {
+      const k = `${l.codigo_posicao}|${l.codigo_produto}`;
+      maxContPorPS.set(k, Math.max(maxContPorPS.get(k) ?? 0, l.numero_contagem));
+    }
+    return recontagens.filter((r) => {
+      const k = `${r.codigo_posicao}|${r.codigo_produto}`;
+      return (maxContPorPS.get(k) ?? 0) <= r.numero_contagem_origem;
+    });
+  }, [recontagens, leiturasCache]);
+
+  const iniciarRecontagem = useCallback(async (r: { codigo_posicao: string; codigo_produto: string; numero_contagem_origem: number }) => {
+    let desc: string | null = null;
+    try {
+      const p = await resolverProdutoPorCodigo(r.codigo_produto);
+      desc = p.descricao;
+    } catch { /* segue sem desc */ }
+    setPosicao(r.codigo_posicao);
+    setProdutoSku(r.codigo_produto);
+    setProdutoDesc(desc);
+    setProdutoInput(r.codigo_produto);
+    setNumeroContagem(r.numero_contagem_origem + 1);
+    setQuantidade("");
+    setWmsAlerta(null);
+    setEtapa("quantidade");
+  }, []);
+
+
+
   const confirmarPosicao = useCallback(async (valor?: string) => {
     const cod = normalizeCode(valor ?? posicao);
     scanBufferRef.current = "";

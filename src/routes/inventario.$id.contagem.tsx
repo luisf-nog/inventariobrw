@@ -346,82 +346,57 @@ function TelaContagem() {
   function sair() { clearOperador(); navigate({ to: "/" }); }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="collector-count-page min-h-screen bg-background" style={pageStyle}>
       {/* Header */}
-      <header className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm border-b border-border">
-        <div className="max-w-lg mx-auto px-4 h-14 flex items-center justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wide truncate leading-none">{inv?.nome ?? "..."}</p>
-            <p className="text-sm font-semibold truncate leading-tight mt-0.5">{op?.nome}</p>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
+      <header className="collector-count-header sticky top-0 z-20 bg-background border-b border-border" style={headerStyle}>
+        <div style={headerInnerStyle}>
+          <p className="collector-count-title" style={headerTitleStyle}>{inv?.nome ?? "..."}</p>
+          <p className="collector-count-operator" style={headerOpStyle}>{op?.nome}</p>
+          <div style={headerActionsStyle}>
             {minhaPos !== null && (
-              <div className={`flex items-center gap-1 text-[11px] px-2 py-1 rounded-full border font-bold ${
-                minhaPos === 1
-                  ? "text-yellow-400 border-yellow-400/40 bg-yellow-400/10"
-                  : minhaPos === 2
-                  ? "text-slate-300 border-slate-400/30 bg-slate-400/10"
-                  : minhaPos === 3
-                  ? "text-amber-600 border-amber-600/30 bg-amber-600/10"
-                  : "text-muted-foreground border-border/50 bg-muted/20"
-              }`}>
-                {minhaPos === 1 ? "🏆" : minhaPos === 2 ? "🥈" : minhaPos === 3 ? "🥉" : null}
-                {minhaPos}°
-              </div>
+              <span style={{ ...pillStyle, borderColor: minhaPos === 1 ? "#f5b53d" : "#2b3142", color: minhaPos === 1 ? "#f5d36b" : "#f1f3f7" }}>
+                {minhaPos === 1 ? "🏆 " : minhaPos === 2 ? "🥈 " : minhaPos === 3 ? "🥉 " : ""}{minhaPos}°
+              </span>
             )}
-            <div className={`flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full border font-medium ${
-              online
-                ? "text-success border-success/30 bg-success/10"
-                : "text-destructive border-destructive/30 bg-destructive/10"
-            }`}>
-              {online ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
+            <span style={{ ...pillStyle, borderColor: online ? "rgba(34,195,154,0.55)" : "rgba(226,59,59,0.65)", color: online ? "#22e6b3" : "#ff8a8a" }}>
+              {online ? <Wifi size={13} style={{ width: 13, height: 13, verticalAlign: -2, marginRight: 4 }} /> : <WifiOff size={13} style={{ width: 13, height: 13, verticalAlign: -2, marginRight: 4 }} />}
               {pending > 0 ? `${pending}` : online ? "on" : "off"}
-            </div>
-            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={sair} aria-label="Sair">
-              <LogOut className="h-4 w-4" />
-            </Button>
+            </span>
+            <button type="button" style={logoutButtonStyle} onClick={sair} aria-label="Sair">
+              <LogOut size={17} style={{ width: 17, height: 17, marginTop: 2 }} />
+            </button>
           </div>
         </div>
       </header>
 
       {/* Última leitura */}
       {ultima && (
-        <div className="bg-success/8 border-b border-success/20">
-          <div className="max-w-lg mx-auto px-4 py-2.5 flex items-start gap-2.5">
-            <CheckCircle2 className="h-4 w-4 text-success shrink-0 mt-0.5" />
-            <div className="min-w-0 flex-1">
-              <p className="text-xs font-mono leading-snug">
-                <span className="text-muted-foreground">{formatPosicaoDisplay(ultima.posicao)}</span>
-                <span className="mx-1.5 text-muted-foreground/40">›</span>
-                <span className="font-semibold">{ultima.sku}</span>
-                <span className="mx-1.5 text-muted-foreground/40">·</span>
-                <span className="font-bold text-success">{ultima.qtd}</span>
-                {ultima.contagem > 1 && <span className="ml-1.5 text-[10px] text-muted-foreground">{ultima.contagem}ª c.</span>}
-              </p>
-              {ultima.desc && <p className="text-[10px] text-muted-foreground truncate mt-0.5">{ultima.desc}</p>}
-            </div>
+        <div style={lastReadStyle}>
+          <div style={lastReadInnerStyle}>
+            <CheckCircle2 size={15} style={{ width: 15, height: 15, verticalAlign: -3, marginRight: 5, color: "#22e6b3" }} />
+            <span style={{ color: "#aab2c4", fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" }}>{formatPosicaoDisplay(ultima.posicao)}</span>
+            <span style={{ margin: "0 6px", color: "#697386" }}>›</span>
+            <strong style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" }}>{ultima.sku}</strong>
+            <span style={{ margin: "0 6px", color: "#697386" }}>·</span>
+            <strong style={{ color: "#22e6b3" }}>{ultima.qtd}</strong>
+            {ultima.contagem > 1 && <span style={{ marginLeft: 6, color: "#aab2c4", fontSize: 10 }}>{ultima.contagem}ª c.</span>}
+            {ultima.desc && <div style={{ marginTop: 3, color: "#aab2c4", fontSize: 10, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{ultima.desc}</div>}
           </div>
         </div>
       )}
 
-      <main className="max-w-lg mx-auto px-4 py-4 space-y-3">
+      <main className="collector-count-main max-w-lg mx-auto px-4 py-4 space-y-3" style={mainStyle}>
         {/* ENDEREÇO */}
-        <div className={`rounded-xl overflow-hidden border bg-card ${etapa === "posicao" ? "border-primary" : "border-border"}`}>
-          <div className={`px-4 py-2.5 border-b border-border/50 flex items-center gap-2 ${etapa === "posicao" ? "bg-primary/5" : ""}`}>
-            <div className={`w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center shrink-0 ${
-              etapa === "posicao" ? "bg-primary text-primary-foreground" : "bg-success/20 text-success"
-            }`}>
-              {etapa === "posicao" ? "1" : "✓"}
-            </div>
-            <MapPin className={`h-3.5 w-3.5 ${etapa === "posicao" ? "text-primary" : "text-muted-foreground"}`} />
-            <span className={`text-xs font-medium uppercase tracking-wide ${etapa === "posicao" ? "text-primary" : "text-muted-foreground"}`}>
-              Endereço
-            </span>
+        <div className={`collector-count-card rounded-xl overflow-hidden border bg-card ${etapa === "posicao" ? "border-primary" : "border-border"}`} style={stepCardStyle(etapa === "posicao")}>
+          <div className="collector-count-card-header" style={stepHeaderStyle(etapa === "posicao")}>
+            <span style={stepNumberStyle(etapa === "posicao", etapa !== "posicao")}>{etapa === "posicao" ? "1" : "✓"}</span>
+            <MapPin size={15} style={{ width: 15, height: 15, verticalAlign: -3, marginRight: 5 }} />
+            <span style={stepLabelStyle(etapa === "posicao")}>Endereço</span>
             {numeroContagem > 1 && etapa !== "posicao" && (
-              <Badge className="ml-auto bg-warning/15 text-warning border-warning/25 text-[10px] px-1.5 py-0 h-5">{numeroContagem}ª</Badge>
+              <Badge className="ml-auto bg-warning/15 text-warning border-warning/25 text-[10px] px-1.5 py-0 h-5" style={{ float: "right", background: "rgba(245,181,61,0.18)", color: "#f5d36b", border: "1px solid rgba(245,181,61,0.45)" }}>{numeroContagem}ª</Badge>
             )}
           </div>
-          <div className="px-4 py-3">
+          <div className="collector-count-card-body px-4 py-3" style={cardBodyStyle}>
             {etapa === "posicao" ? (
               <input
                 ref={refPos}
@@ -445,16 +420,19 @@ function TelaContagem() {
                 }}
                 placeholder="Bipe o código de endereço…"
                 className="w-full h-14 bg-transparent text-2xl font-mono tracking-widest border-none outline-none ring-0 placeholder:text-muted-foreground/30 placeholder:text-sm placeholder:font-sans placeholder:tracking-normal focus:outline-none"
+                style={scanInputStyle}
               />
             ) : (
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xl font-mono font-bold">{formatPosicaoDisplay(posicao)}</span>
+              <div>
                 <button
+                  type="button"
                   onClick={trocarPosicao}
                   className="text-xs text-muted-foreground hover:text-primary transition-colors px-2 py-1 rounded-md hover:bg-primary/10 shrink-0"
+                  style={smallButtonStyle}
                 >
                   trocar
                 </button>
+                <p style={readonlyValueStyle}>{formatPosicaoDisplay(posicao)}</p>
               </div>
             )}
           </div>
@@ -462,19 +440,13 @@ function TelaContagem() {
 
         {/* PRODUTO */}
         {etapa !== "posicao" && (
-          <div className={`rounded-xl overflow-hidden border bg-card ${etapa === "produto" ? "border-primary" : "border-border"}`}>
-            <div className={`px-4 py-2.5 border-b border-border/50 flex items-center gap-2 ${etapa === "produto" ? "bg-primary/5" : ""}`}>
-              <div className={`w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center shrink-0 ${
-                etapa === "produto" ? "bg-primary text-primary-foreground" : "bg-success/20 text-success"
-              }`}>
-                {etapa === "produto" ? "2" : "✓"}
-              </div>
-              <Barcode className={`h-3.5 w-3.5 ${etapa === "produto" ? "text-primary" : "text-muted-foreground"}`} />
-              <span className={`text-xs font-medium uppercase tracking-wide ${etapa === "produto" ? "text-primary" : "text-muted-foreground"}`}>
-                Produto
-              </span>
+          <div className={`collector-count-card rounded-xl overflow-hidden border bg-card ${etapa === "produto" ? "border-primary" : "border-border"}`} style={stepCardStyle(etapa === "produto")}>
+            <div className="collector-count-card-header" style={stepHeaderStyle(etapa === "produto")}>
+              <span style={stepNumberStyle(etapa === "produto", etapa === "quantidade")}>{etapa === "produto" ? "2" : "✓"}</span>
+              <Barcode size={15} style={{ width: 15, height: 15, verticalAlign: -3, marginRight: 5 }} />
+              <span style={stepLabelStyle(etapa === "produto")}>Produto</span>
             </div>
-            <div className="px-4 py-3">
+            <div className="collector-count-card-body px-4 py-3" style={cardBodyStyle}>
               {etapa === "produto" ? (
                 <input
                   ref={refProd}
@@ -498,11 +470,12 @@ function TelaContagem() {
                   }}
                   placeholder="Bipe o código do produto…"
                   className="w-full h-14 bg-transparent text-2xl font-mono tracking-widest border-none outline-none ring-0 placeholder:text-muted-foreground/30 placeholder:text-sm placeholder:font-sans placeholder:tracking-normal focus:outline-none"
+                  style={scanInputStyle}
                 />
               ) : (
                 <div>
-                  <p className="text-xl font-mono font-bold leading-tight">{produtoSku}</p>
-                  {produtoDesc && <p className="text-xs text-muted-foreground mt-0.5 leading-tight">{produtoDesc}</p>}
+                  <p className="text-xl font-mono font-bold leading-tight" style={readonlyValueStyle}>{produtoSku}</p>
+                  {produtoDesc && <p className="text-xs text-muted-foreground mt-0.5 leading-tight" style={secondaryTextStyle}>{produtoDesc}</p>}
                 </div>
               )}
             </div>
@@ -511,20 +484,18 @@ function TelaContagem() {
 
         {/* Alerta persistente: produto fora do lugar */}
         {wmsAlerta && etapa === "quantidade" && (
-          <div className="rounded-xl border-2 border-violet-500 bg-violet-500/15 p-4 flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
-            <div className="w-9 h-9 rounded-full bg-violet-500 flex items-center justify-center shrink-0">
-              <MapPin className="h-5 w-5 text-white" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-bold text-violet-700 dark:text-violet-200 uppercase tracking-wide">
+          <div className="rounded-xl border-2 border-violet-500 bg-violet-500/15 p-4 flex items-start gap-3 animate-in fade-in slide-in-from-top-2" style={alertStyle}>
+            <MapPin size={20} style={{ width: 20, height: 20, verticalAlign: -4, marginRight: 7, color: "#c4b5fd" }} />
+            <div>
+              <p className="text-sm font-bold text-violet-700 dark:text-violet-200 uppercase tracking-wide" style={{ margin: 0, color: "#ddd6fe", fontSize: 14, fontWeight: 900, textTransform: "uppercase" }}>
                 Produto fora do lugar
               </p>
-              <p className="text-xs text-violet-700/90 dark:text-violet-200/90 leading-relaxed mt-1">
+              <p className="text-xs text-violet-700/90 dark:text-violet-200/90 leading-relaxed mt-1" style={{ margin: "6px 0 0", color: "#f1f3f7", fontSize: 12 }}>
                 Segundo o WMS, <span className="font-mono font-bold">{produtoSku}</span> deveria estar em:
               </p>
-              <div className="flex flex-wrap gap-1.5 mt-2">
+              <div className="flex flex-wrap gap-1.5 mt-2" style={{ marginTop: 8 }}>
                 {wmsAlerta.posicoesCorretas.map((p) => (
-                  <span key={p} className="px-2 py-1 rounded bg-violet-600 text-white text-xs font-mono font-bold">
+                  <span key={p} className="px-2 py-1 rounded bg-violet-600 text-white text-xs font-mono font-bold" style={{ display: "inline-block", margin: "0 5px 5px 0", padding: "5px 8px", borderRadius: 6, background: "#7c3aed", color: "#fff", fontSize: 12, fontWeight: 900 }}>
                     {formatPosicaoDisplay(p)}
                   </span>
                 ))}
@@ -535,13 +506,13 @@ function TelaContagem() {
 
         {/* QUANTIDADE */}
         {etapa === "quantidade" && (
-          <div className="rounded-xl overflow-hidden border border-primary bg-card">
-            <div className="px-4 py-2.5 border-b border-border/50 flex items-center gap-2 bg-primary/5">
-              <div className="w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center bg-primary text-primary-foreground shrink-0">3</div>
-              <Hash className="h-3.5 w-3.5 text-primary" />
-              <span className="text-xs font-medium uppercase tracking-wide text-primary">Quantidade</span>
+          <div className="collector-count-card rounded-xl overflow-hidden border border-primary bg-card" style={stepCardStyle(true)}>
+            <div className="collector-count-card-header px-4 py-2.5 border-b border-border/50 flex items-center gap-2 bg-primary/5" style={stepHeaderStyle(true)}>
+              <span style={stepNumberStyle(true, false)}>3</span>
+              <Hash size={15} style={{ width: 15, height: 15, verticalAlign: -3, marginRight: 5 }} />
+              <span style={stepLabelStyle(true)}>Quantidade</span>
             </div>
-            <div className="px-4 py-4 space-y-3">
+            <div className="collector-count-card-body px-4 py-4 space-y-3" style={{ ...cardBodyStyle, paddingTop: 14 }}>
               <Input
                 ref={refQtd}
                 type="text"
@@ -552,16 +523,17 @@ function TelaContagem() {
                 onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); pedirConfirmacao(); } }}
                 placeholder="0"
                 className="h-16 text-4xl text-center font-bold font-mono tracking-wider"
+                style={qtyInputStyle}
                 autoComplete="off"
               />
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-4 gap-2" style={quickButtonsStyle}>
                 {[1, 5, 10].map((n) => (
-                  <Button key={n} variant="secondary" className="h-10 text-sm font-semibold"
+                  <Button key={n} variant="secondary" className="h-10 text-sm font-semibold" style={quickButtonStyle}
                     onClick={() => setQuantidade(String((parseQuantidade(quantidade) ?? 0) + n))}>
                     +{n}
                   </Button>
                 ))}
-                <Button variant="outline" className="h-10 text-sm" onClick={() => setQuantidade("")}>
+                <Button variant="outline" className="h-10 text-sm" style={{ ...quickButtonStyle, marginRight: 0 }} onClick={() => setQuantidade("")}>
                   Limpar
                 </Button>
               </div>
@@ -569,8 +541,9 @@ function TelaContagem() {
                 onClick={pedirConfirmacao}
                 disabled={salvando || !quantidade.trim()}
                 className="w-full h-14 text-base font-bold gap-2"
+                style={confirmMainStyle}
               >
-                <PackageCheck className="h-5 w-5" /> Confirmar
+                <PackageCheck size={19} style={{ width: 19, height: 19, verticalAlign: -4, marginRight: 6 }} /> Confirmar
               </Button>
             </div>
           </div>

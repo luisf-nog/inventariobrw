@@ -193,6 +193,11 @@ function TelaResumo() {
         { event: "UPDATE", schema: "public", table: "inventarios", filter: `id=eq.${id}` },
         agendarRecarga,
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "recontagens_solicitadas", filter: `inventario_id=eq.${id}` },
+        agendarRecarga,
+      )
       .subscribe();
 
     return () => {

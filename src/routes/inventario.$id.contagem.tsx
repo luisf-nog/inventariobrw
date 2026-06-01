@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { LogOut, MapPin, Barcode, Hash, Wifi, WifiOff, CheckCircle2, PackageCheck } from "lucide-react";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { PosicaoJaContadaModal, type AcaoPosicao, type LeituraExistente } from "@/components/PosicaoJaContadaModal";
 import { enqueueLeitura, getQueueForInventario } from "@/lib/offline-queue";
@@ -141,7 +141,6 @@ function TelaContagem() {
   const refQtd = useRef<HTMLInputElement>(null);
   const scanBufferRef = useRef("");
   const lastKeyTimeRef = useRef(0);
-  const [scanDisplay, setScanDisplay] = useState("");
 
   const minhaPos = useMemo(() => {
     if (!op || leiturasCache.length === 0) return null;
@@ -189,7 +188,6 @@ function TelaContagem() {
 
   useEffect(() => {
     scanBufferRef.current = "";
-    setScanDisplay("");
     lastKeyTimeRef.current = 0;
     if (etapa === "quantidade") {
       window.requestAnimationFrame(() => refQtd.current?.focus({ preventScroll: true }));

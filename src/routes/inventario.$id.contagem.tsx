@@ -311,7 +311,7 @@ function TelaContagem() {
     setProdutoDesc(desc);
     setQuantidade("");
     setEtapa("quantidade");
-  }, [produtoInput, posicao, inventarioId]);
+  }, [produtoInput, posicao, inventarioId, checarPosicao]);
 
   function pedirConfirmacao() {
     const qtd = parseQuantidade(quantidade);

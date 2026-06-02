@@ -564,6 +564,7 @@ function TelaContagem() {
             </div>
             <div className="collector-count-card-body px-4 py-3" style={cardBodyStyle}>
               {etapa === "produto" ? (
+                <>
                 <input
                   ref={refProd}
                   type="text"
@@ -586,6 +587,16 @@ function TelaContagem() {
                   className="w-full h-14 bg-transparent text-2xl font-mono tracking-widest border-none outline-none ring-0 placeholder:text-muted-foreground/30 placeholder:text-sm placeholder:font-sans placeholder:tracking-normal focus:outline-none"
                   style={scanInputStyle}
                 />
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => void marcarPosicaoVazia()}
+                  disabled={salvando}
+                  style={{ width: "100%", height: 44, marginTop: 10, borderRadius: 8, border: "1px dashed #f5b53d", background: "rgba(245,181,61,0.08)", color: "#f5d36b", fontSize: 13, fontWeight: 800, cursor: "pointer" }}
+                >
+                  ∅ Posição vazia (sem produto)
+                </button>
+                </>
               ) : (
                 <div>
                   <p className="text-xl font-mono font-bold leading-tight" style={readonlyValueStyle}>{produtoSku}</p>

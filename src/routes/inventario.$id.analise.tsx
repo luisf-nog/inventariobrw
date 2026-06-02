@@ -116,13 +116,38 @@ function TelaAnalise() {
 
       // Agrega leituras por (pos, sku, num_contagem)
       const leiturasAgg = new Map<string, Map<number, number>>();
+      const posicoesVazias = new Map<string, number>(); // pos → numero_contagem mais alto
       for (const l of leiturasRaw) {
         if (!isPosicaoConsiderada(l.codigo_posicao)) continue;
         const sku = skuPorCodigo(l.codigo_produto);
+        // Marcador "VAZIO": operador confirmou posição sem produtos
+        if (sku === "VAZIO") {
+          const atual = posicoesVazias.get(l.codigo_posicao) ?? 0;
+          posicoesVazias.set(l.codigo_posicao, Math.max(atual, l.numero_contagem));
+          continue;
+        }
         const k = `${l.codigo_posicao}|${sku}`;
         const m = leiturasAgg.get(k) ?? new Map<number, number>();
         m.set(l.numero_contagem, (m.get(l.numero_contagem) ?? 0) + Number(l.quantidade));
         leiturasAgg.set(k, m);
+      }
+
+      // Expande "posição vazia": para cada SKU do WMS naquela posição que ainda não foi contado, registra 0
+      for (const [pos, numCont] of posicoesVazias) {
+        for (const w of wmsFilt) {
+          if (w.codigo_posicao !== pos) continue;
+          const k = `${pos}|${w.sku}`;
+          if (leiturasAgg.has(k)) continue;
+          const m = new Map<number, number>();
+          m.set(numCont, 0);
+          leiturasAgg.set(k, m);
+        }
+        // Se posição vazia não tem nada no WMS, ainda assim conta como contada
+        const semWms = !wmsFilt.some((w) => w.codigo_posicao === pos);
+        if (semWms) {
+          leiturasAgg.set(`${pos}|VAZIO`, new Map([[numCont, 0]]));
+          wmsAgg.set(`${pos}|VAZIO`, { qtd: 0, descricao: "Posição vazia" });
+        }
       }
 
       // União de chaves

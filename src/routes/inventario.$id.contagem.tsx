@@ -314,7 +314,16 @@ function TelaContagem() {
     const codRaw = (valor ?? produtoInput).trim();
     scanBufferRef.current = "";
     if (!isValidCode(codRaw)) { beepError(); toast.error("Produto inválido"); return; }
-    let sku = normalizeCode(codRaw);
+    const codNorm = normalizeCode(codRaw);
+    // Trava: operador bipou o endereço de novo no campo de produto
+    if (codNorm === posicao || codRaw.replace(/\D/g, "") === posicao.replace(/\D/g, "")) {
+      beepError();
+      toast.error("Você bipou o endereço como produto. Bipe o código do PRODUTO.");
+      if (refProd.current) refProd.current.value = "";
+      setProdutoInput("");
+      return;
+    }
+    let sku = codNorm;
     let desc: string | null = null;
     if (navigator.onLine) {
       const produto = await resolverProdutoPorCodigo(codRaw);
@@ -394,6 +403,22 @@ function TelaContagem() {
   function pedirConfirmacao() {
     const qtd = parseQuantidade(quantidade);
     if (qtd === null) { beepError(); toast.error("Quantidade inválida"); return; }
+    const qtdDigits = quantidade.replace(/\D/g, "");
+    const posDigits = posicao.replace(/\D/g, "");
+    const skuDigits = produtoSku.replace(/\D/g, "");
+    // Trava: operador bipou o endereço ou o produto no campo de quantidade
+    if (qtdDigits.length >= 6 && (qtdDigits === posDigits || qtdDigits === skuDigits)) {
+      beepError();
+      toast.error("Você bipou um código no campo de quantidade. Digite a quantidade contada.");
+      setQuantidade("");
+      window.requestAnimationFrame(() => refQtd.current?.focus({ preventScroll: true }));
+      return;
+    }
+    // Sanidade: quantidades absurdas exigem digitação manual deliberada
+    if (qtd > 9999) {
+      beepWarn();
+      toast.warning(`Quantidade muito alta (${qtd}). Confirme se digitou corretamente.`);
+    }
     setConfirmandoLeitura(true);
   }
 

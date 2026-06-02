@@ -434,6 +434,34 @@ function TelaContagem() {
     setEtapa("posicao");
   }
 
+  async function marcarPosicaoVazia() {
+    if (!op || !posicao) return;
+    setSalvando(true);
+    const lidoEm = new Date().toISOString();
+    const skuVazio = "VAZIO";
+    let offline = false;
+    if (!navigator.onLine) {
+      enqueueLeitura({ inventario_id: inventarioId, codigo_posicao: posicao, codigo_produto: skuVazio, quantidade: 0, numero_contagem: numeroContagem, operador_id: op.id, operador_nome: op.nome, lido_em: lidoEm });
+      offline = true;
+    } else {
+      const { error } = await supabase.from("leituras").insert({ inventario_id: inventarioId, codigo_posicao: posicao, codigo_produto: skuVazio, quantidade: 0, numero_contagem: numeroContagem, operador_id: op.id, lido_em: lidoEm });
+      if (error) {
+        enqueueLeitura({ inventario_id: inventarioId, codigo_posicao: posicao, codigo_produto: skuVazio, quantidade: 0, numero_contagem: numeroContagem, operador_id: op.id, operador_nome: op.nome, lido_em: lidoEm });
+        offline = true;
+      }
+    }
+    setSalvando(false);
+    if (!offline) {
+      setLeiturasCache((prev) => [{ codigo_posicao: posicao, codigo_produto: skuVazio, quantidade: 0, numero_contagem: numeroContagem, operador_nome: op.nome, operador_id: op.id, lido_em: lidoEm }, ...prev]);
+    }
+    beepSuccess();
+    setUltima({ posicao, sku: skuVazio, desc: "Posição vazia", qtd: 0, contagem: numeroContagem });
+    if (offline) toast.warning("Salvo offline — será sincronizado");
+    setWmsAlerta(null);
+    setPosicao(""); setProdutoInput(""); setProdutoSku(""); setProdutoDesc(null); setQuantidade(""); setNumeroContagem(1);
+    setEtapa("posicao");
+  }
+
   function sair() { clearOperador(); navigate({ to: "/" }); }
 
   return (

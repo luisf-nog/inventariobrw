@@ -403,6 +403,22 @@ function TelaContagem() {
   function pedirConfirmacao() {
     const qtd = parseQuantidade(quantidade);
     if (qtd === null) { beepError(); toast.error("Quantidade inválida"); return; }
+    const qtdDigits = quantidade.replace(/\D/g, "");
+    const posDigits = posicao.replace(/\D/g, "");
+    const skuDigits = produtoSku.replace(/\D/g, "");
+    // Trava: operador bipou o endereço ou o produto no campo de quantidade
+    if (qtdDigits.length >= 6 && (qtdDigits === posDigits || qtdDigits === skuDigits)) {
+      beepError();
+      toast.error("Você bipou um código no campo de quantidade. Digite a quantidade contada.");
+      setQuantidade("");
+      window.requestAnimationFrame(() => refQtd.current?.focus({ preventScroll: true }));
+      return;
+    }
+    // Sanidade: quantidades absurdas exigem digitação manual deliberada
+    if (qtd > 9999) {
+      beepWarn();
+      toast.warning(`Quantidade muito alta (${qtd}). Confirme se digitou corretamente.`);
+    }
     setConfirmandoLeitura(true);
   }
 

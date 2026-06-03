@@ -46,6 +46,7 @@ async function fetchAllWms(inventarioId: string): Promise<WmsRow[]> {
       .from("estoque_wms_snapshot")
       .select("codigo_posicao, sku, descricao, qtde_unidades")
       .eq("inventario_id", inventarioId)
+      .order("id", { ascending: true })
       .range(offset, offset + PAGE - 1);
     if (error) throw error;
     const rows = (data ?? []) as WmsRow[];
@@ -63,6 +64,7 @@ async function fetchAllLeituras(inventarioId: string): Promise<LeituraRow[]> {
       .from("leituras")
       .select("codigo_posicao, codigo_produto, numero_contagem, quantidade")
       .eq("inventario_id", inventarioId)
+      .order("id", { ascending: true })
       .range(offset, offset + PAGE - 1);
     if (error) throw error;
     const rows = (data ?? []) as LeituraRow[];

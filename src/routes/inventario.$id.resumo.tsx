@@ -276,9 +276,9 @@ function TelaResumo() {
   // "Fora do lugar": SKU bipado em uma posição onde o WMS NÃO tem este SKU,
   // mas o WMS conhece este SKU em outra(s) posição(ões) COMPATÍVEIS.
   // Compatibilidade:
-  //   - Contada PBL (rua 995) → só sugere PBL nível 1.
-  //   - Picking normal (rua 001/002) → só sugere normal nível 1 (chars 8-9 == "01")
-  //     e nunca PBL nem outras ruas (997 avarias etc.).
+  //   - Contada PBL (rua 995) → só sugere PBL.
+  //   - Picking normal (ruas 001–899) → só sugere normal nível 1 (chars 8-9 == "01")
+  //     e nunca PBL nem ruas técnicas/especiais 990+.
   const foraDoLugar = useMemo(() => {
     const isNivel1Normal = (c: string) => isPosicaoNormal(c) && c.slice(8, 10) === "01";
     const isPblValida = (c: string) => isPosicaoPbl(c);

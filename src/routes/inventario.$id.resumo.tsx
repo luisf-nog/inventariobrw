@@ -72,6 +72,7 @@ async function fetchWmsSnapshot(inventarioId: string): Promise<WmsRow[]> {
       .from("estoque_wms_snapshot")
       .select("codigo_posicao, sku, qtde_unidades")
       .eq("inventario_id", inventarioId)
+      .order("id", { ascending: true })
       .range(offset, offset + PAGE - 1);
     if (error) throw error;
     const rows = (data ?? []) as WmsRow[];

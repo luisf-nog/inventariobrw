@@ -49,13 +49,14 @@ function tempoRelativo(iso: string) {
 type WmsRow = { codigo_posicao: string; sku: string; qtde_unidades: number };
 
 // Regras globais de classificação de posição (12 chars):
-//   rua "001" ou "002" → estoque normal (picking porta-pallet)
-//   rua "995"           → PBL (flowrack)
-//   demais ruas (ex.: 997 avarias) são IGNORADAS em todas as análises.
-export const RUA_NORMAL = new Set(["001", "002"]);
+//   ruas 001–899 → estoque normal (picking porta-pallet)
+//   rua 995      → PBL (flowrack)
+//   ruas técnicas/especiais 990+ (exceto PBL) são IGNORADAS nas análises.
 export const RUA_PBL = "995";
 export function isPosicaoNormal(c: string) {
-  return c.length === 12 && RUA_NORMAL.has(c.slice(2, 5));
+  if (c.length !== 12) return false;
+  const rua = Number(c.slice(2, 5));
+  return Number.isInteger(rua) && rua >= 1 && rua <= 899;
 }
 export function isPosicaoPbl(c: string) {
   return c.length === 12 && c.slice(2, 5) === RUA_PBL;
@@ -275,9 +276,9 @@ function TelaResumo() {
   // "Fora do lugar": SKU bipado em uma posição onde o WMS NÃO tem este SKU,
   // mas o WMS conhece este SKU em outra(s) posição(ões) COMPATÍVEIS.
   // Compatibilidade:
-  //   - Contada PBL (rua 995) → só sugere PBL nível 1.
-  //   - Picking normal (rua 001/002) → só sugere normal nível 1 (chars 8-9 == "01")
-  //     e nunca PBL nem outras ruas (997 avarias etc.).
+  //   - Contada PBL (rua 995) → só sugere PBL.
+  //   - Picking normal (ruas 001–899) → só sugere normal nível 1 (chars 8-9 == "01")
+  //     e nunca PBL nem ruas técnicas/especiais 990+.
   const foraDoLugar = useMemo(() => {
     const isNivel1Normal = (c: string) => isPosicaoNormal(c) && c.slice(8, 10) === "01";
     const isPblValida = (c: string) => isPosicaoPbl(c);

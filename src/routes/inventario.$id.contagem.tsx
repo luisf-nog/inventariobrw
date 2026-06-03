@@ -370,15 +370,15 @@ function TelaContagem() {
         const contadas = new Set((jaContadas ?? []).map((r: any) => r.codigo_posicao as string));
         // Filtra por compatibilidade de rua:
         //   - posicao contada PBL (rua 995) → só sugere PBL
-        //   - posicao normal (rua 001/002) → só sugere normal nível 1 (chars 8-9 == "01")
-        //   - qualquer outra rua (ex.: 997 avarias) é descartada
+        //   - posicao normal (ruas 001–899) → só sugere normal nível 1 (chars 8-9 == "01")
+        //   - ruas técnicas/especiais 990+ são descartadas
         const contadaPbl = posicao.length === 12 && posicao.slice(2, 5) === "995";
-        const ruasNormais = new Set(["001", "002"]);
         const compativel = (p: string) => {
           if (p.length !== 12) return false;
           const rua = p.slice(2, 5);
           if (contadaPbl) return rua === "995";
-          return ruasNormais.has(rua) && p.slice(8, 10) === "01";
+          const ruaNum = Number(rua);
+          return Number.isInteger(ruaNum) && ruaNum >= 1 && ruaNum <= 899 && p.slice(8, 10) === "01";
         };
         const pendentes = Array.from(posicoesWms)
           .filter((p) => !contadas.has(p) && compativel(p))

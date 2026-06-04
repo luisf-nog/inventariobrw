@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
   ArrowLeft, FileSpreadsheet, CheckCircle2, AlertTriangle,
-  Circle, PlusCircle, Package, Layers,
+  Circle, PlusCircle, Package, Layers, ArrowRightLeft, MapPin, Boxes,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { toast } from "sonner";

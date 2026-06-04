@@ -389,6 +389,36 @@ function TelaAnalise() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">
+        {/* View mode toggle */}
+        <div className="flex gap-2 flex-wrap items-center">
+          <div className="inline-flex rounded-lg border border-border bg-card p-0.5">
+            {([
+              { v: "posicao", label: "Por posição", icon: MapPin },
+              { v: "produto", label: "Por produto", icon: Boxes },
+            ] as const).map(({ v, label, icon: Icon }) => (
+              <button key={v}
+                onClick={() => setViewMode(v)}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium flex items-center gap-1.5 transition-colors ${
+                  viewMode === v ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                }`}>
+                <Icon className="h-3.5 w-3.5" /> {label}
+              </button>
+            ))}
+          </div>
+          {viewMode === "produto" && (
+            <button
+              onClick={() => setFiltroCompensacao((v) => !v)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium border flex items-center gap-1.5 transition-colors ${
+                filtroCompensacao
+                  ? "bg-amber-500/15 border-amber-500/40 text-amber-700 dark:text-amber-300"
+                  : "bg-card border-border text-muted-foreground hover:text-foreground"
+              }`}>
+              <ArrowRightLeft className="h-3.5 w-3.5" /> Possível compensação
+              <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-background/60 tabular-nums">{compensacoesCount}</span>
+            </button>
+          )}
+        </div>
+
         {/* Tabs categoria */}
         <div className="flex gap-2 flex-wrap">
           {([
@@ -407,6 +437,7 @@ function TelaAnalise() {
             </button>
           ))}
         </div>
+
 
         {/* Progresso */}
         <div className="rounded-xl border border-border bg-card p-4 space-y-2">

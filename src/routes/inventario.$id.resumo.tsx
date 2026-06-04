@@ -887,6 +887,15 @@ function TelaResumo() {
                                 <Button
                                   size="icon"
                                   variant="ghost"
+                                  className="h-7 w-7 text-muted-foreground hover:text-primary"
+                                  title={isAdmin ? "Editar quantidade" : "Faça login como supervisor para editar"}
+                                  onClick={() => iniciarEdicao(l)}
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
                                   className="h-7 w-7 text-muted-foreground hover:text-destructive"
                                   title={isAdmin ? "Excluir leitura" : "Faça login como supervisor para excluir"}
                                   onClick={() => {

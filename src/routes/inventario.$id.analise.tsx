@@ -487,7 +487,7 @@ function TelaAnalise() {
           <div className="flex justify-center py-16">
             <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
           </div>
-        ) : (
+        ) : viewMode === "posicao" ? (
           <div className="rounded-xl border border-border overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -552,6 +552,102 @@ function TelaAnalise() {
             </div>
             <div className="px-3 py-2 border-t border-border bg-secondary/30 text-xs text-muted-foreground">
               {linhasFiltradas.length} {linhasFiltradas.length === 1 ? "item" : "itens"} listado{linhasFiltradas.length === 1 ? "" : "s"}
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-xl border border-border overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-secondary/50 border-b border-border">
+                  <tr>
+                    <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">SKU</th>
+                    <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide hidden md:table-cell">Descrição</th>
+                    <th colSpan={3} className="px-3 py-2.5 text-center text-xs font-medium uppercase tracking-wide text-sky-700 dark:text-sky-300 border-l border-border">Picking</th>
+                    <th colSpan={3} className="px-3 py-2.5 text-center text-xs font-medium uppercase tracking-wide text-fuchsia-700 dark:text-fuchsia-300 border-l border-border">PBL</th>
+                    <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide border-l border-border">Δ Total</th>
+                    <th className="px-3 py-2.5 text-center text-xs font-medium text-muted-foreground uppercase tracking-wide">Comp.</th>
+                  </tr>
+                  <tr className="bg-secondary/30 border-b border-border text-[10px]">
+                    <th></th>
+                    <th className="hidden md:table-cell"></th>
+                    <th className="px-2 py-1.5 text-right text-muted-foreground border-l border-border">WMS</th>
+                    <th className="px-2 py-1.5 text-right text-muted-foreground">Cont.</th>
+                    <th className="px-2 py-1.5 text-right text-muted-foreground">Δ</th>
+                    <th className="px-2 py-1.5 text-right text-muted-foreground border-l border-border">WMS</th>
+                    <th className="px-2 py-1.5 text-right text-muted-foreground">Cont.</th>
+                    <th className="px-2 py-1.5 text-right text-muted-foreground">Δ</th>
+                    <th className="border-l border-border"></th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/50">
+                  {linhasProdutoFiltradas.map((p) => (
+                    <tr key={p.sku} className={`hover:bg-muted/20 ${p.compensa ? "bg-amber-500/8" : ""}`}>
+                      <td className="px-3 py-2 font-mono text-xs font-medium whitespace-nowrap">{p.sku}</td>
+                      <td className="px-3 py-2 text-xs max-w-[240px] truncate text-muted-foreground hidden md:table-cell" title={p.descricao}>
+                        {p.descricao || <span className="italic">—</span>}
+                      </td>
+                      {/* Picking */}
+                      <td className="px-2 py-2 text-right tabular-nums border-l border-border">
+                        {p.wms_picking || <span className="text-muted-foreground/50">—</span>}
+                      </td>
+                      <td className="px-2 py-2 text-right tabular-nums font-semibold">
+                        {p.contado_picking || <span className="text-muted-foreground/50">—</span>}
+                        {p.pendente_picking > 0 && (
+                          <div className="text-[9px] text-muted-foreground italic">{p.pendente_picking} pend.</div>
+                        )}
+                      </td>
+                      <td className={`px-2 py-2 text-right tabular-nums font-medium ${
+                        p.dif_picking === 0 ? "text-muted-foreground" : p.dif_picking > 0 ? "text-violet-600 dark:text-violet-400" : "text-destructive"
+                      }`}>
+                        {p.dif_picking > 0 ? `+${p.dif_picking}` : p.dif_picking}
+                      </td>
+                      {/* PBL */}
+                      <td className="px-2 py-2 text-right tabular-nums border-l border-border">
+                        {p.wms_pbl || <span className="text-muted-foreground/50">—</span>}
+                      </td>
+                      <td className="px-2 py-2 text-right tabular-nums font-semibold">
+                        {p.contado_pbl || <span className="text-muted-foreground/50">—</span>}
+                        {p.pendente_pbl > 0 && (
+                          <div className="text-[9px] text-muted-foreground italic">{p.pendente_pbl} pend.</div>
+                        )}
+                      </td>
+                      <td className={`px-2 py-2 text-right tabular-nums font-medium ${
+                        p.dif_pbl === 0 ? "text-muted-foreground" : p.dif_pbl > 0 ? "text-violet-600 dark:text-violet-400" : "text-destructive"
+                      }`}>
+                        {p.dif_pbl > 0 ? `+${p.dif_pbl}` : p.dif_pbl}
+                      </td>
+                      {/* Total */}
+                      <td className={`px-3 py-2 text-right tabular-nums font-bold border-l border-border ${
+                        p.dif_total === 0 ? "text-emerald-600 dark:text-emerald-400" : p.dif_total > 0 ? "text-violet-600 dark:text-violet-400" : "text-destructive"
+                      }`}>
+                        {p.dif_total > 0 ? `+${p.dif_total}` : p.dif_total}
+                      </td>
+                      <td className="px-2 py-2 text-center">
+                        {p.compensa && (
+                          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-700 dark:text-amber-300 font-medium" title="Sobra em um tipo e falta no outro — pode ser troca entre picking e PBL">
+                            <ArrowRightLeft className="h-3 w-3" />
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  {linhasProdutoFiltradas.length === 0 && (
+                    <tr>
+                      <td colSpan={10} className="px-3 py-10 text-center text-muted-foreground text-sm">
+                        Nenhum produto para os filtros selecionados
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <div className="px-3 py-2 border-t border-border bg-secondary/30 text-xs text-muted-foreground flex items-center justify-between flex-wrap gap-2">
+              <span>{linhasProdutoFiltradas.length} produto{linhasProdutoFiltradas.length === 1 ? "" : "s"}</span>
+              <span className="flex items-center gap-1 text-amber-700 dark:text-amber-400">
+                <ArrowRightLeft className="h-3 w-3" />
+                {compensacoesCount} com possível compensação picking ↔ PBL
+              </span>
             </div>
           </div>
         )}

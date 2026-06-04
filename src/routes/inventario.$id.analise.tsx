@@ -255,6 +255,83 @@ function TelaAnalise() {
     ? Math.round((stats.posicoesContadas / stats.posicoesTotal) * 100)
     : 0;
 
+  /* ── Agregação por produto (Picking x PBL) ──────────────────────── */
+  type LinhaProduto = {
+    sku: string;
+    descricao: string;
+    wms_picking: number;
+    contado_picking: number;
+    dif_picking: number;
+    pendente_picking: number;       // posições do SKU no picking sem contagem
+    wms_pbl: number;
+    contado_pbl: number;
+    dif_pbl: number;
+    pendente_pbl: number;
+    dif_total: number;
+    compensa: boolean;              // sobra num lado e falta no outro
+    posicoes_picking: string[];
+    posicoes_pbl: string[];
+  };
+
+  const linhasPorProduto = useMemo<LinhaProduto[]>(() => {
+    const map = new Map<string, LinhaProduto>();
+    for (const l of linhas) {
+      if (l.sku === "VAZIO") continue;
+      let p = map.get(l.sku);
+      if (!p) {
+        p = {
+          sku: l.sku, descricao: l.descricao,
+          wms_picking: 0, contado_picking: 0, dif_picking: 0, pendente_picking: 0,
+          wms_pbl: 0, contado_pbl: 0, dif_pbl: 0, pendente_pbl: 0,
+          dif_total: 0, compensa: false,
+          posicoes_picking: [], posicoes_pbl: [],
+        };
+        map.set(l.sku, p);
+      }
+      if (!p.descricao && l.descricao) p.descricao = l.descricao;
+      const naoContado = l.qtd_contada === null;
+      if (l.categoria === "pbl") {
+        p.wms_pbl += l.qtd_wms ?? 0;
+        p.contado_pbl += l.qtd_contada ?? 0;
+        if (naoContado && (l.qtd_wms ?? 0) > 0) p.pendente_pbl += 1;
+        if (!p.posicoes_pbl.includes(l.codigo_posicao)) p.posicoes_pbl.push(l.codigo_posicao);
+      } else {
+        p.wms_picking += l.qtd_wms ?? 0;
+        p.contado_picking += l.qtd_contada ?? 0;
+        if (naoContado && (l.qtd_wms ?? 0) > 0) p.pendente_picking += 1;
+        if (!p.posicoes_picking.includes(l.codigo_posicao)) p.posicoes_picking.push(l.codigo_posicao);
+      }
+    }
+    const out = Array.from(map.values());
+    for (const p of out) {
+      p.dif_picking = p.contado_picking - p.wms_picking;
+      p.dif_pbl = p.contado_pbl - p.wms_pbl;
+      p.dif_total = p.dif_picking + p.dif_pbl;
+      p.compensa =
+        (p.dif_picking > 0 && p.dif_pbl < 0) ||
+        (p.dif_picking < 0 && p.dif_pbl > 0);
+    }
+    out.sort((a, b) => {
+      // Prioriza compensações, depois |dif_total| maior
+      if (a.compensa !== b.compensa) return a.compensa ? -1 : 1;
+      return Math.abs(b.dif_total) - Math.abs(a.dif_total);
+    });
+    return out;
+  }, [linhas]);
+
+  const linhasProdutoFiltradas = useMemo(() => linhasPorProduto.filter((p) => {
+    if (filtroCompensacao && !p.compensa) return false;
+    const fr = filtroProd.trim().toUpperCase();
+    if (fr && !(p.sku.toUpperCase().includes(fr) || p.descricao.toUpperCase().includes(fr))) return false;
+    // se categoria == normal/pbl, mostra só produtos com presença nessa categoria
+    if (categoria === "normal" && p.wms_picking === 0 && p.contado_picking === 0) return false;
+    if (categoria === "pbl" && p.wms_pbl === 0 && p.contado_pbl === 0) return false;
+    return true;
+  }), [linhasPorProduto, filtroCompensacao, filtroProd, categoria]);
+
+  const compensacoesCount = useMemo(() => linhasPorProduto.filter((p) => p.compensa).length, [linhasPorProduto]);
+
+
   function exportar() {
     const dados = linhasFiltradas.map((l) => ({
       Categoria: l.categoria === "pbl" ? "PBL" : "Picking Normal",

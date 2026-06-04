@@ -416,6 +416,33 @@ function TelaResumo() {
     toast.success("Leitura removida");
   }
 
+  function iniciarEdicao(l: Linha) {
+    if (!isAdmin) { toast.error("Faça login como supervisor para editar"); return; }
+    setEditandoId(l.id);
+    setEditValor(String(l.quantidade));
+    setDeletandoId(null);
+  }
+
+  async function salvarEdicao(l: Linha) {
+    const cleaned = editValor.replace(",", ".").trim();
+    const novo = Number(cleaned);
+    if (!Number.isFinite(novo) || novo < 0) {
+      toast.error("Quantidade inválida");
+      return;
+    }
+    if (novo === l.quantidade) { setEditandoId(null); return; }
+    setSalvandoId(l.id);
+    const { error } = await supabase
+      .from("leituras")
+      .update({ quantidade: novo })
+      .eq("id", l.id);
+    setSalvandoId(null);
+    if (error) { toast.error(error.message); return; }
+    setLinhas((prev) => prev.map((x) => x.id === l.id ? { ...x, quantidade: novo } : x));
+    setEditandoId(null);
+    toast.success(`Quantidade atualizada: ${l.quantidade} → ${novo}`);
+  }
+
   async function solicitarRecontagem(l: Linha) {
     if (!isAdmin) { toast.error("Faça login como supervisor"); return; }
     setSolicitandoId(l.id);

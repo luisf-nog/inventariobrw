@@ -777,6 +777,8 @@ function TelaResumo() {
                       const confirmando = deletandoId === l.id;
                       const recPend = recontagensPendentes.has(k);
                       const solicitando = solicitandoId === l.id;
+                      const editando = editandoId === l.id;
+                      const salvando = salvandoId === l.id;
                       return (
                         <tr key={l.id} className={`${div ? "bg-destructive/8" : fora ? "bg-violet-500/8" : divWms ? "bg-amber-500/8" : "hover:bg-muted/20"} ${confirmando ? "bg-destructive/15" : ""} ${recPend ? "ring-1 ring-inset ring-sky-500/30" : ""}`}>
                           <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{formatPosicaoDisplay(l.codigo_posicao)}</td>

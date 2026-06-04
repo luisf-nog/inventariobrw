@@ -84,6 +84,8 @@ function TelaAnalise() {
   const [statusFiltro, setStatusFiltro] = useState<"todos" | StatusItem>("todos");
   const [filtroPos, setFiltroPos] = useState("");
   const [filtroProd, setFiltroProd] = useState("");
+  const [viewMode, setViewMode] = useState<"posicao" | "produto">("posicao");
+  const [filtroCompensacao, setFiltroCompensacao] = useState(false);
 
   useEffect(() => {
     let cancelado = false;

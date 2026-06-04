@@ -104,6 +104,9 @@ function TelaResumo() {
   const [deletandoId, setDeletandoId] = useState<string | null>(null);
   const [recontagens, setRecontagens] = useState<Array<{ id: string; codigo_posicao: string; codigo_produto: string; numero_contagem_origem: number }>>([]);
   const [solicitandoId, setSolicitandoId] = useState<string | null>(null);
+  const [editandoId, setEditandoId] = useState<string | null>(null);
+  const [editValor, setEditValor] = useState<string>("");
+  const [salvandoId, setSalvandoId] = useState<string | null>(null);
 
 
 

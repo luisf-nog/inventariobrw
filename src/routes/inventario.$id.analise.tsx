@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
   ArrowLeft, FileSpreadsheet, CheckCircle2, AlertTriangle,
-  Circle, PlusCircle, Package, Layers,
+  Circle, PlusCircle, Package, Layers, ArrowRightLeft, MapPin, Boxes,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { toast } from "sonner";
@@ -84,6 +84,8 @@ function TelaAnalise() {
   const [statusFiltro, setStatusFiltro] = useState<"todos" | StatusItem>("todos");
   const [filtroPos, setFiltroPos] = useState("");
   const [filtroProd, setFiltroProd] = useState("");
+  const [viewMode, setViewMode] = useState<"posicao" | "produto">("posicao");
+  const [filtroCompensacao, setFiltroCompensacao] = useState(false);
 
   useEffect(() => {
     let cancelado = false;
@@ -253,22 +255,117 @@ function TelaAnalise() {
     ? Math.round((stats.posicoesContadas / stats.posicoesTotal) * 100)
     : 0;
 
+  /* ── Agregação por produto (Picking x PBL) ──────────────────────── */
+  type LinhaProduto = {
+    sku: string;
+    descricao: string;
+    wms_picking: number;
+    contado_picking: number;
+    dif_picking: number;
+    pendente_picking: number;       // posições do SKU no picking sem contagem
+    wms_pbl: number;
+    contado_pbl: number;
+    dif_pbl: number;
+    pendente_pbl: number;
+    dif_total: number;
+    compensa: boolean;              // sobra num lado e falta no outro
+    posicoes_picking: string[];
+    posicoes_pbl: string[];
+  };
+
+  const linhasPorProduto = useMemo<LinhaProduto[]>(() => {
+    const map = new Map<string, LinhaProduto>();
+    for (const l of linhas) {
+      if (l.sku === "VAZIO") continue;
+      let p = map.get(l.sku);
+      if (!p) {
+        p = {
+          sku: l.sku, descricao: l.descricao,
+          wms_picking: 0, contado_picking: 0, dif_picking: 0, pendente_picking: 0,
+          wms_pbl: 0, contado_pbl: 0, dif_pbl: 0, pendente_pbl: 0,
+          dif_total: 0, compensa: false,
+          posicoes_picking: [], posicoes_pbl: [],
+        };
+        map.set(l.sku, p);
+      }
+      if (!p.descricao && l.descricao) p.descricao = l.descricao;
+      const naoContado = l.qtd_contada === null;
+      if (l.categoria === "pbl") {
+        p.wms_pbl += l.qtd_wms ?? 0;
+        p.contado_pbl += l.qtd_contada ?? 0;
+        if (naoContado && (l.qtd_wms ?? 0) > 0) p.pendente_pbl += 1;
+        if (!p.posicoes_pbl.includes(l.codigo_posicao)) p.posicoes_pbl.push(l.codigo_posicao);
+      } else {
+        p.wms_picking += l.qtd_wms ?? 0;
+        p.contado_picking += l.qtd_contada ?? 0;
+        if (naoContado && (l.qtd_wms ?? 0) > 0) p.pendente_picking += 1;
+        if (!p.posicoes_picking.includes(l.codigo_posicao)) p.posicoes_picking.push(l.codigo_posicao);
+      }
+    }
+    const out = Array.from(map.values());
+    for (const p of out) {
+      p.dif_picking = p.contado_picking - p.wms_picking;
+      p.dif_pbl = p.contado_pbl - p.wms_pbl;
+      p.dif_total = p.dif_picking + p.dif_pbl;
+      p.compensa =
+        (p.dif_picking > 0 && p.dif_pbl < 0) ||
+        (p.dif_picking < 0 && p.dif_pbl > 0);
+    }
+    out.sort((a, b) => {
+      // Prioriza compensações, depois |dif_total| maior
+      if (a.compensa !== b.compensa) return a.compensa ? -1 : 1;
+      return Math.abs(b.dif_total) - Math.abs(a.dif_total);
+    });
+    return out;
+  }, [linhas]);
+
+  const linhasProdutoFiltradas = useMemo(() => linhasPorProduto.filter((p) => {
+    if (filtroCompensacao && !p.compensa) return false;
+    const fr = filtroProd.trim().toUpperCase();
+    if (fr && !(p.sku.toUpperCase().includes(fr) || p.descricao.toUpperCase().includes(fr))) return false;
+    // se categoria == normal/pbl, mostra só produtos com presença nessa categoria
+    if (categoria === "normal" && p.wms_picking === 0 && p.contado_picking === 0) return false;
+    if (categoria === "pbl" && p.wms_pbl === 0 && p.contado_pbl === 0) return false;
+    return true;
+  }), [linhasPorProduto, filtroCompensacao, filtroProd, categoria]);
+
+  const compensacoesCount = useMemo(() => linhasPorProduto.filter((p) => p.compensa).length, [linhasPorProduto]);
+
+
   function exportar() {
-    const dados = linhasFiltradas.map((l) => ({
-      Categoria: l.categoria === "pbl" ? "PBL" : "Picking Normal",
-      Posição: formatPosicaoDisplay(l.codigo_posicao),
-      "Posição (raw)": l.codigo_posicao,
-      SKU: l.sku,
-      Descrição: l.descricao,
-      "Qtd WMS": l.qtd_wms ?? "",
-      "Qtd Contada": l.qtd_contada ?? "",
-      Diferença: l.diferenca ?? "",
-      "Nº contagens": l.num_contagens,
-      Status: rotuloStatus(l.status),
-    }));
-    const ws = XLSX.utils.json_to_sheet(dados);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Análise");
+    if (viewMode === "posicao") {
+      const dados = linhasFiltradas.map((l) => ({
+        Categoria: l.categoria === "pbl" ? "PBL" : "Picking Normal",
+        Posição: formatPosicaoDisplay(l.codigo_posicao),
+        "Posição (raw)": l.codigo_posicao,
+        SKU: l.sku,
+        Descrição: l.descricao,
+        "Qtd WMS": l.qtd_wms ?? "",
+        "Qtd Contada": l.qtd_contada ?? "",
+        Diferença: l.diferenca ?? "",
+        "Nº contagens": l.num_contagens,
+        Status: rotuloStatus(l.status),
+      }));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dados), "Por posição");
+    } else {
+      const dados = linhasProdutoFiltradas.map((p) => ({
+        SKU: p.sku,
+        Descrição: p.descricao,
+        "WMS Picking": p.wms_picking,
+        "Contado Picking": p.contado_picking,
+        "Δ Picking": p.dif_picking,
+        "Pendente Picking": p.pendente_picking,
+        "WMS PBL": p.wms_pbl,
+        "Contado PBL": p.contado_pbl,
+        "Δ PBL": p.dif_pbl,
+        "Pendente PBL": p.pendente_pbl,
+        "Δ Total": p.dif_total,
+        "Compensa?": p.compensa ? "SIM" : "",
+        Posições: [...p.posicoes_picking, ...p.posicoes_pbl].map(formatPosicaoDisplay).join(" | "),
+      }));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dados), "Por produto");
+    }
     XLSX.writeFile(wb, `analise-${inv?.nome ?? id}-${new Date().toISOString().slice(0, 10)}.xlsx`);
     toast.success("Planilha exportada");
   }
@@ -292,6 +389,36 @@ function TelaAnalise() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">
+        {/* View mode toggle */}
+        <div className="flex gap-2 flex-wrap items-center">
+          <div className="inline-flex rounded-lg border border-border bg-card p-0.5">
+            {([
+              { v: "posicao", label: "Por posição", icon: MapPin },
+              { v: "produto", label: "Por produto", icon: Boxes },
+            ] as const).map(({ v, label, icon: Icon }) => (
+              <button key={v}
+                onClick={() => setViewMode(v)}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium flex items-center gap-1.5 transition-colors ${
+                  viewMode === v ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                }`}>
+                <Icon className="h-3.5 w-3.5" /> {label}
+              </button>
+            ))}
+          </div>
+          {viewMode === "produto" && (
+            <button
+              onClick={() => setFiltroCompensacao((v) => !v)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium border flex items-center gap-1.5 transition-colors ${
+                filtroCompensacao
+                  ? "bg-amber-500/15 border-amber-500/40 text-amber-700 dark:text-amber-300"
+                  : "bg-card border-border text-muted-foreground hover:text-foreground"
+              }`}>
+              <ArrowRightLeft className="h-3.5 w-3.5" /> Possível compensação
+              <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-background/60 tabular-nums">{compensacoesCount}</span>
+            </button>
+          )}
+        </div>
+
         {/* Tabs categoria */}
         <div className="flex gap-2 flex-wrap">
           {([
@@ -310,6 +437,7 @@ function TelaAnalise() {
             </button>
           ))}
         </div>
+
 
         {/* Progresso */}
         <div className="rounded-xl border border-border bg-card p-4 space-y-2">
@@ -359,7 +487,7 @@ function TelaAnalise() {
           <div className="flex justify-center py-16">
             <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
           </div>
-        ) : (
+        ) : viewMode === "posicao" ? (
           <div className="rounded-xl border border-border overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -424,6 +552,102 @@ function TelaAnalise() {
             </div>
             <div className="px-3 py-2 border-t border-border bg-secondary/30 text-xs text-muted-foreground">
               {linhasFiltradas.length} {linhasFiltradas.length === 1 ? "item" : "itens"} listado{linhasFiltradas.length === 1 ? "" : "s"}
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-xl border border-border overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-secondary/50 border-b border-border">
+                  <tr>
+                    <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">SKU</th>
+                    <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide hidden md:table-cell">Descrição</th>
+                    <th colSpan={3} className="px-3 py-2.5 text-center text-xs font-medium uppercase tracking-wide text-sky-700 dark:text-sky-300 border-l border-border">Picking</th>
+                    <th colSpan={3} className="px-3 py-2.5 text-center text-xs font-medium uppercase tracking-wide text-fuchsia-700 dark:text-fuchsia-300 border-l border-border">PBL</th>
+                    <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide border-l border-border">Δ Total</th>
+                    <th className="px-3 py-2.5 text-center text-xs font-medium text-muted-foreground uppercase tracking-wide">Comp.</th>
+                  </tr>
+                  <tr className="bg-secondary/30 border-b border-border text-[10px]">
+                    <th></th>
+                    <th className="hidden md:table-cell"></th>
+                    <th className="px-2 py-1.5 text-right text-muted-foreground border-l border-border">WMS</th>
+                    <th className="px-2 py-1.5 text-right text-muted-foreground">Cont.</th>
+                    <th className="px-2 py-1.5 text-right text-muted-foreground">Δ</th>
+                    <th className="px-2 py-1.5 text-right text-muted-foreground border-l border-border">WMS</th>
+                    <th className="px-2 py-1.5 text-right text-muted-foreground">Cont.</th>
+                    <th className="px-2 py-1.5 text-right text-muted-foreground">Δ</th>
+                    <th className="border-l border-border"></th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/50">
+                  {linhasProdutoFiltradas.map((p) => (
+                    <tr key={p.sku} className={`hover:bg-muted/20 ${p.compensa ? "bg-amber-500/8" : ""}`}>
+                      <td className="px-3 py-2 font-mono text-xs font-medium whitespace-nowrap">{p.sku}</td>
+                      <td className="px-3 py-2 text-xs max-w-[240px] truncate text-muted-foreground hidden md:table-cell" title={p.descricao}>
+                        {p.descricao || <span className="italic">—</span>}
+                      </td>
+                      {/* Picking */}
+                      <td className="px-2 py-2 text-right tabular-nums border-l border-border">
+                        {p.wms_picking || <span className="text-muted-foreground/50">—</span>}
+                      </td>
+                      <td className="px-2 py-2 text-right tabular-nums font-semibold">
+                        {p.contado_picking || <span className="text-muted-foreground/50">—</span>}
+                        {p.pendente_picking > 0 && (
+                          <div className="text-[9px] text-muted-foreground italic">{p.pendente_picking} pend.</div>
+                        )}
+                      </td>
+                      <td className={`px-2 py-2 text-right tabular-nums font-medium ${
+                        p.dif_picking === 0 ? "text-muted-foreground" : p.dif_picking > 0 ? "text-violet-600 dark:text-violet-400" : "text-destructive"
+                      }`}>
+                        {p.dif_picking > 0 ? `+${p.dif_picking}` : p.dif_picking}
+                      </td>
+                      {/* PBL */}
+                      <td className="px-2 py-2 text-right tabular-nums border-l border-border">
+                        {p.wms_pbl || <span className="text-muted-foreground/50">—</span>}
+                      </td>
+                      <td className="px-2 py-2 text-right tabular-nums font-semibold">
+                        {p.contado_pbl || <span className="text-muted-foreground/50">—</span>}
+                        {p.pendente_pbl > 0 && (
+                          <div className="text-[9px] text-muted-foreground italic">{p.pendente_pbl} pend.</div>
+                        )}
+                      </td>
+                      <td className={`px-2 py-2 text-right tabular-nums font-medium ${
+                        p.dif_pbl === 0 ? "text-muted-foreground" : p.dif_pbl > 0 ? "text-violet-600 dark:text-violet-400" : "text-destructive"
+                      }`}>
+                        {p.dif_pbl > 0 ? `+${p.dif_pbl}` : p.dif_pbl}
+                      </td>
+                      {/* Total */}
+                      <td className={`px-3 py-2 text-right tabular-nums font-bold border-l border-border ${
+                        p.dif_total === 0 ? "text-emerald-600 dark:text-emerald-400" : p.dif_total > 0 ? "text-violet-600 dark:text-violet-400" : "text-destructive"
+                      }`}>
+                        {p.dif_total > 0 ? `+${p.dif_total}` : p.dif_total}
+                      </td>
+                      <td className="px-2 py-2 text-center">
+                        {p.compensa && (
+                          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-700 dark:text-amber-300 font-medium" title="Sobra em um tipo e falta no outro — pode ser troca entre picking e PBL">
+                            <ArrowRightLeft className="h-3 w-3" />
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  {linhasProdutoFiltradas.length === 0 && (
+                    <tr>
+                      <td colSpan={10} className="px-3 py-10 text-center text-muted-foreground text-sm">
+                        Nenhum produto para os filtros selecionados
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <div className="px-3 py-2 border-t border-border bg-secondary/30 text-xs text-muted-foreground flex items-center justify-between flex-wrap gap-2">
+              <span>{linhasProdutoFiltradas.length} produto{linhasProdutoFiltradas.length === 1 ? "" : "s"}</span>
+              <span className="flex items-center gap-1 text-amber-700 dark:text-amber-400">
+                <ArrowRightLeft className="h-3 w-3" />
+                {compensacoesCount} com possível compensação picking ↔ PBL
+              </span>
             </div>
           </div>
         )}

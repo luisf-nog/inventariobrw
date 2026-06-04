@@ -333,21 +333,39 @@ function TelaAnalise() {
 
 
   function exportar() {
-    const dados = linhasFiltradas.map((l) => ({
-      Categoria: l.categoria === "pbl" ? "PBL" : "Picking Normal",
-      Posição: formatPosicaoDisplay(l.codigo_posicao),
-      "Posição (raw)": l.codigo_posicao,
-      SKU: l.sku,
-      Descrição: l.descricao,
-      "Qtd WMS": l.qtd_wms ?? "",
-      "Qtd Contada": l.qtd_contada ?? "",
-      Diferença: l.diferenca ?? "",
-      "Nº contagens": l.num_contagens,
-      Status: rotuloStatus(l.status),
-    }));
-    const ws = XLSX.utils.json_to_sheet(dados);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Análise");
+    if (viewMode === "posicao") {
+      const dados = linhasFiltradas.map((l) => ({
+        Categoria: l.categoria === "pbl" ? "PBL" : "Picking Normal",
+        Posição: formatPosicaoDisplay(l.codigo_posicao),
+        "Posição (raw)": l.codigo_posicao,
+        SKU: l.sku,
+        Descrição: l.descricao,
+        "Qtd WMS": l.qtd_wms ?? "",
+        "Qtd Contada": l.qtd_contada ?? "",
+        Diferença: l.diferenca ?? "",
+        "Nº contagens": l.num_contagens,
+        Status: rotuloStatus(l.status),
+      }));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dados), "Por posição");
+    } else {
+      const dados = linhasProdutoFiltradas.map((p) => ({
+        SKU: p.sku,
+        Descrição: p.descricao,
+        "WMS Picking": p.wms_picking,
+        "Contado Picking": p.contado_picking,
+        "Δ Picking": p.dif_picking,
+        "Pendente Picking": p.pendente_picking,
+        "WMS PBL": p.wms_pbl,
+        "Contado PBL": p.contado_pbl,
+        "Δ PBL": p.dif_pbl,
+        "Pendente PBL": p.pendente_pbl,
+        "Δ Total": p.dif_total,
+        "Compensa?": p.compensa ? "SIM" : "",
+        Posições: [...p.posicoes_picking, ...p.posicoes_pbl].map(formatPosicaoDisplay).join(" | "),
+      }));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dados), "Por produto");
+    }
     XLSX.writeFile(wb, `analise-${inv?.nome ?? id}-${new Date().toISOString().slice(0, 10)}.xlsx`);
     toast.success("Planilha exportada");
   }

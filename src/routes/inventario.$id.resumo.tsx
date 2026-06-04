@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   ArrowLeft, Download, FileSpreadsheet, Lock, AlertTriangle,
   Trash2, Users, Clock, Activity, BarChart2, RefreshCw, MapPin, RotateCcw, ClipboardCheck,
+  Pencil, Check, X,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { toast } from "sonner";
@@ -103,6 +104,9 @@ function TelaResumo() {
   const [deletandoId, setDeletandoId] = useState<string | null>(null);
   const [recontagens, setRecontagens] = useState<Array<{ id: string; codigo_posicao: string; codigo_produto: string; numero_contagem_origem: number }>>([]);
   const [solicitandoId, setSolicitandoId] = useState<string | null>(null);
+  const [editandoId, setEditandoId] = useState<string | null>(null);
+  const [editValor, setEditValor] = useState<string>("");
+  const [salvandoId, setSalvandoId] = useState<string | null>(null);
 
 
 
@@ -410,6 +414,33 @@ function TelaResumo() {
     setLinhas((prev) => prev.filter((l) => l.id !== leituraId));
     setDeletandoId(null);
     toast.success("Leitura removida");
+  }
+
+  function iniciarEdicao(l: Linha) {
+    if (!isAdmin) { toast.error("Faça login como supervisor para editar"); return; }
+    setEditandoId(l.id);
+    setEditValor(String(l.quantidade));
+    setDeletandoId(null);
+  }
+
+  async function salvarEdicao(l: Linha) {
+    const cleaned = editValor.replace(",", ".").trim();
+    const novo = Number(cleaned);
+    if (!Number.isFinite(novo) || novo < 0) {
+      toast.error("Quantidade inválida");
+      return;
+    }
+    if (novo === l.quantidade) { setEditandoId(null); return; }
+    setSalvandoId(l.id);
+    const { error } = await supabase
+      .from("leituras")
+      .update({ quantidade: novo })
+      .eq("id", l.id);
+    setSalvandoId(null);
+    if (error) { toast.error(error.message); return; }
+    setLinhas((prev) => prev.map((x) => x.id === l.id ? { ...x, quantidade: novo } : x));
+    setEditandoId(null);
+    toast.success(`Quantidade atualizada: ${l.quantidade} → ${novo}`);
   }
 
   async function solicitarRecontagem(l: Linha) {
@@ -746,6 +777,8 @@ function TelaResumo() {
                       const confirmando = deletandoId === l.id;
                       const recPend = recontagensPendentes.has(k);
                       const solicitando = solicitandoId === l.id;
+                      const editando = editandoId === l.id;
+                      const salvando = salvandoId === l.id;
                       return (
                         <tr key={l.id} className={`${div ? "bg-destructive/8" : fora ? "bg-violet-500/8" : divWms ? "bg-amber-500/8" : "hover:bg-muted/20"} ${confirmando ? "bg-destructive/15" : ""} ${recPend ? "ring-1 ring-inset ring-sky-500/30" : ""}`}>
                           <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{formatPosicaoDisplay(l.codigo_posicao)}</td>
@@ -772,8 +805,34 @@ function TelaResumo() {
                           </td>
                           <td className="px-3 py-2 text-center text-xs">{l.numero_contagem}</td>
                           <td className="px-3 py-2 text-right font-semibold">
-                            {l.quantidade}
-                            {div && <AlertTriangle className="inline h-3 w-3 ml-1 text-destructive" />}
+                            {editando ? (
+                              <div className="flex items-center gap-1 justify-end">
+                                <Input
+                                  type="number"
+                                  inputMode="decimal"
+                                  autoFocus
+                                  value={editValor}
+                                  onChange={(e) => setEditValor(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") { e.preventDefault(); void salvarEdicao(l); }
+                                    if (e.key === "Escape") { e.preventDefault(); setEditandoId(null); }
+                                  }}
+                                  className="h-7 w-20 text-right text-xs px-1"
+                                  disabled={salvando}
+                                />
+                                <Button size="icon" variant="ghost" className="h-7 w-7 text-emerald-600" disabled={salvando} onClick={() => void salvarEdicao(l)} title="Salvar">
+                                  <Check className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground" disabled={salvando} onClick={() => setEditandoId(null)} title="Cancelar">
+                                  <X className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <>
+                                {l.quantidade}
+                                {div && <AlertTriangle className="inline h-3 w-3 ml-1 text-destructive" />}
+                              </>
+                            )}
                           </td>
                           <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">
                             {wmsMap.size === 0 ? <span className="text-[10px]">—</span> : wms === undefined ? <span className="text-[10px] italic">não há</span> : wms}
@@ -824,6 +883,15 @@ function TelaResumo() {
                                   }}
                                 >
                                   <RotateCcw className={`h-3.5 w-3.5 ${solicitando ? "animate-spin" : ""}`} />
+                                </Button>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-7 w-7 text-muted-foreground hover:text-primary"
+                                  title={isAdmin ? "Editar quantidade" : "Faça login como supervisor para editar"}
+                                  onClick={() => iniciarEdicao(l)}
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
                                 </Button>
                                 <Button
                                   size="icon"

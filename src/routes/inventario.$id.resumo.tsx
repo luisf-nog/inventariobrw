@@ -805,8 +805,34 @@ function TelaResumo() {
                           </td>
                           <td className="px-3 py-2 text-center text-xs">{l.numero_contagem}</td>
                           <td className="px-3 py-2 text-right font-semibold">
-                            {l.quantidade}
-                            {div && <AlertTriangle className="inline h-3 w-3 ml-1 text-destructive" />}
+                            {editando ? (
+                              <div className="flex items-center gap-1 justify-end">
+                                <Input
+                                  type="number"
+                                  inputMode="decimal"
+                                  autoFocus
+                                  value={editValor}
+                                  onChange={(e) => setEditValor(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") { e.preventDefault(); void salvarEdicao(l); }
+                                    if (e.key === "Escape") { e.preventDefault(); setEditandoId(null); }
+                                  }}
+                                  className="h-7 w-20 text-right text-xs px-1"
+                                  disabled={salvando}
+                                />
+                                <Button size="icon" variant="ghost" className="h-7 w-7 text-emerald-600" disabled={salvando} onClick={() => void salvarEdicao(l)} title="Salvar">
+                                  <Check className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground" disabled={salvando} onClick={() => setEditandoId(null)} title="Cancelar">
+                                  <X className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <>
+                                {l.quantidade}
+                                {div && <AlertTriangle className="inline h-3 w-3 ml-1 text-destructive" />}
+                              </>
+                            )}
                           </td>
                           <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">
                             {wmsMap.size === 0 ? <span className="text-[10px]">—</span> : wms === undefined ? <span className="text-[10px] italic">não há</span> : wms}

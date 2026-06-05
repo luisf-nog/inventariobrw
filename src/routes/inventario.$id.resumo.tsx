@@ -138,7 +138,7 @@ function TelaResumo() {
     "todos" | "complementar" | "sobra" | "falta" | "divergente" | "diferenca" | "naocontado"
   >("todos");
   const [filtroItemLocal, setFiltroItemLocal] = useState<"ambos" | "picking" | "pbl">("ambos");
-  const [ordemItem, setOrdemItem] = useState<"sku" | "diferenca">("sku");
+  const [ordemItem, setOrdemItem] = useState<"sku" | "diferenca" | "dif_picking" | "dif_pbl" | "dif_total">("sku");
 
   const [isAdmin, setIsAdmin] = useState(false);
   const [confirmandoEncerrar, setConfirmandoEncerrar] = useState(false);
@@ -375,7 +375,14 @@ function TelaResumo() {
       }
     });
     return [...rows].sort((a, b) => {
+      const aPick = Math.abs(a.pick.delta ?? 0);
+      const bPick = Math.abs(b.pick.delta ?? 0);
+      const aPbl = Math.abs(a.pbl.delta ?? 0);
+      const bPbl = Math.abs(b.pbl.delta ?? 0);
       if (ordemItem === "diferenca" && a.magnitude !== b.magnitude) return b.magnitude - a.magnitude;
+      if (ordemItem === "dif_picking" && aPick !== bPick) return bPick - aPick;
+      if (ordemItem === "dif_pbl" && aPbl !== bPbl) return bPbl - aPbl;
+      if (ordemItem === "dif_total" && (aPick + aPbl) !== (bPick + bPbl)) return (bPick + bPbl) - (aPick + aPbl);
       return a.item.sku.localeCompare(b.item.sku);
     });
   }, [itensComputados, filtroItemProd, filtroItemStatus, filtroItemLocal, ordemItem]);
@@ -850,10 +857,13 @@ function TelaResumo() {
                   </SelectContent>
                 </Select>
                 <Select value={ordemItem} onValueChange={(v) => setOrdemItem(v as typeof ordemItem)}>
-                  <SelectTrigger className="h-8 w-[170px] text-sm"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-8 w-[220px] text-sm"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="sku">Ordenar por produto</SelectItem>
-                    <SelectItem value="diferenca">Ordenar por maior diferença</SelectItem>
+                    <SelectItem value="diferenca">Maior diferença (geral)</SelectItem>
+                    <SelectItem value="dif_total">Maior Δ total (|pick|+|pbl|)</SelectItem>
+                    <SelectItem value="dif_picking">Maior Δ no Picking</SelectItem>
+                    <SelectItem value="dif_pbl">Maior Δ no PBL</SelectItem>
                   </SelectContent>
                 </Select>
                 <Button onClick={exportarItensXLSX} variant="outline" size="sm" className="gap-1.5 h-8">
@@ -868,104 +878,131 @@ function TelaResumo() {
               <div className="rounded-xl border border-border overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
-                    <thead className="bg-secondary/50">
+                    <thead className="bg-secondary/70">
                       <tr>
-                        <th rowSpan={2} className="px-3 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide align-bottom border-b border-border">Produto</th>
-                        <th rowSpan={2} className="px-3 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide align-bottom border-b border-border max-w-[160px]">Descrição</th>
+                        <th rowSpan={2} className="px-3 py-2 text-left text-xs font-semibold text-foreground/90 uppercase tracking-wide align-bottom border-b border-border">Produto</th>
+                        <th rowSpan={2} className="px-3 py-2 text-left text-xs font-semibold text-foreground/90 uppercase tracking-wide align-bottom border-b border-border max-w-[160px]">Descrição</th>
                         <th
                           colSpan={wmsMap.size > 0 ? maxContagem + 2 : maxContagem}
-                          className="px-3 py-1.5 text-center text-[11px] font-semibold text-blue-700 dark:text-blue-400 border-l border-border border-b border-border/40 bg-blue-50/50 dark:bg-blue-950/20 uppercase tracking-wide"
+                          className="px-3 py-1.5 text-center text-[11px] font-bold text-blue-700 dark:text-blue-300 border-l border-border border-b border-border/40 bg-blue-100/70 dark:bg-blue-950/40 uppercase tracking-wider"
                         >
                           Picking
                         </th>
                         <th
                           colSpan={wmsMap.size > 0 ? maxContagem + 2 : maxContagem}
-                          className="px-3 py-1.5 text-center text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 border-l border-border border-b border-border/40 bg-emerald-50/50 dark:bg-emerald-950/20 uppercase tracking-wide"
+                          className="px-3 py-1.5 text-center text-[11px] font-bold text-emerald-700 dark:text-emerald-300 border-l border-border border-b border-border/40 bg-emerald-100/70 dark:bg-emerald-950/40 uppercase tracking-wider"
                         >
                           PBL (995)
                         </th>
+                        {wmsMap.size > 0 && (
+                          <th
+                            rowSpan={2}
+                            className="px-3 py-2 text-center text-[11px] font-bold text-violet-700 dark:text-violet-300 border-l-2 border-border border-b border-border align-bottom bg-violet-100/70 dark:bg-violet-950/40 uppercase tracking-wider"
+                          >
+                            Δ Total
+                          </th>
+                        )}
                       </tr>
                       <tr className="border-b border-border">
                         {wmsMap.size > 0 && (
-                          <th className="px-3 py-2 text-right text-[11px] font-medium text-muted-foreground whitespace-nowrap border-l border-border bg-blue-50/30 dark:bg-blue-950/10">Esp.</th>
+                          <th className="px-2 py-2 text-right text-[11px] font-semibold text-foreground/70 whitespace-nowrap border-l border-border bg-blue-50/60 dark:bg-blue-950/20">Esp.</th>
                         )}
                         {Array.from({ length: maxContagem }, (_, i) => i + 1).map((c) => (
-                          <th key={c} className={`px-3 py-2 text-right text-[11px] font-medium text-muted-foreground whitespace-nowrap bg-blue-50/30 dark:bg-blue-950/10 ${wmsMap.size === 0 && c === 1 ? "border-l border-border" : ""}`}>
+                          <th key={c} className={`px-2 py-2 text-right text-[11px] font-semibold text-foreground/70 whitespace-nowrap bg-blue-50/60 dark:bg-blue-950/20 ${wmsMap.size === 0 && c === 1 ? "border-l border-border" : ""}`}>
                             {c}ª Ctg
                           </th>
                         ))}
                         {wmsMap.size > 0 && (
-                          <th className="px-3 py-2 text-right text-[11px] font-medium text-muted-foreground bg-blue-50/30 dark:bg-blue-950/10">Δ</th>
+                          <th className="px-2 py-2 text-right text-[11px] font-bold text-blue-700 dark:text-blue-300 bg-blue-200/60 dark:bg-blue-900/40">Δ</th>
                         )}
                         {wmsMap.size > 0 && (
-                          <th className="px-3 py-2 text-right text-[11px] font-medium text-muted-foreground whitespace-nowrap border-l border-border bg-emerald-50/30 dark:bg-emerald-950/10">Esp.</th>
+                          <th className="px-2 py-2 text-right text-[11px] font-semibold text-foreground/70 whitespace-nowrap border-l border-border bg-emerald-50/60 dark:bg-emerald-950/20">Esp.</th>
                         )}
                         {Array.from({ length: maxContagem }, (_, i) => i + 1).map((c) => (
-                          <th key={c} className={`px-3 py-2 text-right text-[11px] font-medium text-muted-foreground whitespace-nowrap bg-emerald-50/30 dark:bg-emerald-950/10 ${wmsMap.size === 0 && c === 1 ? "border-l border-border" : ""}`}>
+                          <th key={c} className={`px-2 py-2 text-right text-[11px] font-semibold text-foreground/70 whitespace-nowrap bg-emerald-50/60 dark:bg-emerald-950/20 ${wmsMap.size === 0 && c === 1 ? "border-l border-border" : ""}`}>
                             {c}ª Ctg
                           </th>
                         ))}
                         {wmsMap.size > 0 && (
-                          <th className="px-3 py-2 text-right text-[11px] font-medium text-muted-foreground bg-emerald-50/30 dark:bg-emerald-950/10">Δ</th>
+                          <th className="px-2 py-2 text-right text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-200/60 dark:bg-emerald-900/40">Δ</th>
                         )}
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-border/50">
+                    <tbody className="divide-y divide-border/60">
                       {itensFiltrados.map(({ item, pick, pbl, complementar, naoContado }) => {
                         const wmsLoaded = wmsMap.size > 0;
                         const deltaCell = (delta: number | null, divergente: boolean, semContagem: boolean) => {
-                          if (semContagem) return <span className="text-muted-foreground/30 text-xs">—</span>;
-                          if (divergente) return <AlertTriangle className="inline h-3.5 w-3.5 text-amber-500" title="Contagens divergentes" />;
-                          if (delta === null) return <span className="text-muted-foreground/40 text-xs">—</span>;
+                          if (semContagem) return <span className="text-muted-foreground/60 text-xs">—</span>;
+                          if (divergente) return <span title="Contagens divergentes"><AlertTriangle className="inline h-3.5 w-3.5 text-amber-500" /></span>;
+                          if (delta === null) return <span className="text-muted-foreground/60 text-xs">—</span>;
                           if (delta === 0) return <span className="text-emerald-600 dark:text-emerald-400 font-bold">0</span>;
                           return <span className={`font-bold ${delta > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"}`}>{delta > 0 ? `+${delta}` : delta}</span>;
                         };
+                        const deltaTotal =
+                          (pick.delta ?? 0) + (pbl.delta ?? 0);
+                        const semQualquer = item.pickingContagens.size === 0 && item.pblContagens.size === 0;
                         return (
-                          <tr key={item.sku} className={complementar ? "bg-violet-500/8 hover:bg-violet-500/12" : "hover:bg-muted/20"}>
-                            <td className="px-3 py-2 font-mono text-xs font-medium">
+                          <tr key={item.sku} className={complementar ? "bg-violet-500/10 hover:bg-violet-500/15" : "hover:bg-muted/30"}>
+                            <td className="px-3 py-2 font-mono text-xs font-semibold text-foreground">
                               <div className="flex items-center gap-1 flex-wrap">
                                 {item.sku}
                                 {complementar && (
-                                  <span className="text-[9px] px-1 py-0.5 rounded bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 font-sans font-semibold">⇄</span>
+                                  <span className="text-[9px] px-1 py-0.5 rounded bg-violet-100 dark:bg-violet-900/50 text-violet-700 dark:text-violet-200 font-sans font-semibold">⇄</span>
                                 )}
                                 {naoContado && (
-                                  <span className="text-[9px] px-1 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 font-sans font-medium">não contado</span>
+                                  <span className="text-[9px] px-1 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-200 font-sans font-medium">não contado</span>
                                 )}
                               </div>
                             </td>
-                            <td className="px-3 py-2 text-xs text-muted-foreground max-w-[160px] truncate" title={item.descricao}>
-                              {item.descricao || <span className="italic">—</span>}
+                            <td className="px-3 py-2 text-xs text-foreground/75 max-w-[160px] truncate" title={item.descricao}>
+                              {item.descricao || <span className="italic text-muted-foreground/60">—</span>}
                             </td>
                             {/* Picking */}
                             {wmsLoaded && (
-                              <td className="px-3 py-2 text-right tabular-nums text-xs text-muted-foreground border-l border-border">
-                                {item.pickingWms > 0 ? item.pickingWms : <span className="text-muted-foreground/40">—</span>}
+                              <td className="px-2 py-2 text-right tabular-nums text-xs text-foreground/70 border-l border-border bg-blue-50/30 dark:bg-blue-950/10">
+                                {item.pickingWms > 0 ? item.pickingWms : <span className="text-muted-foreground/50">—</span>}
                               </td>
                             )}
                             {Array.from({ length: maxContagem }, (_, i) => i + 1).map((c) => (
-                              <td key={c} className={`px-3 py-2 text-right tabular-nums font-semibold ${!wmsLoaded && c === 1 ? "border-l border-border" : ""} ${pick.divergente ? "text-amber-600 dark:text-amber-400" : ""}`}>
-                                {item.pickingContagens.has(c) ? item.pickingContagens.get(c) : <span className="text-muted-foreground/25">—</span>}
+                              <td key={c} className={`px-2 py-2 text-right tabular-nums font-semibold bg-blue-50/30 dark:bg-blue-950/10 ${!wmsLoaded && c === 1 ? "border-l border-border" : ""} ${pick.divergente ? "text-amber-600 dark:text-amber-400" : "text-foreground"}`}>
+                                {item.pickingContagens.has(c) ? item.pickingContagens.get(c) : <span className="text-muted-foreground/50 font-normal">—</span>}
                               </td>
                             ))}
                             {wmsLoaded && (
-                              <td className="px-3 py-2 text-right tabular-nums">
+                              <td className="px-2 py-2 text-right tabular-nums bg-blue-100/40 dark:bg-blue-900/20">
                                 {deltaCell(pick.delta, pick.divergente, item.pickingContagens.size === 0)}
                               </td>
                             )}
                             {/* PBL */}
                             {wmsLoaded && (
-                              <td className="px-3 py-2 text-right tabular-nums text-xs text-muted-foreground border-l border-border">
-                                {item.pblWms > 0 ? item.pblWms : <span className="text-muted-foreground/40">—</span>}
+                              <td className="px-2 py-2 text-right tabular-nums text-xs text-foreground/70 border-l border-border bg-emerald-50/30 dark:bg-emerald-950/10">
+                                {item.pblWms > 0 ? item.pblWms : <span className="text-muted-foreground/50">—</span>}
                               </td>
                             )}
                             {Array.from({ length: maxContagem }, (_, i) => i + 1).map((c) => (
-                              <td key={c} className={`px-3 py-2 text-right tabular-nums font-semibold ${!wmsLoaded && c === 1 ? "border-l border-border" : ""} ${pbl.divergente ? "text-amber-600 dark:text-amber-400" : ""}`}>
-                                {item.pblContagens.has(c) ? item.pblContagens.get(c) : <span className="text-muted-foreground/25">—</span>}
+                              <td key={c} className={`px-2 py-2 text-right tabular-nums font-semibold bg-emerald-50/30 dark:bg-emerald-950/10 ${!wmsLoaded && c === 1 ? "border-l border-border" : ""} ${pbl.divergente ? "text-amber-600 dark:text-amber-400" : "text-foreground"}`}>
+                                {item.pblContagens.has(c) ? item.pblContagens.get(c) : <span className="text-muted-foreground/50 font-normal">—</span>}
                               </td>
                             ))}
                             {wmsLoaded && (
-                              <td className="px-3 py-2 text-right tabular-nums">
+                              <td className="px-2 py-2 text-right tabular-nums bg-emerald-100/40 dark:bg-emerald-900/20">
                                 {deltaCell(pbl.delta, pbl.divergente, item.pblContagens.size === 0)}
+                              </td>
+                            )}
+                            {/* Δ Total */}
+                            {wmsLoaded && (
+                              <td className="px-3 py-2 text-right tabular-nums border-l-2 border-border bg-violet-100/40 dark:bg-violet-950/30">
+                                {semQualquer ? (
+                                  <span className="text-muted-foreground/60 text-xs">—</span>
+                                ) : pick.divergente || pbl.divergente ? (
+                                  <span title="Contagens divergentes"><AlertTriangle className="inline h-3.5 w-3.5 text-amber-500" /></span>
+                                ) : deltaTotal === 0 ? (
+                                  <span className="text-emerald-600 dark:text-emerald-400 font-bold">0</span>
+                                ) : (
+                                  <span className={`font-bold ${deltaTotal > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"}`}>
+                                    {deltaTotal > 0 ? `+${deltaTotal}` : deltaTotal}
+                                  </span>
+                                )}
                               </td>
                             )}
                           </tr>

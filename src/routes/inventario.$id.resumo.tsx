@@ -375,7 +375,14 @@ function TelaResumo() {
       }
     });
     return [...rows].sort((a, b) => {
+      const aPick = Math.abs(a.pick.delta ?? 0);
+      const bPick = Math.abs(b.pick.delta ?? 0);
+      const aPbl = Math.abs(a.pbl.delta ?? 0);
+      const bPbl = Math.abs(b.pbl.delta ?? 0);
       if (ordemItem === "diferenca" && a.magnitude !== b.magnitude) return b.magnitude - a.magnitude;
+      if (ordemItem === "dif_picking" && aPick !== bPick) return bPick - aPick;
+      if (ordemItem === "dif_pbl" && aPbl !== bPbl) return bPbl - aPbl;
+      if (ordemItem === "dif_total" && (aPick + aPbl) !== (bPick + bPbl)) return (bPick + bPbl) - (aPick + aPbl);
       return a.item.sku.localeCompare(b.item.sku);
     });
   }, [itensComputados, filtroItemProd, filtroItemStatus, filtroItemLocal, ordemItem]);

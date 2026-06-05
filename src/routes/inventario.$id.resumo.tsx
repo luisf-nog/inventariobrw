@@ -6,10 +6,12 @@ import { sincronizarEstoqueWms } from "@/lib/wms.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   ArrowLeft, Download, FileSpreadsheet, Lock, AlertTriangle,
-  Trash2, Users, Clock, Activity, BarChart2, RefreshCw, MapPin, RotateCcw, ClipboardCheck,
-  Pencil, Check, X,
+  Trash2, Users, Package, CheckCircle2, BarChart2,
+  RefreshCw, MapPin, RotateCcw, ClipboardCheck, Pencil, Check, X,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { toast } from "sonner";
@@ -37,22 +39,28 @@ type Linha = {
   lido_em: string;
 };
 
-function tempoRelativo(iso: string) {
-  const diff = Date.now() - new Date(iso).getTime();
-  const min = Math.floor(diff / 60000);
-  if (min < 1) return "agora";
-  if (min < 60) return `${min}min atrás`;
-  const h = Math.floor(min / 60);
-  if (h < 24) return `${h}h atrás`;
-  return new Date(iso).toLocaleDateString("pt-BR");
-}
+type ConsolidadoItem = {
+  codigo_posicao: string;
+  sku: string;
+  descricao: string;
+  contagens: Map<number, number>;
+  operadores: string[];
+  divergente: boolean;
+};
 
 type WmsRow = { codigo_posicao: string; sku: string; qtde_unidades: number };
 
-// Regras globais de classificação de posição (12 chars):
+function getNivel(codigo: string): string {
+  const c = codigo.trim();
+  if (c.length === 10) return c.slice(5, 7);
+  if (c.length === 12) return c.slice(6, 8);
+  return "??";
+}
+
+// Regras de classificação de posição (12 chars):
 //   ruas 001–899 → estoque normal (picking porta-pallet)
 //   rua 995      → PBL (flowrack)
-//   ruas técnicas/especiais 990+ (exceto PBL) são IGNORADAS nas análises.
+//   ruas técnicas 990+ (exceto PBL) são IGNORADAS nas análises.
 export const RUA_PBL = "995";
 export function isPosicaoNormal(c: string) {
   if (c.length !== 12) return false;
@@ -88,16 +96,25 @@ function TelaResumo() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
   const sincronizarWms = useServerFn(sincronizarEstoqueWms);
+
   const [inv, setInv] = useState<{ nome: string; status: string; wms_sincronizado_em: string | null } | null>(null);
   const [linhas, setLinhas] = useState<Linha[]>([]);
-  const [wmsMap, setWmsMap] = useState<Map<string, number>>(new Map()); // key = "pos|sku" => qtde WMS
-  const [skuPositions, setSkuPositions] = useState<Map<string, Set<string>>>(new Map()); // sku => Set<posições no WMS>
+  const [wmsMap, setWmsMap] = useState<Map<string, number>>(new Map());
+  const [skuPositions, setSkuPositions] = useState<Map<string, Set<string>>>(new Map());
   const [loading, setLoading] = useState(true);
   const [sincronizando, setSincronizando] = useState(false);
+
+  // Filtros da aba Consolidado
+  const [filtroConsPos, setFiltroConsPos] = useState("");
+  const [filtroConsProd, setFiltroConsProd] = useState("");
+  const [filtroConsStatus, setFiltroConsStatus] = useState<"todos" | "ok" | "divergentes">("todos");
+
+  // Filtros da aba Leituras Brutas
   const [filtroPos, setFiltroPos] = useState("");
   const [filtroProd, setFiltroProd] = useState("");
   const [filtroOp, setFiltroOp] = useState("");
   const [soDivergentes, setSoDivergentes] = useState(false);
+
   const [isAdmin, setIsAdmin] = useState(false);
   const [confirmandoEncerrar, setConfirmandoEncerrar] = useState(false);
   const [confirmTexto, setConfirmTexto] = useState("");
@@ -107,9 +124,6 @@ function TelaResumo() {
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [editValor, setEditValor] = useState<string>("");
   const [salvandoId, setSalvandoId] = useState<string | null>(null);
-
-
-
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setIsAdmin(!!data.user));
@@ -153,11 +167,9 @@ function TelaResumo() {
       ]);
       setRecontagens((recData ?? []) as any);
 
-
       if (cancelado) return;
       if (error) { toast.error(error.message); setLoading(false); return; }
 
-      // Agrega WMS por (posicao, sku) e indexa sku -> posições
       const wm = new Map<string, number>();
       const sp = new Map<string, Set<string>>();
       for (const w of wmsData) {
@@ -175,6 +187,7 @@ function TelaResumo() {
       const skuPorCodigo = (codigo: string) => eanToSku[codigo.replace(/\D/g, "")] ?? codigo;
       const descricoes = await buscarDescricoesPorSku(codigosLidos.map(skuPorCodigo));
       if (cancelado) return;
+
       const ls: Linha[] = (data ?? []).map((d: any) => ({
         id: d.id,
         codigo_posicao: d.codigo_posicao,
@@ -187,14 +200,13 @@ function TelaResumo() {
         operador_nome: d.operadores?.nome ?? null,
         lido_em: d.lido_em,
       }));
+
       setLinhas(ls);
       setLoading(false);
     };
 
-
     carregar();
 
-    // Realtime: recarrega ao detectar mudanças nas leituras deste inventário
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
     const agendarRecarga = () => {
       if (debounceTimer) clearTimeout(debounceTimer);
@@ -203,21 +215,9 @@ function TelaResumo() {
 
     const channel = supabase
       .channel(`resumo-${id}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "leituras", filter: `inventario_id=eq.${id}` },
-        agendarRecarga,
-      )
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "inventarios", filter: `id=eq.${id}` },
-        agendarRecarga,
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "recontagens_solicitadas", filter: `inventario_id=eq.${id}` },
-        agendarRecarga,
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "leituras", filter: `inventario_id=eq.${id}` }, agendarRecarga)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "inventarios", filter: `id=eq.${id}` }, agendarRecarga)
+      .on("postgres_changes", { event: "*", schema: "public", table: "recontagens_solicitadas", filter: `inventario_id=eq.${id}` }, agendarRecarga)
       .subscribe();
 
     return () => {
@@ -227,27 +227,67 @@ function TelaResumo() {
     };
   }, [id]);
 
-  /* ── Métricas derivadas ─────────────────────────────────────────── */
+  /* ── Consolidado: uma linha por posição+produto ─────────────────── */
 
-  const divergencias = useMemo(() => {
-    const set = new Set<string>();
-    const byPP = new Map<string, Map<number, number>>();
+  const consolidado = useMemo((): ConsolidadoItem[] => {
+    const map = new Map<string, ConsolidadoItem>();
     for (const l of linhas) {
-      const k = `${l.codigo_posicao}|${l.sku}`;
-      const m = byPP.get(k) ?? new Map();
-      m.set(l.numero_contagem, (m.get(l.numero_contagem) ?? 0) + l.quantidade);
-      byPP.set(k, m);
-    }
-    for (const [k, m] of byPP) {
-      if (m.size > 1) {
-        const vals = Array.from(m.values());
-        if (vals.some((v) => v !== vals[0])) set.add(k);
+      const key = `${l.codigo_posicao}|${l.sku}`;
+      if (!map.has(key)) {
+        map.set(key, {
+          codigo_posicao: l.codigo_posicao,
+          sku: l.sku,
+          descricao: l.descricao,
+          contagens: new Map(),
+          operadores: [],
+          divergente: false,
+        });
+      }
+      const item = map.get(key)!;
+      item.contagens.set(l.numero_contagem, (item.contagens.get(l.numero_contagem) ?? 0) + l.quantidade);
+      if (l.operador_nome && !item.operadores.includes(l.operador_nome)) {
+        item.operadores.push(l.operador_nome);
       }
     }
-    return set;
+    for (const item of map.values()) {
+      if (item.contagens.size > 1) {
+        const vals = Array.from(item.contagens.values());
+        item.divergente = vals.some((v) => v !== vals[0]);
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => a.codigo_posicao.localeCompare(b.codigo_posicao));
   }, [linhas]);
 
-  // Quantidade convergente por (posicao, sku) — soma da última contagem se convergir
+  const maxContagem = useMemo(
+    () => linhas.reduce((m, l) => Math.max(m, l.numero_contagem), 1),
+    [linhas],
+  );
+
+  const divergencias = useMemo(
+    () => consolidado.filter((i) => i.divergente),
+    [consolidado],
+  );
+
+  const divergenciasSet = useMemo(
+    () => new Set(divergencias.map((i) => `${i.codigo_posicao}|${i.sku}`)),
+    [divergencias],
+  );
+
+  const porProduto = useMemo(() => {
+    const map = new Map<string, {
+      sku: string; descricao: string; posicoes: number; totalConfirmado: number; temDivergencia: boolean;
+    }>();
+    for (const item of consolidado) {
+      const ex = map.get(item.sku) ?? { sku: item.sku, descricao: item.descricao, posicoes: 0, totalConfirmado: 0, temDivergencia: false };
+      ex.posicoes += 1;
+      if (!item.divergente) ex.totalConfirmado += Array.from(item.contagens.values())[0];
+      ex.temDivergencia = ex.temDivergencia || item.divergente;
+      map.set(item.sku, ex);
+    }
+    return Array.from(map.values()).sort((a, b) => b.totalConfirmado - a.totalConfirmado);
+  }, [consolidado]);
+
+  // Quantidade convergente por (posicao, sku) — base para comparação WMS
   const contadoPorPS = useMemo(() => {
     const byPP = new Map<string, Map<number, number>>();
     for (const l of linhas) {
@@ -265,7 +305,7 @@ function TelaResumo() {
     return out;
   }, [linhas]);
 
-  // Divergências WMS: contado convergente ≠ WMS, OU posição contada não existe no WMS
+  // Divergências vs WMS: contado convergente ≠ WMS, ou posição não existe no WMS
   const divergenciasWms = useMemo(() => {
     const set = new Set<string>();
     if (wmsMap.size === 0) return set;
@@ -277,16 +317,10 @@ function TelaResumo() {
     return set;
   }, [contadoPorPS, wmsMap]);
 
-  // "Fora do lugar": SKU bipado em uma posição onde o WMS NÃO tem este SKU,
-  // mas o WMS conhece este SKU em outra(s) posição(ões) COMPATÍVEIS.
-  // Compatibilidade:
-  //   - Contada PBL (rua 995) → só sugere PBL.
-  //   - Picking normal (ruas 001–899) → só sugere normal nível 1 (chars 8-9 == "01")
-  //     e nunca PBL nem ruas técnicas/especiais 990+.
+  // SKU bipado em posição onde WMS não tem este SKU, mas tem em posição compatível
   const foraDoLugar = useMemo(() => {
     const isNivel1Normal = (c: string) => isPosicaoNormal(c) && c.slice(8, 10) === "01";
     const isPblValida = (c: string) => isPosicaoPbl(c);
-
     const map = new Map<string, string[]>();
     if (skuPositions.size === 0) return map;
     for (const [k, info] of contadoPorPS) {
@@ -305,7 +339,7 @@ function TelaResumo() {
     return map;
   }, [contadoPorPS, skuPositions]);
 
-  // Recontagens pendentes: solicitação ainda não atendida (sem leitura com contagem > origem)
+  // Recontagens pendentes: solicitação ainda não atendida
   const recontagensPendentes = useMemo(() => {
     const maxContPorPS = new Map<string, number>();
     for (const l of linhas) {
@@ -321,62 +355,66 @@ function TelaResumo() {
     return pend;
   }, [recontagens, linhas]);
 
+  const stats = useMemo(() => {
+    const totalUnidades = consolidado
+      .filter((i) => !i.divergente)
+      .reduce((sum, i) => sum + Array.from(i.contagens.values())[0], 0);
 
+    const posicoesAereas = new Set(
+      linhas.filter((l) => getNivel(l.codigo_posicao) !== "01").map((l) => l.codigo_posicao),
+    ).size;
 
-  const stats = useMemo(() => ({
-    posicoes: new Set(linhas.map((l) => l.codigo_posicao)).size,
-    leituras: linhas.length,
-    operadores: new Set(linhas.map((l) => l.operador_id).filter(Boolean)).size,
-    divergencias: divergencias.size,
-    divergenciasWms: divergenciasWms.size,
-    foraDoLugar: foraDoLugar.size,
-  }), [linhas, divergencias, divergenciasWms, foraDoLugar]);
-
+    return {
+      posicoes: new Set(linhas.map((l) => l.codigo_posicao)).size,
+      posicoesAereas,
+      produtos: new Set(linhas.map((l) => l.sku)).size,
+      totalUnidades,
+      operadores: new Set(linhas.map((l) => l.operador_id).filter(Boolean)).size,
+      divergencias: divergencias.length,
+      divergenciasWms: divergenciasWms.size,
+      foraDoLugar: foraDoLugar.size,
+    };
+  }, [linhas, consolidado, divergencias, divergenciasWms, foraDoLugar]);
 
   const statsPorOperador = useMemo(() => {
-    const map = new Map<string, { nome: string; count: number; ultima: string }>();
+    const map = new Map<string, { nome: string; count: number }>();
     for (const l of linhas) {
       const nome = l.operador_nome ?? "Desconhecido";
-      const ex = map.get(nome) ?? { nome, count: 0, ultima: "" };
-      map.set(nome, {
-        nome,
-        count: ex.count + 1,
-        ultima: l.lido_em > ex.ultima ? l.lido_em : ex.ultima,
-      });
+      const ex = map.get(nome) ?? { nome, count: 0 };
+      map.set(nome, { nome, count: ex.count + 1 });
     }
     return Array.from(map.values()).sort((a, b) => b.count - a.count);
   }, [linhas]);
 
-  const statsPorContagem = useMemo(() => {
-    const map = new Map<number, number>();
-    for (const l of linhas) map.set(l.numero_contagem, (map.get(l.numero_contagem) ?? 0) + 1);
-    return Array.from(map.entries()).sort((a, b) => a[0] - b[0]);
-  }, [linhas]);
+  /* ── Filtros ────────────────────────────────────────────────────── */
 
-  const ultimasLeituras = useMemo(() =>
-    [...linhas].sort((a, b) => b.lido_em.localeCompare(a.lido_em)).slice(0, 15),
-  [linhas]);
+  const consolidadoFiltrado = useMemo(() => {
+    const fp = filtroConsPos.trim().toUpperCase();
+    const fr = filtroConsProd.trim().toUpperCase();
+    return consolidado.filter((item) => {
+      if (fp && !item.codigo_posicao.includes(fp)) return false;
+      if (fr && !(item.sku.includes(fr) || item.descricao.toUpperCase().includes(fr))) return false;
+      if (filtroConsStatus === "ok" && item.divergente) return false;
+      if (filtroConsStatus === "divergentes" && !item.divergente) return false;
+      return true;
+    });
+  }, [consolidado, filtroConsPos, filtroConsProd, filtroConsStatus]);
 
-  const ritmoUltimaHora = useMemo(() => {
-    const corte = new Date(Date.now() - 3_600_000).toISOString();
-    return linhas.filter((l) => l.lido_em >= corte).length;
-  }, [linhas]);
-
-  /* ── Filtro ─────────────────────────────────────────────────────── */
-
-  const filtrados = linhas.filter((l) => {
-    const fp = filtroPos.trim().toUpperCase();
-    const fr = filtroProd.trim().toUpperCase();
-    const fo = filtroOp.trim().toLowerCase();
-    if (fp && !l.codigo_posicao.includes(fp)) return false;
-    if (fr && !(l.sku.includes(fr) || l.descricao.toUpperCase().includes(fr) || l.codigo_produto.includes(fr))) return false;
-    if (fo && !(l.operador_nome ?? "").toLowerCase().includes(fo)) return false;
-    if (soDivergentes) {
-      const k = `${l.codigo_posicao}|${l.sku}`;
-      if (!divergencias.has(k) && !divergenciasWms.has(k) && !foraDoLugar.has(k)) return false;
-    }
-    return true;
-  });
+  const filtrados = useMemo(() => {
+    return linhas.filter((l) => {
+      const fp = filtroPos.trim().toUpperCase();
+      const fr = filtroProd.trim().toUpperCase();
+      const fo = filtroOp.trim().toLowerCase();
+      if (fp && !l.codigo_posicao.includes(fp)) return false;
+      if (fr && !(l.sku.includes(fr) || l.descricao.toUpperCase().includes(fr) || l.codigo_produto.includes(fr))) return false;
+      if (fo && !(l.operador_nome ?? "").toLowerCase().includes(fo)) return false;
+      if (soDivergentes) {
+        const k = `${l.codigo_posicao}|${l.sku}`;
+        if (!divergenciasSet.has(k) && !divergenciasWms.has(k) && !foraDoLugar.has(k)) return false;
+      }
+      return true;
+    });
+  }, [linhas, filtroPos, filtroProd, filtroOp, soDivergentes, divergenciasSet, divergenciasWms, foraDoLugar]);
 
   /* ── Ações ──────────────────────────────────────────────────────── */
 
@@ -386,7 +424,6 @@ function TelaResumo() {
     try {
       const r = await sincronizarWms({ data: { inventarioId: id } });
       toast.success(`WMS sincronizado: ${r.posicoes} posições, ${r.total_inserido} registros`);
-      // Recarrega snapshot
       const wmsData = await fetchWmsSnapshot(id);
       const wm = new Map<string, number>();
       const sp = new Map<string, Set<string>>();
@@ -407,7 +444,6 @@ function TelaResumo() {
     }
   }
 
-
   async function deletarLeitura(leituraId: string) {
     const { error } = await supabase.from("leituras").delete().eq("id", leituraId);
     if (error) { toast.error(error.message); return; }
@@ -426,16 +462,10 @@ function TelaResumo() {
   async function salvarEdicao(l: Linha) {
     const cleaned = editValor.replace(",", ".").trim();
     const novo = Number(cleaned);
-    if (!Number.isFinite(novo) || novo < 0) {
-      toast.error("Quantidade inválida");
-      return;
-    }
+    if (!Number.isFinite(novo) || novo < 0) { toast.error("Quantidade inválida"); return; }
     if (novo === l.quantidade) { setEditandoId(null); return; }
     setSalvandoId(l.id);
-    const { error } = await supabase
-      .from("leituras")
-      .update({ quantidade: novo })
-      .eq("id", l.id);
+    const { error } = await supabase.from("leituras").update({ quantidade: novo }).eq("id", l.id);
     setSalvandoId(null);
     if (error) { toast.error(error.message); return; }
     setLinhas((prev) => prev.map((x) => x.id === l.id ? { ...x, quantidade: novo } : x));
@@ -461,8 +491,6 @@ function TelaResumo() {
     if (data) setRecontagens((prev) => [...prev, data as any]);
     toast.success("Recontagem solicitada — operador verá no coletor");
   }
-
-
 
   function exportarCSV() {
     const header = ["posicao", "produto", "descricao", "contagem", "quantidade", "qtd_wms", "diferenca", "operador", "lido_em"];
@@ -499,7 +527,7 @@ function TelaResumo() {
         "Status WMS": wms === undefined ? "Não está no WMS" : wms === l.quantidade ? "OK" : l.quantidade > wms ? "Sobra" : "Falta",
         Operador: l.operador_nome ?? "",
         "Lido em": new Date(l.lido_em).toLocaleString("pt-BR"),
-        "Divergência entre contagens": divergencias.has(k) ? "Sim" : "",
+        "Divergência entre contagens": divergenciasSet.has(k) ? "Sim" : "",
         "Fora do lugar (posição correta WMS)": foraDoLugar.get(k)?.map(formatPosicaoDisplay).join(" | ") ?? "",
       };
     });
@@ -509,10 +537,12 @@ function TelaResumo() {
     XLSX.writeFile(wb, `${nome}.xlsx`);
   }
 
-
   async function encerrar() {
     if (confirmTexto.trim().toUpperCase() !== "ENCERRAR") { toast.error("Digite ENCERRAR para confirmar"); return; }
-    const { error } = await supabase.from("inventarios").update({ status: "encerrado", encerrado_em: new Date().toISOString() }).eq("id", id);
+    const { error } = await supabase
+      .from("inventarios")
+      .update({ status: "encerrado", encerrado_em: new Date().toISOString() })
+      .eq("id", id);
     if (error) { toast.error(error.message); return; }
     toast.success("Inventário encerrado");
     setConfirmandoEncerrar(false);
@@ -520,6 +550,7 @@ function TelaResumo() {
   }
 
   const maxOpCount = statsPorOperador[0]?.count ?? 1;
+  const colunasCons = 3 + maxContagem + 2;
 
   /* ── Render ─────────────────────────────────────────────────────── */
   return (
@@ -542,25 +573,12 @@ function TelaResumo() {
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <Button
-              onClick={() => navigate({ to: "/inventario/$id/analise", params: { id } })}
-              variant="default"
-              size="sm"
-              className="gap-1.5"
-              title="Análise final por posição"
-            >
+            <Button onClick={() => navigate({ to: "/inventario/$id/analise", params: { id } })} variant="default" size="sm" className="gap-1.5" title="Análise final por posição">
               <ClipboardCheck className="h-4 w-4" />
               <span className="hidden sm:inline">Análise</span>
             </Button>
             {isAdmin && (
-              <Button
-                onClick={sincronizar}
-                disabled={sincronizando}
-                variant="outline"
-                size="sm"
-                className="gap-1.5"
-                title="Sincronizar estoque do WMS"
-              >
+              <Button onClick={sincronizar} disabled={sincronizando} variant="outline" size="sm" className="gap-1.5" title="Sincronizar estoque do WMS">
                 <RefreshCw className={`h-4 w-4 ${sincronizando ? "animate-spin" : ""}`} />
                 <span className="hidden sm:inline">WMS</span>
               </Button>
@@ -575,7 +593,6 @@ function TelaResumo() {
               <FileSpreadsheet className="h-4 w-4" />
             </Button>
           </div>
-
         </div>
       </header>
 
@@ -584,26 +601,50 @@ function TelaResumo() {
         {/* ── KPIs ───────────────────────────────────────────────── */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
           <div className="rounded-xl border border-border bg-card p-4">
-            <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1.5"><BarChart2 className="h-3.5 w-3.5" /> Posições</p>
+            <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1.5">
+              <BarChart2 className="h-3.5 w-3.5" /> Posições
+            </p>
             <p className="text-3xl font-bold tabular-nums">{stats.posicoes}</p>
-          </div>
-          <div className="rounded-xl border border-border bg-card p-4">
-            <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1.5"><Activity className="h-3.5 w-3.5" /> Leituras</p>
-            <p className="text-3xl font-bold tabular-nums">{stats.leituras}</p>
-            {ritmoUltimaHora > 0 && (
-              <p className="text-[10px] text-primary mt-1">{ritmoUltimaHora} na última hora</p>
+            {stats.posicoesAereas > 0 && (
+              <p className="text-[10px] text-amber-500 mt-1 flex items-center gap-1">
+                <AlertTriangle className="h-3 w-3" />
+                {stats.posicoesAereas} aérea{stats.posicoesAereas > 1 ? "s" : ""}
+              </p>
             )}
           </div>
+
           <div className="rounded-xl border border-border bg-card p-4">
-            <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1.5"><Users className="h-3.5 w-3.5" /> Operadores</p>
-            <p className="text-3xl font-bold tabular-nums">{stats.operadores}</p>
+            <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1.5">
+              <Package className="h-3.5 w-3.5" /> Produtos
+            </p>
+            <p className="text-3xl font-bold tabular-nums">{stats.produtos}</p>
+            <p className="text-[10px] text-muted-foreground mt-1">
+              {stats.totalUnidades.toLocaleString("pt-BR")} unidades confirmadas
+            </p>
           </div>
+
+          <div className="rounded-xl border border-border bg-card p-4">
+            <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1.5">
+              <Users className="h-3.5 w-3.5" /> Operadores
+            </p>
+            <p className="text-3xl font-bold tabular-nums">{stats.operadores}</p>
+            <p className="text-[10px] text-muted-foreground mt-1">{linhas.length} leituras brutas</p>
+          </div>
+
           <div className={`rounded-xl border p-4 ${stats.divergencias > 0 ? "border-destructive/40 bg-destructive/5" : "border-border bg-card"}`}>
             <p className={`text-xs mb-1 flex items-center gap-1.5 ${stats.divergencias > 0 ? "text-destructive" : "text-muted-foreground"}`}>
               <AlertTriangle className="h-3.5 w-3.5" /> Entre contagens
             </p>
-            <p className={`text-3xl font-bold tabular-nums ${stats.divergencias > 0 ? "text-destructive" : ""}`}>{stats.divergencias}</p>
+            <p className={`text-3xl font-bold tabular-nums ${stats.divergencias > 0 ? "text-destructive" : ""}`}>
+              {stats.divergencias}
+            </p>
+            {stats.divergencias === 0 && consolidado.length > 0 && (
+              <p className="text-[10px] text-emerald-600 mt-1 flex items-center gap-1">
+                <CheckCircle2 className="h-3 w-3" /> Tudo confirmado
+              </p>
+            )}
           </div>
+
           <div className={`rounded-xl border p-4 ${stats.divergenciasWms > 0 ? "border-amber-500/40 bg-amber-500/5" : "border-border bg-card"}`}>
             <p className={`text-xs mb-1 flex items-center gap-1.5 ${stats.divergenciasWms > 0 ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`}>
               <AlertTriangle className="h-3.5 w-3.5" /> vs WMS
@@ -612,6 +653,7 @@ function TelaResumo() {
               {wmsMap.size === 0 ? "—" : stats.divergenciasWms}
             </p>
           </div>
+
           <div className={`rounded-xl border p-4 ${stats.foraDoLugar > 0 ? "border-violet-500/40 bg-violet-500/5" : "border-border bg-card"}`}>
             <p className={`text-xs mb-1 flex items-center gap-1.5 ${stats.foraDoLugar > 0 ? "text-violet-600 dark:text-violet-400" : "text-muted-foreground"}`}>
               <MapPin className="h-3.5 w-3.5" /> Fora do lugar
@@ -622,25 +664,243 @@ function TelaResumo() {
           </div>
         </div>
 
+        {/* ── Alerta posições aéreas ─────────────────────────────── */}
+        {stats.posicoesAereas > 0 && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 px-4 py-3 flex items-start gap-3">
+            <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-amber-800 dark:text-amber-400">
+                {stats.posicoesAereas} posição{stats.posicoesAereas !== 1 ? "ões" : ""} aérea{stats.posicoesAereas !== 1 ? "s" : ""} detectada{stats.posicoesAereas !== 1 ? "s" : ""}
+              </p>
+              <p className="text-xs text-amber-700 dark:text-amber-500 mt-0.5">
+                Posições com nível diferente de 01 (ex: 02, 03…) foram encontradas. Verifique se houve leituras acidentais de posições aéreas.
+              </p>
+            </div>
+          </div>
+        )}
 
-        {/* ── Dashboard ──────────────────────────────────────────── */}
-        {!loading && linhas.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* ── Tabs de análise ────────────────────────────────────── */}
+        {loading ? (
+          <div className="flex justify-center py-16">
+            <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : (
+          <Tabs defaultValue="consolidado">
+            <TabsList className="flex-wrap h-auto gap-1 mb-4">
+              <TabsTrigger value="consolidado">
+                Consolidado
+                <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0 h-4">{consolidado.length}</Badge>
+              </TabsTrigger>
+              <TabsTrigger value="produtos">
+                Por Produto
+                <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0 h-4">{porProduto.length}</Badge>
+              </TabsTrigger>
+              <TabsTrigger value="divergencias">
+                Divergências
+                {stats.divergencias > 0 ? (
+                  <Badge variant="destructive" className="ml-1.5 text-[10px] px-1.5 py-0 h-4">{stats.divergencias}</Badge>
+                ) : (
+                  <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0 h-4">0</Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="operadores">Operadores</TabsTrigger>
+              <TabsTrigger value="leituras">Leituras Brutas</TabsTrigger>
+            </TabsList>
 
-            {/* Por operador */}
-            <div className="rounded-xl border border-border bg-card p-4 space-y-3">
-              <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
-                <Users className="h-3.5 w-3.5" /> Por operador
-              </h3>
-              <div className="space-y-3">
+            {/* ── Consolidado ────────────────────────────────────── */}
+            <TabsContent value="consolidado" className="space-y-3">
+              <p className="text-xs text-muted-foreground">
+                Uma linha por combinação posição + produto. Colunas de contagem mostram a quantidade registrada em cada rodada.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <Input placeholder="Filtrar posição" value={filtroConsPos} onChange={(e) => setFiltroConsPos(e.target.value)} />
+                <Input placeholder="Filtrar produto / descrição" value={filtroConsProd} onChange={(e) => setFiltroConsProd(e.target.value)} />
+                <Select value={filtroConsStatus} onValueChange={(v) => setFiltroConsStatus(v as typeof filtroConsStatus)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos</SelectItem>
+                    <SelectItem value="ok">Apenas confirmados</SelectItem>
+                    <SelectItem value="divergentes">Apenas divergentes</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {consolidadoFiltrado.length !== consolidado.length && (
+                <p className="text-[11px] text-muted-foreground">Exibindo {consolidadoFiltrado.length} de {consolidado.length}</p>
+              )}
+              <div className="rounded-xl border border-border overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-secondary/50 border-b border-border">
+                      <tr>
+                        <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Posição</th>
+                        <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Produto</th>
+                        <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide hidden md:table-cell">Descrição</th>
+                        {Array.from({ length: maxContagem }, (_, i) => i + 1).map((ctg) => (
+                          <th key={ctg} className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap">
+                            {ctg}ª Ctg
+                          </th>
+                        ))}
+                        <th className="px-3 py-2.5 text-center text-xs font-medium text-muted-foreground uppercase tracking-wide">Status</th>
+                        <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide hidden lg:table-cell">Operador(es)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/50">
+                      {consolidadoFiltrado.map((item) => (
+                        <tr key={`${item.codigo_posicao}|${item.sku}`} className={item.divergente ? "bg-destructive/8" : "hover:bg-muted/20"}>
+                          <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{formatPosicaoDisplay(item.codigo_posicao)}</td>
+                          <td className="px-3 py-2 font-mono text-xs font-medium">{item.sku}</td>
+                          <td className="px-3 py-2 text-xs max-w-[200px] truncate text-muted-foreground hidden md:table-cell" title={item.descricao}>
+                            {item.descricao || <span className="italic">—</span>}
+                          </td>
+                          {Array.from({ length: maxContagem }, (_, i) => i + 1).map((ctg) => (
+                            <td key={ctg} className="px-3 py-2 text-right tabular-nums font-semibold">
+                              {item.contagens.has(ctg) ? item.contagens.get(ctg) : <span className="text-muted-foreground/40">—</span>}
+                            </td>
+                          ))}
+                          <td className="px-3 py-2 text-center">
+                            {item.divergente ? (
+                              <Badge variant="destructive" className="text-[10px] px-1.5 py-0 h-4 gap-1">
+                                <AlertTriangle className="h-2.5 w-2.5" /> Divergente
+                              </Badge>
+                            ) : (
+                              <Badge className="text-[10px] px-1.5 py-0 h-4 gap-1 text-emerald-700 bg-emerald-50 border-emerald-200 dark:bg-emerald-950/30 dark:border-emerald-800 dark:text-emerald-400 hover:bg-emerald-50">
+                                <CheckCircle2 className="h-2.5 w-2.5" /> OK
+                              </Badge>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-xs text-muted-foreground hidden lg:table-cell truncate max-w-[140px]">
+                            {item.operadores.join(", ") || "—"}
+                          </td>
+                        </tr>
+                      ))}
+                      {consolidadoFiltrado.length === 0 && (
+                        <tr>
+                          <td colSpan={colunasCons} className="px-3 py-10 text-center text-muted-foreground text-sm">Nenhum resultado</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </TabsContent>
+
+            {/* ── Por Produto ────────────────────────────────────── */}
+            <TabsContent value="produtos">
+              <p className="text-xs text-muted-foreground mb-3">
+                Total confirmado por SKU somando todas as posições. Posições com divergência não entram no total.
+              </p>
+              <div className="rounded-xl border border-border overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-secondary/50 border-b border-border">
+                      <tr>
+                        <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Produto</th>
+                        <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide hidden md:table-cell">Descrição</th>
+                        <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide">Posições</th>
+                        <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide">Total Unid.</th>
+                        <th className="px-3 py-2.5 text-center text-xs font-medium text-muted-foreground uppercase tracking-wide">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/50">
+                      {porProduto.map((prod) => (
+                        <tr key={prod.sku} className={prod.temDivergencia ? "bg-destructive/8" : "hover:bg-muted/20"}>
+                          <td className="px-3 py-2 font-mono text-xs font-medium">{prod.sku}</td>
+                          <td className="px-3 py-2 text-xs text-muted-foreground max-w-[240px] truncate hidden md:table-cell" title={prod.descricao}>
+                            {prod.descricao || <span className="italic">—</span>}
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums">{prod.posicoes}</td>
+                          <td className="px-3 py-2 text-right font-bold tabular-nums">
+                            {prod.totalConfirmado > 0 ? prod.totalConfirmado.toLocaleString("pt-BR") : <span className="text-muted-foreground text-xs italic">—</span>}
+                          </td>
+                          <td className="px-3 py-2 text-center">
+                            {prod.temDivergencia ? (
+                              <Badge variant="destructive" className="text-[10px] px-1.5 py-0 h-4 gap-1">
+                                <AlertTriangle className="h-2.5 w-2.5" /> Divergente
+                              </Badge>
+                            ) : (
+                              <Badge className="text-[10px] px-1.5 py-0 h-4 gap-1 text-emerald-700 bg-emerald-50 border-emerald-200 dark:bg-emerald-950/30 dark:border-emerald-800 dark:text-emerald-400 hover:bg-emerald-50">
+                                <CheckCircle2 className="h-2.5 w-2.5" /> OK
+                              </Badge>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                      {porProduto.length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="px-3 py-10 text-center text-muted-foreground text-sm">Nenhum dado</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </TabsContent>
+
+            {/* ── Divergências ───────────────────────────────────── */}
+            <TabsContent value="divergencias">
+              {divergencias.length === 0 ? (
+                <div className="rounded-xl border border-border bg-card p-12 text-center">
+                  <CheckCircle2 className="h-10 w-10 text-emerald-500 mx-auto mb-3" />
+                  <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Nenhuma divergência encontrada</p>
+                  <p className="text-xs text-muted-foreground mt-1">Todas as posições contadas em múltiplas rodadas apresentam a mesma quantidade.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-xs text-muted-foreground">
+                    {divergencias.length} posição+produto com contagens divergentes — revise e decida qual valor é o correto antes de encerrar.
+                  </p>
+                  <div className="rounded-xl border border-border overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-secondary/50 border-b border-border">
+                          <tr>
+                            <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Posição</th>
+                            <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Produto</th>
+                            <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide hidden md:table-cell">Descrição</th>
+                            {Array.from({ length: maxContagem }, (_, i) => i + 1).map((ctg) => (
+                              <th key={ctg} className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap">
+                                {ctg}ª Ctg
+                              </th>
+                            ))}
+                            <th className="px-3 py-2.5 text-right text-xs font-medium text-destructive uppercase tracking-wide">Diferença</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border/50">
+                          {divergencias.map((item) => {
+                            const vals = Array.from(item.contagens.values());
+                            const diff = Math.max(...vals) - Math.min(...vals);
+                            return (
+                              <tr key={`${item.codigo_posicao}|${item.sku}`} className="bg-destructive/8">
+                                <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{formatPosicaoDisplay(item.codigo_posicao)}</td>
+                                <td className="px-3 py-2 font-mono text-xs font-medium">{item.sku}</td>
+                                <td className="px-3 py-2 text-xs text-muted-foreground max-w-[200px] truncate hidden md:table-cell" title={item.descricao}>
+                                  {item.descricao || <span className="italic">—</span>}
+                                </td>
+                                {Array.from({ length: maxContagem }, (_, i) => i + 1).map((ctg) => (
+                                  <td key={ctg} className="px-3 py-2 text-right tabular-nums font-bold">
+                                    {item.contagens.has(ctg) ? item.contagens.get(ctg) : <span className="text-muted-foreground/40">—</span>}
+                                  </td>
+                                ))}
+                                <td className="px-3 py-2 text-right font-bold tabular-nums text-destructive">±{diff}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </TabsContent>
+
+            {/* ── Operadores ─────────────────────────────────────── */}
+            <TabsContent value="operadores">
+              <div className="rounded-xl border border-border bg-card p-4 space-y-3 max-w-lg">
                 {statsPorOperador.map((op) => (
                   <div key={op.nome}>
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-sm font-medium truncate max-w-[60%]">{op.nome}</span>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className="text-xs text-muted-foreground">{tempoRelativo(op.ultima)}</span>
-                        <span className="text-sm font-bold tabular-nums">{op.count}</span>
-                      </div>
+                      <span className="text-sm font-bold tabular-nums">{op.count} leituras</span>
                     </div>
                     <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
                       <div
@@ -650,290 +910,195 @@ function TelaResumo() {
                     </div>
                   </div>
                 ))}
+                {statsPorOperador.length === 0 && <p className="text-xs text-muted-foreground">Sem dados</p>}
               </div>
-            </div>
+            </TabsContent>
 
-            {/* Por contagem + últimas leituras */}
-            <div className="space-y-4">
-              {/* Distribuição por contagem */}
-              <div className="rounded-xl border border-border bg-card p-4 space-y-3">
-                <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
-                  <BarChart2 className="h-3.5 w-3.5" /> Distribuição por contagem
-                </h3>
-                <div className="flex flex-wrap gap-2">
-                  {statsPorContagem.map(([ctg, count]) => (
-                    <div key={ctg} className="flex-1 min-w-[80px] rounded-lg border border-border bg-secondary/40 px-3 py-2 text-center">
-                      <p className="text-[10px] text-muted-foreground uppercase">
-                        {ctg}ª contagem
-                      </p>
-                      <p className="text-xl font-bold tabular-nums mt-0.5">{count}</p>
-                    </div>
-                  ))}
-                  {statsPorContagem.length === 0 && (
-                    <p className="text-xs text-muted-foreground">Sem dados</p>
-                  )}
+            {/* ── Leituras Brutas ────────────────────────────────── */}
+            <TabsContent value="leituras" className="space-y-3">
+              <p className="text-xs text-muted-foreground">
+                Registros brutos — uma linha por scan. Use a aba Consolidado para a visão analítica.
+              </p>
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 flex-1">
+                  <Input placeholder="Filtrar posição" value={filtroPos} onChange={(e) => setFiltroPos(e.target.value)} />
+                  <Input placeholder="Filtrar produto" value={filtroProd} onChange={(e) => setFiltroProd(e.target.value)} />
+                  <Input placeholder="Filtrar operador" value={filtroOp} onChange={(e) => setFiltroOp(e.target.value)} />
+                </div>
+                <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none shrink-0">
+                  <input
+                    type="checkbox"
+                    checked={soDivergentes}
+                    onChange={(e) => setSoDivergentes(e.target.checked)}
+                    className="h-3.5 w-3.5 accent-destructive"
+                  />
+                  Só divergentes
+                </label>
+              </div>
+              {filtrados.length !== linhas.length && (
+                <p className="text-[11px] text-muted-foreground">Exibindo {filtrados.length} de {linhas.length} leituras</p>
+              )}
+              <div className="rounded-xl border border-border overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-secondary/50 border-b border-border">
+                      <tr>
+                        <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Posição</th>
+                        <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Produto</th>
+                        <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide hidden md:table-cell">Descrição</th>
+                        <th className="px-3 py-2.5 text-center text-xs font-medium text-muted-foreground uppercase tracking-wide">Ctg</th>
+                        <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide">Qtd</th>
+                        <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide">WMS</th>
+                        <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide">Δ</th>
+                        <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide hidden sm:table-cell">Operador</th>
+                        <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide hidden lg:table-cell">Horário</th>
+                        <th className="px-3 py-2.5 w-20" />
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/50">
+                      {filtrados.map((l) => {
+                        const k = `${l.codigo_posicao}|${l.sku}`;
+                        const div = divergenciasSet.has(k);
+                        const wms = wmsMap.get(k);
+                        const dif = wms !== undefined ? l.quantidade - wms : null;
+                        const divWms = divergenciasWms.has(k);
+                        const posCorretas = foraDoLugar.get(k);
+                        const fora = !!posCorretas;
+                        const confirmando = deletandoId === l.id;
+                        const recPend = recontagensPendentes.has(k);
+                        const solicitando = solicitandoId === l.id;
+                        const editando = editandoId === l.id;
+                        const salvando = salvandoId === l.id;
+                        return (
+                          <tr
+                            key={l.id}
+                            className={`${div ? "bg-destructive/8" : fora ? "bg-violet-500/8" : divWms ? "bg-amber-500/8" : "hover:bg-muted/20"} ${confirmando ? "bg-destructive/15" : ""} ${recPend ? "ring-1 ring-inset ring-sky-500/30" : ""}`}
+                          >
+                            <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{formatPosicaoDisplay(l.codigo_posicao)}</td>
+                            <td className="px-3 py-2 font-mono text-xs font-medium">
+                              <div className="flex items-center gap-1 flex-wrap">
+                                <span>{l.sku}</span>
+                                {fora && (
+                                  <span
+                                    className="inline-flex items-center gap-0.5 text-[9px] px-1 py-0.5 rounded bg-violet-500/15 text-violet-700 dark:text-violet-300 font-sans font-medium cursor-help"
+                                    title={`WMS diz que este SKU está em: ${posCorretas!.map(formatPosicaoDisplay).join(", ")}`}
+                                  >
+                                    <MapPin className="h-2.5 w-2.5" /> fora do lugar
+                                  </span>
+                                )}
+                                {recPend && (
+                                  <span className="inline-flex items-center gap-0.5 text-[9px] px-1 py-0.5 rounded bg-sky-500/15 text-sky-700 dark:text-sky-300 font-sans font-medium">
+                                    <RotateCcw className="h-2.5 w-2.5" /> recontagem pedida
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-3 py-2 text-xs max-w-[200px] truncate text-muted-foreground hidden md:table-cell" title={l.descricao}>
+                              {l.descricao || <span className="italic">—</span>}
+                            </td>
+                            <td className="px-3 py-2 text-center text-xs">{l.numero_contagem}</td>
+                            <td className="px-3 py-2 text-right font-semibold">
+                              {editando ? (
+                                <div className="flex items-center gap-1 justify-end">
+                                  <Input
+                                    type="number"
+                                    inputMode="decimal"
+                                    autoFocus
+                                    value={editValor}
+                                    onChange={(e) => setEditValor(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") { e.preventDefault(); void salvarEdicao(l); }
+                                      if (e.key === "Escape") { e.preventDefault(); setEditandoId(null); }
+                                    }}
+                                    className="h-7 w-20 text-right text-xs px-1"
+                                    disabled={salvando}
+                                  />
+                                  <Button size="icon" variant="ghost" className="h-7 w-7 text-emerald-600" disabled={salvando} onClick={() => void salvarEdicao(l)} title="Salvar">
+                                    <Check className="h-3.5 w-3.5" />
+                                  </Button>
+                                  <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground" disabled={salvando} onClick={() => setEditandoId(null)} title="Cancelar">
+                                    <X className="h-3.5 w-3.5" />
+                                  </Button>
+                                </div>
+                              ) : (
+                                <>
+                                  {l.quantidade}
+                                  {div && <AlertTriangle className="inline h-3 w-3 ml-1 text-destructive" />}
+                                </>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">
+                              {wmsMap.size === 0 ? <span className="text-[10px]">—</span> : wms === undefined ? <span className="text-[10px] italic">não há</span> : wms}
+                            </td>
+                            <td className={`px-3 py-2 text-right tabular-nums font-medium ${dif === null ? "" : dif === 0 ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`}>
+                              {dif === null ? "" : dif > 0 ? `+${dif}` : dif}
+                            </td>
+                            <td className="px-3 py-2 text-xs text-muted-foreground hidden sm:table-cell">{l.operador_nome ?? "—"}</td>
+                            <td className="px-3 py-2 text-xs text-muted-foreground tabular-nums hidden lg:table-cell">
+                              {new Date(l.lido_em).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                            </td>
+                            <td className="px-2 py-1 text-right">
+                              {confirmando ? (
+                                <div className="flex items-center gap-1 justify-end">
+                                  <Button size="sm" variant="destructive" className="h-7 px-2 text-[11px]" onClick={() => deletarLeitura(l.id)}>Excluir</Button>
+                                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground" onClick={() => setDeletandoId(null)}>✕</Button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-0.5 justify-end">
+                                  <Button
+                                    size="icon" variant="ghost"
+                                    className={`h-7 w-7 ${recPend ? "text-sky-600 dark:text-sky-400" : "text-muted-foreground hover:text-sky-600"}`}
+                                    title={recPend ? "Recontagem já solicitada (aguardando operador)" : isAdmin ? "Solicitar recontagem deste item" : "Faça login como supervisor"}
+                                    disabled={recPend || solicitando}
+                                    onClick={() => {
+                                      if (!isAdmin) { toast.error("Faça login como supervisor para solicitar recontagem"); return; }
+                                      void solicitarRecontagem(l);
+                                    }}
+                                  >
+                                    <RotateCcw className={`h-3.5 w-3.5 ${solicitando ? "animate-spin" : ""}`} />
+                                  </Button>
+                                  <Button
+                                    size="icon" variant="ghost"
+                                    className="h-7 w-7 text-muted-foreground hover:text-primary"
+                                    title={isAdmin ? "Editar quantidade" : "Faça login como supervisor para editar"}
+                                    onClick={() => iniciarEdicao(l)}
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </Button>
+                                  <Button
+                                    size="icon" variant="ghost"
+                                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                    title={isAdmin ? "Excluir leitura" : "Faça login como supervisor para excluir"}
+                                    onClick={() => {
+                                      if (!isAdmin) { toast.error("Faça login como supervisor para excluir leituras"); return; }
+                                      setDeletandoId(l.id);
+                                    }}
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {filtrados.length === 0 && (
+                        <tr>
+                          <td colSpan={10} className="px-3 py-10 text-center text-muted-foreground text-sm">Nenhuma leitura</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               </div>
-
-              {/* Ritmo — leituras por hora (últimas 8h) */}
-              <RitmoPorHora linhas={linhas} />
-            </div>
-          </div>
+            </TabsContent>
+          </Tabs>
         )}
-
-        {/* ── Atividade recente ───────────────────────────────────── */}
-        {!loading && ultimasLeituras.length > 0 && (
-          <div className="rounded-xl border border-border bg-card overflow-hidden">
-            <div className="px-4 py-3 border-b border-border flex items-center gap-1.5">
-              <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-              <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Atividade recente</h3>
-              <span className="ml-auto text-[10px] text-muted-foreground">últimas {ultimasLeituras.length} leituras</span>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead className="bg-secondary/30 border-b border-border/50">
-                  <tr>
-                    <th className="px-3 py-2 text-left text-muted-foreground font-medium">Horário</th>
-                    <th className="px-3 py-2 text-left text-muted-foreground font-medium">Operador</th>
-                    <th className="px-3 py-2 text-left text-muted-foreground font-medium">Posição</th>
-                    <th className="px-3 py-2 text-left text-muted-foreground font-medium">Produto</th>
-                    <th className="px-3 py-2 text-right text-muted-foreground font-medium">Qtd</th>
-                    <th className="px-3 py-2 text-center text-muted-foreground font-medium">Ctg</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/40">
-                  {ultimasLeituras.map((l) => (
-                    <tr key={l.id} className="hover:bg-muted/10">
-                      <td className="px-3 py-2 tabular-nums text-muted-foreground whitespace-nowrap">
-                        {new Date(l.lido_em).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-                      </td>
-                      <td className="px-3 py-2 max-w-[100px] truncate">{l.operador_nome ?? "—"}</td>
-                      <td className="px-3 py-2 font-mono whitespace-nowrap">{formatPosicaoDisplay(l.codigo_posicao)}</td>
-                      <td className="px-3 py-2 font-mono font-medium">{l.sku}</td>
-                      <td className="px-3 py-2 text-right font-bold">{l.quantidade}</td>
-                      <td className="px-3 py-2 text-center text-muted-foreground">{l.numero_contagem}ª</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* ── Filtros + Tabela completa ───────────────────────────── */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Todas as leituras {filtrados.length !== linhas.length && `(${filtrados.length} de ${linhas.length})`}
-            </h3>
-            <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={soDivergentes}
-                onChange={(e) => setSoDivergentes(e.target.checked)}
-                className="h-3.5 w-3.5 accent-destructive"
-              />
-              Só divergentes
-            </label>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-            <Input placeholder="Filtrar posição" value={filtroPos} onChange={(e) => setFiltroPos(e.target.value)} />
-            <Input placeholder="Filtrar produto" value={filtroProd} onChange={(e) => setFiltroProd(e.target.value)} />
-            <Input placeholder="Filtrar operador" value={filtroOp} onChange={(e) => setFiltroOp(e.target.value)} />
-          </div>
-
-
-          {loading ? (
-            <div className="flex justify-center py-16">
-              <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-            </div>
-          ) : (
-            <div className="rounded-xl border border-border overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-secondary/50 border-b border-border">
-                    <tr>
-                      <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Posição</th>
-                      <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Produto</th>
-                      <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide hidden md:table-cell">Descrição</th>
-                      <th className="px-3 py-2.5 text-center text-xs font-medium text-muted-foreground uppercase tracking-wide">Ctg</th>
-                      <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide">Qtd</th>
-                      <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide">WMS</th>
-                      <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide">Δ</th>
-                      <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide hidden sm:table-cell">Operador</th>
-                      <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide hidden lg:table-cell">Horário</th>
-                      <th className="px-3 py-2.5 w-20" />
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/50">
-                    {filtrados.map((l) => {
-                      const k = `${l.codigo_posicao}|${l.sku}`;
-                      const div = divergencias.has(k);
-                      const wms = wmsMap.get(k);
-                      const dif = wms !== undefined ? l.quantidade - wms : null;
-                      const divWms = divergenciasWms.has(k);
-                      const posCorretas = foraDoLugar.get(k);
-                      const fora = !!posCorretas;
-                      const confirmando = deletandoId === l.id;
-                      const recPend = recontagensPendentes.has(k);
-                      const solicitando = solicitandoId === l.id;
-                      const editando = editandoId === l.id;
-                      const salvando = salvandoId === l.id;
-                      return (
-                        <tr key={l.id} className={`${div ? "bg-destructive/8" : fora ? "bg-violet-500/8" : divWms ? "bg-amber-500/8" : "hover:bg-muted/20"} ${confirmando ? "bg-destructive/15" : ""} ${recPend ? "ring-1 ring-inset ring-sky-500/30" : ""}`}>
-                          <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{formatPosicaoDisplay(l.codigo_posicao)}</td>
-                          <td className="px-3 py-2 font-mono text-xs font-medium">
-                            <div className="flex items-center gap-1 flex-wrap">
-                              <span>{l.sku}</span>
-                              {fora && (
-                                <span
-                                  className="inline-flex items-center gap-0.5 text-[9px] px-1 py-0.5 rounded bg-violet-500/15 text-violet-700 dark:text-violet-300 font-sans font-medium cursor-help"
-                                  title={`WMS diz que este SKU está em: ${posCorretas!.map(formatPosicaoDisplay).join(", ")}`}
-                                >
-                                  <MapPin className="h-2.5 w-2.5" /> fora do lugar
-                                </span>
-                              )}
-                              {recPend && (
-                                <span className="inline-flex items-center gap-0.5 text-[9px] px-1 py-0.5 rounded bg-sky-500/15 text-sky-700 dark:text-sky-300 font-sans font-medium">
-                                  <RotateCcw className="h-2.5 w-2.5" /> recontagem pedida
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-3 py-2 text-xs max-w-[200px] truncate text-muted-foreground hidden md:table-cell" title={l.descricao}>
-                            {l.descricao || <span className="italic">—</span>}
-                          </td>
-                          <td className="px-3 py-2 text-center text-xs">{l.numero_contagem}</td>
-                          <td className="px-3 py-2 text-right font-semibold">
-                            {editando ? (
-                              <div className="flex items-center gap-1 justify-end">
-                                <Input
-                                  type="number"
-                                  inputMode="decimal"
-                                  autoFocus
-                                  value={editValor}
-                                  onChange={(e) => setEditValor(e.target.value)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter") { e.preventDefault(); void salvarEdicao(l); }
-                                    if (e.key === "Escape") { e.preventDefault(); setEditandoId(null); }
-                                  }}
-                                  className="h-7 w-20 text-right text-xs px-1"
-                                  disabled={salvando}
-                                />
-                                <Button size="icon" variant="ghost" className="h-7 w-7 text-emerald-600" disabled={salvando} onClick={() => void salvarEdicao(l)} title="Salvar">
-                                  <Check className="h-3.5 w-3.5" />
-                                </Button>
-                                <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground" disabled={salvando} onClick={() => setEditandoId(null)} title="Cancelar">
-                                  <X className="h-3.5 w-3.5" />
-                                </Button>
-                              </div>
-                            ) : (
-                              <>
-                                {l.quantidade}
-                                {div && <AlertTriangle className="inline h-3 w-3 ml-1 text-destructive" />}
-                              </>
-                            )}
-                          </td>
-                          <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">
-                            {wmsMap.size === 0 ? <span className="text-[10px]">—</span> : wms === undefined ? <span className="text-[10px] italic">não há</span> : wms}
-                          </td>
-                          <td className={`px-3 py-2 text-right tabular-nums font-medium ${
-                            dif === null ? "" : dif === 0 ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"
-                          }`}>
-                            {dif === null ? "" : dif > 0 ? `+${dif}` : dif}
-                          </td>
-                          <td className="px-3 py-2 text-xs text-muted-foreground hidden sm:table-cell">{l.operador_nome ?? "—"}</td>
-                          <td className="px-3 py-2 text-xs text-muted-foreground tabular-nums hidden lg:table-cell">
-                            {new Date(l.lido_em).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
-                          </td>
-                          <td className="px-2 py-1 text-right">
-                            {confirmando ? (
-                              <div className="flex items-center gap-1 justify-end">
-                                <Button
-                                  size="sm"
-                                  variant="destructive"
-                                  className="h-7 px-2 text-[11px]"
-                                  onClick={() => deletarLeitura(l.id)}
-                                >
-                                  Excluir
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="h-7 w-7 p-0 text-muted-foreground"
-                                  onClick={() => setDeletandoId(null)}
-                                >
-                                  ✕
-                                </Button>
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-0.5 justify-end">
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className={`h-7 w-7 ${recPend ? "text-sky-600 dark:text-sky-400" : "text-muted-foreground hover:text-sky-600"}`}
-                                  title={recPend ? "Recontagem já solicitada (aguardando operador)" : isAdmin ? "Solicitar recontagem deste item" : "Faça login como supervisor"}
-                                  disabled={recPend || solicitando}
-                                  onClick={() => {
-                                    if (!isAdmin) {
-                                      toast.error("Faça login como supervisor para solicitar recontagem");
-                                      return;
-                                    }
-                                    void solicitarRecontagem(l);
-                                  }}
-                                >
-                                  <RotateCcw className={`h-3.5 w-3.5 ${solicitando ? "animate-spin" : ""}`} />
-                                </Button>
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="h-7 w-7 text-muted-foreground hover:text-primary"
-                                  title={isAdmin ? "Editar quantidade" : "Faça login como supervisor para editar"}
-                                  onClick={() => iniciarEdicao(l)}
-                                >
-                                  <Pencil className="h-3.5 w-3.5" />
-                                </Button>
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                                  title={isAdmin ? "Excluir leitura" : "Faça login como supervisor para excluir"}
-                                  onClick={() => {
-                                    if (!isAdmin) {
-                                      toast.error("Faça login como supervisor para excluir leituras");
-                                      return;
-                                    }
-                                    setDeletandoId(l.id);
-                                  }}
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
-                              </div>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                    {filtrados.length === 0 && (
-                      <tr>
-                        <td colSpan={10} className="px-3 py-10 text-center text-muted-foreground text-sm">
-                          Nenhuma leitura
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-
-              </div>
-            </div>
-          )}
-        </div>
 
         {/* ── Encerrar ───────────────────────────────────────────── */}
         {isAdmin && inv?.status === "aberto" && (
           <div className="pt-2 flex items-center gap-3">
-            <Button variant="destructive" size="lg" className="gap-2"
-              onClick={() => { setConfirmandoEncerrar(true); setConfirmTexto(""); }}>
+            <Button variant="destructive" size="lg" className="gap-2" onClick={() => { setConfirmandoEncerrar(true); setConfirmTexto(""); }}>
               <Lock className="h-4 w-4" /> Encerrar inventário
             </Button>
           </div>
@@ -946,7 +1111,6 @@ function TelaResumo() {
         )}
       </main>
 
-      {/* AlertDialog de encerramento */}
       <AlertDialog open={confirmandoEncerrar} onOpenChange={setConfirmandoEncerrar}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -964,54 +1128,6 @@ function TelaResumo() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
-  );
-}
-
-/* ── Gráfico de barras por hora ──────────────────────────────────── */
-function RitmoPorHora({ linhas }: { linhas: Linha[] }) {
-  const dados = useMemo(() => {
-    const agora = Date.now();
-    const barras: { hora: string; count: number }[] = [];
-    for (let h = 7; h >= 0; h--) {
-      const inicio = new Date(agora - (h + 1) * 3_600_000).toISOString();
-      const fim = new Date(agora - h * 3_600_000).toISOString();
-      const count = linhas.filter((l) => l.lido_em >= inicio && l.lido_em < fim).length;
-      const label = new Date(agora - h * 3_600_000).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-      barras.push({ hora: label, count });
-    }
-    return barras;
-  }, [linhas]);
-
-  const max = Math.max(...dados.map((d) => d.count), 1);
-  const total = dados.reduce((s, d) => s + d.count, 0);
-  if (total === 0) return null;
-
-  return (
-    <div className="rounded-xl border border-border bg-card p-4 space-y-3">
-      <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
-        <Activity className="h-3.5 w-3.5" /> Ritmo (últimas 8h)
-      </h3>
-      <div className="flex items-end gap-1 h-16">
-        {dados.map((d, i) => (
-          <div key={i} className="flex-1 flex flex-col items-center gap-1 group">
-            <div className="w-full flex items-end justify-center" style={{ height: 48 }}>
-              <div
-                className="w-full rounded-sm bg-primary/70 group-hover:bg-primary transition-all"
-                style={{ height: `${Math.max((d.count / max) * 48, d.count > 0 ? 3 : 0)}px` }}
-                title={`${d.hora}: ${d.count} leituras`}
-              />
-            </div>
-            {d.count > 0 && (
-              <span className="text-[9px] text-muted-foreground tabular-nums leading-none">{d.count}</span>
-            )}
-          </div>
-        ))}
-      </div>
-      <div className="flex justify-between text-[9px] text-muted-foreground">
-        <span>{dados[0]?.hora}</span>
-        <span>{dados[dados.length - 1]?.hora}</span>
-      </div>
     </div>
   );
 }

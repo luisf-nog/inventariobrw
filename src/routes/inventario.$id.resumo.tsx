@@ -728,17 +728,27 @@ function TelaResumo() {
 
   function exportarItensXLSX() {
     const wmsLoaded = wmsMap.size > 0;
+    // Espelha exatamente as colunas da tabela "Por Item" (incluindo Δ Total).
     const dados = itensFiltrados.map((r) => {
+      const { item, pick, pbl } = r;
       const row: Record<string, string | number> = {
-        Produto: r.item.sku,
-        Descrição: r.item.descricao,
+        Produto: item.sku,
+        Descrição: item.descricao,
       };
-      if (wmsLoaded) row["Picking esperado (WMS)"] = r.item.pickingWms;
-      for (let c = 1; c <= maxContagem; c++) row[`Picking ${c}ª ctg`] = r.item.pickingContagens.get(c) ?? "";
-      if (wmsLoaded) row["Picking Δ"] = r.pick.divergente ? "divergente" : r.pick.delta ?? "";
-      if (wmsLoaded) row["PBL esperado (WMS)"] = r.item.pblWms;
-      for (let c = 1; c <= maxContagem; c++) row[`PBL ${c}ª ctg`] = r.item.pblContagens.get(c) ?? "";
-      if (wmsLoaded) row["PBL Δ"] = r.pbl.divergente ? "divergente" : r.pbl.delta ?? "";
+      if (wmsLoaded) row["Picking esperado (WMS)"] = item.pickingWms;
+      for (let c = 1; c <= maxContagem; c++) row[`Picking ${c}ª ctg`] = item.pickingContagens.get(c) ?? "";
+      if (wmsLoaded) row["Picking Δ"] = pick.divergente ? "divergente" : pick.delta ?? "";
+      if (wmsLoaded) row["PBL esperado (WMS)"] = item.pblWms;
+      for (let c = 1; c <= maxContagem; c++) row[`PBL ${c}ª ctg`] = item.pblContagens.get(c) ?? "";
+      if (wmsLoaded) row["PBL Δ"] = pbl.divergente ? "divergente" : pbl.delta ?? "";
+      if (wmsLoaded) {
+        const semQualquer = item.pickingContagens.size === 0 && item.pblContagens.size === 0;
+        row["Δ Total"] = semQualquer
+          ? ""
+          : pick.divergente || pbl.divergente
+            ? "divergente"
+            : (pick.delta ?? 0) + (pbl.delta ?? 0);
+      }
       row["Status"] = statusItem(r);
       return row;
     });
@@ -748,18 +758,12 @@ function TelaResumo() {
     XLSX.writeFile(wb, `analise-itens-${inv?.nome ?? id}-${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
 
-  // Saldo total esperado no WMS para uma posição pendente
-  function saldoWmsPos(itensWms: { sku: string; qtd: number }[]) {
-    return itensWms.reduce((s, i) => s + i.qtd, 0);
-  }
-
   function exportarNaoContadas() {
     const dados = cobertura.naoContadas.map((p) => ({
       Posição: formatPosicaoDisplay(p.pos),
       "Posição (código)": p.pos,
       Local: p.pbl ? "PBL" : "Picking",
-      "Itens esperados (WMS)": p.itensWms.map((i) => `${i.sku} (${i.qtd})`).join(", "),
-      "Saldo WMS": saldoWmsPos(p.itensWms),
+      "Itens esperados (WMS)": p.itensWms.map((i) => i.sku).join(", "),
     }));
     const ws = XLSX.utils.json_to_sheet(dados);
     const wb = XLSX.utils.book_new();
@@ -773,12 +777,32 @@ function TelaResumo() {
       "Posição (código)": p.pos,
       Local: p.pbl ? "PBL" : "Picking",
       "Contagens feitas": p.rounds.map((r) => `${r}ª`).join(", "),
-      "Itens esperados (WMS)": p.itensWms.map((i) => `${i.sku} (${i.qtd})`).join(", "),
+      "Itens esperados (WMS)": p.itensWms.map((i) => i.sku).join(", "),
     }));
     const ws = XLSX.utils.json_to_sheet(dados);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Falta 2a contagem");
     XLSX.writeFile(wb, `falta-2a-contagem-${inv?.nome ?? id}-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  }
+
+  function exportarDivergentes() {
+    const dados = divergencias.map((item) => {
+      const vals = Array.from(item.contagens.values());
+      const diff = Math.max(...vals) - Math.min(...vals);
+      const row: Record<string, string | number> = {
+        Posição: formatPosicaoDisplay(item.codigo_posicao),
+        "Posição (código)": item.codigo_posicao,
+        Produto: item.sku,
+        Descrição: item.descricao,
+      };
+      for (let c = 1; c <= maxContagem; c++) row[`${c}ª contagem`] = item.contagens.get(c) ?? "";
+      row["Diferença"] = diff;
+      return row;
+    });
+    const ws = XLSX.utils.json_to_sheet(dados);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Contagens divergentes");
+    XLSX.writeFile(wb, `contagens-divergentes-${inv?.nome ?? id}-${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
 
   async function encerrar() {
@@ -1237,6 +1261,14 @@ function TelaResumo() {
                       <AlertTriangle className="h-4 w-4 text-destructive" />
                       <h3 className="text-sm font-semibold">Contagens divergentes</h3>
                       <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">{divergencias.length}</Badge>
+                      <Button
+                        onClick={exportarDivergentes}
+                        disabled={divergencias.length === 0}
+                        variant="outline" size="sm" className="ml-auto gap-1.5 h-8"
+                        title="Exporta as posições com contagens divergentes entre rodadas"
+                      >
+                        <FileSpreadsheet className="h-4 w-4" /> Exportar
+                      </Button>
                     </div>
                     {divergencias.length === 0 ? (
                       <p className="text-xs text-emerald-600 dark:text-emerald-400">Nenhuma divergência entre rodadas de contagem.</p>

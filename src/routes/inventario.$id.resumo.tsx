@@ -915,7 +915,7 @@ function TelaResumo() {
                         const wmsLoaded = wmsMap.size > 0;
                         const deltaCell = (delta: number | null, divergente: boolean, semContagem: boolean) => {
                           if (semContagem) return <span className="text-muted-foreground/30 text-xs">—</span>;
-                          if (divergente) return <AlertTriangle className="inline h-3.5 w-3.5 text-amber-500"><title>Contagens divergentes</title></AlertTriangle>;
+                          if (divergente) return <span title="Contagens divergentes"><AlertTriangle className="inline h-3.5 w-3.5 text-amber-500" /></span>;
                           if (delta === null) return <span className="text-muted-foreground/40 text-xs">—</span>;
                           if (delta === 0) return <span className="text-emerald-600 dark:text-emerald-400 font-bold">0</span>;
                           return <span className={`font-bold ${delta > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"}`}>{delta > 0 ? `+${delta}` : delta}</span>;

@@ -90,9 +90,29 @@ export function isPosicaoConsiderada(c: string) {
   return isPosicaoNormal(c) || isPosicaoPbl(c);
 }
 
-function secaoInfo(contagens: Map<number, number>, wms: number, wmsLoaded: boolean) {
+// Valor confirmado de uma série de contagens pela regra da MAIORIA (moda):
+// - 0 contagens → nulo
+// - 1 contagem → o próprio valor (a falta de 2ª contagem é tratada à parte)
+// - 2+ contagens → o valor que mais se repete, desde que apareça ≥ 2 vezes e
+//   não haja empate na maior frequência. Senão, nulo (= divergente).
+function valorConfirmado(contagens: Map<number, number>): number | null {
   const vals = Array.from(contagens.values());
-  const confirmed = contagens.size > 0 && vals.every((v) => v === vals[0]) ? vals[0] : null;
+  if (vals.length === 0) return null;
+  if (vals.length === 1) return vals[0];
+  const freq = new Map<number, number>();
+  for (const v of vals) freq.set(v, (freq.get(v) ?? 0) + 1);
+  let melhor: number | null = null;
+  let melhorFreq = 0;
+  let empate = false;
+  for (const [v, f] of freq) {
+    if (f > melhorFreq) { melhor = v; melhorFreq = f; empate = false; }
+    else if (f === melhorFreq) { empate = true; }
+  }
+  return melhorFreq >= 2 && !empate ? melhor : null;
+}
+
+function secaoInfo(contagens: Map<number, number>, wms: number, wmsLoaded: boolean) {
+  const confirmed = valorConfirmado(contagens);
   const delta = wmsLoaded && confirmed !== null ? confirmed - wms : null;
   return { confirmed, delta, divergente: contagens.size > 1 && confirmed === null };
 }
@@ -325,10 +345,7 @@ function TelaResumo() {
       }
     }
     for (const item of map.values()) {
-      if (item.contagens.size > 1) {
-        const vals = Array.from(item.contagens.values());
-        item.divergente = vals.some((v) => v !== vals[0]);
-      }
+      item.divergente = item.contagens.size > 1 && valorConfirmado(item.contagens) === null;
     }
     return Array.from(map.values()).sort((a, b) => a.codigo_posicao.localeCompare(b.codigo_posicao));
   }, [linhas]);
@@ -483,9 +500,8 @@ function TelaResumo() {
     }
     const out = new Map<string, { qtd: number; convergente: boolean }>();
     for (const [k, m] of byPP) {
-      const vals = Array.from(m.values());
-      const convergente = vals.every((v) => v === vals[0]);
-      out.set(k, { qtd: vals[0] ?? 0, convergente });
+      const confirmado = valorConfirmado(m);
+      out.set(k, { qtd: confirmado ?? 0, convergente: confirmado !== null });
     }
     return out;
   }, [linhasAnalisadas]);
@@ -586,7 +602,7 @@ function TelaResumo() {
   const stats = useMemo(() => {
     const totalUnidades = consolidado
       .filter((i) => !i.divergente)
-      .reduce((sum, i) => sum + Array.from(i.contagens.values())[0], 0);
+      .reduce((sum, i) => sum + (valorConfirmado(i.contagens) ?? 0), 0);
 
     return {
       posicoes: new Set(linhasAnalisadas.map((l) => l.codigo_posicao)).size,
@@ -993,6 +1009,18 @@ function TelaResumo() {
                   onChange={(e) => setFiltroItemProd(e.target.value)}
                   className="max-w-xs h-8 text-sm"
                 />
+                <Button
+                  onClick={() => setFiltroItemStatus(filtroItemStatus === "divergente" ? "todos" : "divergente")}
+                  variant={filtroItemStatus === "divergente" ? "default" : "outline"}
+                  size="sm"
+                  className="gap-1.5 h-8"
+                  title="Mostrar só itens com divergência entre contagens"
+                >
+                  <AlertTriangle className="h-4 w-4" /> Entre contagens
+                  <Badge variant="secondary" className="ml-0.5 text-[10px] px-1.5 py-0 h-4">
+                    {itensComputados.filter((r) => r.pick.divergente || r.pbl.divergente).length}
+                  </Badge>
+                </Button>
                 <Select value={filtroItemStatus} onValueChange={(v) => setFiltroItemStatus(v as typeof filtroItemStatus)}>
                   <SelectTrigger className="h-8 w-[210px] text-sm"><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -1001,7 +1029,7 @@ function TelaResumo() {
                     <SelectItem value="complementar">Complementares (sobra ⇄ falta)</SelectItem>
                     <SelectItem value="sobra">Com sobra (vs WMS)</SelectItem>
                     <SelectItem value="falta">Com falta (vs WMS)</SelectItem>
-                    <SelectItem value="divergente">Contagens divergentes</SelectItem>
+                    <SelectItem value="divergente">Entre contagens (divergentes)</SelectItem>
                     <SelectItem value="naocontado">Não contados (esperados no WMS)</SelectItem>
                   </SelectContent>
                 </Select>

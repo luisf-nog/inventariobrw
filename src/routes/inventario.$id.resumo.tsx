@@ -72,36 +72,6 @@ type ItemRow = {
   magnitude: number;
 };
 
-/* ── Diagnóstico de divergências ──────────────────────────────────── */
-type CategoriaDiag = "falta_real" | "sobra_real" | "compensacao_parcial" | "realocacao" | "recontar";
-type StatusTratativa = "pendente" | "ajustado" | "recontar" | "aceito" | "investigando";
-
-type DiagRow = {
-  item: ItemAnalise;
-  pick: SecaoInfo;
-  pbl: SecaoInfo;
-  categoria: CategoriaDiag;
-  severidade: number;
-  total: number; // delta total (picking + PBL) vs WMS
-  foraDoLugar: boolean;
-};
-
-const CAT_INFO: Record<CategoriaDiag, { label: string; acao: string; sev: number; badge: string }> = {
-  falta_real: { label: "Falta real", acao: "Investigar saída / perda não lançada", sev: 5, badge: "bg-destructive/15 text-destructive" },
-  sobra_real: { label: "Sobra real", acao: "Investigar entrada não lançada", sev: 4, badge: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" },
-  compensacao_parcial: { label: "Compensação parcial", acao: "Ajustar endereço + investigar a diferença restante", sev: 3, badge: "bg-amber-500/15 text-amber-600 dark:text-amber-400" },
-  recontar: { label: "Recontar", acao: "Contagens não batem — solicitar recontagem", sev: 2, badge: "bg-orange-500/15 text-orange-600 dark:text-orange-400" },
-  realocacao: { label: "Realocação (saldo zero)", acao: "Ajustar endereço picking⇄PBL — sem impacto de estoque", sev: 1, badge: "bg-violet-500/15 text-violet-600 dark:text-violet-400" },
-};
-
-const STATUS_TRATATIVA: { value: StatusTratativa; label: string }[] = [
-  { value: "pendente", label: "Pendente" },
-  { value: "investigando", label: "Investigando" },
-  { value: "recontar", label: "Recontar" },
-  { value: "ajustado", label: "Ajustado" },
-  { value: "aceito", label: "Aceito" },
-];
-
 // Regras de classificação de posição (12 chars):
 //   ruas 001–899, nível 01 → estoque normal (picking porta-pallet)
 //   rua 995                → PBL (flowrack) — sem restrição de nível
@@ -220,8 +190,6 @@ function TelaResumo() {
   const [deletandoId, setDeletandoId] = useState<string | null>(null);
   const [recontagens, setRecontagens] = useState<Array<{ id: string; codigo_posicao: string; codigo_produto: string; numero_contagem_origem: number }>>([]);
   const [solicitandoId, setSolicitandoId] = useState<string | null>(null);
-  const [tratativas, setTratativas] = useState<Map<string, StatusTratativa>>(new Map());
-  const [filtroDiagCat, setFiltroDiagCat] = useState<CategoriaDiag | "todos">("todos");
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [editValor, setEditValor] = useState<string>("");
   const [salvandoId, setSalvandoId] = useState<string | null>(null);
@@ -258,22 +226,15 @@ function TelaResumo() {
         return { data: out, error: null as any };
       };
 
-      const [{ data, error }, wmsData, { data: recData }, { data: tratData }] = await Promise.all([
+      const [{ data, error }, wmsData, { data: recData }] = await Promise.all([
         fetchAllLeituras(),
         fetchWmsSnapshot(id),
         supabase
           .from("recontagens_solicitadas")
           .select("id, codigo_posicao, codigo_produto, numero_contagem_origem")
           .eq("inventario_id", id),
-        (supabase as any)
-          .from("tratativas_divergencia")
-          .select("sku, status")
-          .eq("inventario_id", id),
       ]);
       setRecontagens((recData ?? []) as any);
-      const tmap = new Map<string, StatusTratativa>();
-      for (const t of (tratData ?? []) as any[]) tmap.set(t.sku, t.status);
-      setTratativas(tmap);
 
       if (cancelado) return;
       if (error) { toast.error(error.message); setLoading(false); return; }
@@ -414,6 +375,38 @@ function TelaResumo() {
     return Array.from(map.values()).sort((a, b) => a.sku.localeCompare(b.sku));
   }, [linhasAnalisadas, wmsMap]);
 
+  // Saldo do mesmo SKU encontrado em posições onde o WMS NÃO o espera.
+  // Usa `linhas` cru (não `linhasAnalisadas`) de propósito: assim captura também as
+  // posições aéreas/técnica descartadas — é justamente onde o saldo "perdido" costuma estar.
+  const outrasPosicoesPorSku = useMemo(() => {
+    const out = new Map<string, { total: number; totalForaAnalise: number; posicoes: { pos: string; qtd: number; foraAnalise: boolean }[] }>();
+    if (skuPositions.size === 0) return out;
+    const byKey = new Map<string, Map<number, number>>(); // sku|pos -> contagem -> qtd
+    for (const l of linhas) {
+      const esperadas = skuPositions.get(l.sku);
+      if (esperadas && esperadas.has(l.codigo_posicao)) continue; // posição esperada → não é "outra"
+      const k = `${l.sku}|${l.codigo_posicao}`;
+      const m = byKey.get(k) ?? new Map<number, number>();
+      m.set(l.numero_contagem, (m.get(l.numero_contagem) ?? 0) + l.quantidade);
+      byKey.set(k, m);
+    }
+    for (const [k, rounds] of byKey) {
+      const sep = k.indexOf("|");
+      const sku = k.slice(0, sep);
+      const pos = k.slice(sep + 1);
+      const qtd = Math.max(...Array.from(rounds.values())); // melhor representação do que havia ali
+      if (qtd <= 0) continue;
+      const foraAnalise = !isPosicaoConsiderada(pos);
+      const entry = out.get(sku) ?? { total: 0, totalForaAnalise: 0, posicoes: [] };
+      entry.posicoes.push({ pos, qtd, foraAnalise });
+      entry.total += qtd;
+      if (foraAnalise) entry.totalForaAnalise += qtd;
+      out.set(sku, entry);
+    }
+    for (const e of out.values()) e.posicoes.sort((a, b) => a.pos.localeCompare(b.pos));
+    return out;
+  }, [linhas, skuPositions]);
+
   // Cada item já com seus indicadores calculados (reusado por filtro, ordenação, render e export)
   const itensComputados = useMemo((): ItemRow[] => {
     const wmsLoaded = wmsMap.size > 0;
@@ -529,62 +522,6 @@ function TelaResumo() {
     return map;
   }, [contadoPorPS, skuPositions]);
 
-  // SKUs que aparecem em alguma posição "fora do lugar" (para sinalizar no diagnóstico)
-  const skusForaDoLugar = useMemo(() => {
-    const s = new Set<string>();
-    for (const k of foraDoLugar.keys()) s.add(k.split("|")[1]);
-    return s;
-  }, [foraDoLugar]);
-
-  // Diagnóstico por SKU: classifica cada divergência e sugere uma ação
-  const diagnostico = useMemo((): DiagRow[] => {
-    if (wmsMap.size === 0) return [];
-    const rows: DiagRow[] = [];
-    for (const r of itensComputados) {
-      const divergente = r.pick.divergente || r.pbl.divergente;
-      const dp = r.pick.delta ?? 0;
-      const db = r.pbl.delta ?? 0;
-      const total = dp + db;
-      let categoria: CategoriaDiag | null = null;
-      if (divergente) categoria = "recontar";
-      else if (r.complementar && total === 0) categoria = "realocacao";
-      else if (r.complementar) categoria = "compensacao_parcial";
-      else if (total > 0) categoria = "sobra_real";
-      else if (total < 0) categoria = "falta_real";
-      if (!categoria) continue; // total 0, sem divergência → nada a tratar
-      rows.push({
-        item: r.item, pick: r.pick, pbl: r.pbl,
-        categoria, severidade: CAT_INFO[categoria].sev, total,
-        foraDoLugar: skusForaDoLugar.has(r.item.sku),
-      });
-    }
-    return rows.sort((a, b) =>
-      b.severidade - a.severidade ||
-      Math.abs(b.total) - Math.abs(a.total) ||
-      a.item.sku.localeCompare(b.item.sku),
-    );
-  }, [itensComputados, wmsMap, skusForaDoLugar]);
-
-  const diagFiltrado = useMemo(
-    () => filtroDiagCat === "todos" ? diagnostico : diagnostico.filter((d) => d.categoria === filtroDiagCat),
-    [diagnostico, filtroDiagCat],
-  );
-
-  // Resumo de impacto: separa o que é só realocação do que é perda/sobra real
-  const diagResumo = useMemo(() => {
-    const r = { realocacao: 0, recontar: 0, compensacaoParcial: 0, sobraRealCount: 0, sobraRealUn: 0, faltaRealCount: 0, faltaRealUn: 0, tratados: 0 };
-    for (const d of diagnostico) {
-      if ((tratativas.get(d.item.sku) ?? "pendente") !== "pendente") r.tratados++;
-      switch (d.categoria) {
-        case "realocacao": r.realocacao++; break;
-        case "recontar": r.recontar++; break;
-        case "compensacao_parcial": r.compensacaoParcial++; break;
-        case "sobra_real": r.sobraRealCount++; r.sobraRealUn += d.total; break;
-        case "falta_real": r.faltaRealCount++; r.faltaRealUn += d.total; break;
-      }
-    }
-    return r;
-  }, [diagnostico, tratativas]);
 
   // Recontagens pendentes: solicitação ainda não atendida
   const recontagensPendentes = useMemo(() => {
@@ -844,6 +781,12 @@ function TelaResumo() {
           : pick.divergente || pbl.divergente
             ? "divergente"
             : (pick.delta ?? 0) + (pbl.delta ?? 0);
+        const outras = outrasPosicoesPorSku.get(item.sku);
+        row["Outras posições (qtd)"] = outras?.total ?? "";
+        row["Outras posições (fora da análise)"] = outras?.totalForaAnalise ?? "";
+        row["Outras posições (detalhe)"] = outras
+          ? outras.posicoes.map((p) => `${formatPosicaoDisplay(p.pos)}: ${p.qtd}${p.foraAnalise ? " (fora)" : ""}`).join(" | ")
+          : "";
       }
       row["Status"] = statusItem(r);
       return row;
@@ -893,44 +836,6 @@ function TelaResumo() {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Contagens divergentes");
     XLSX.writeFile(wb, `contagens-divergentes-${inv?.nome ?? id}-${new Date().toISOString().slice(0, 10)}.xlsx`);
-  }
-
-  // Persiste o status de tratativa de um SKU (ausência de linha = "pendente")
-  async function definirTratativa(sku: string, status: StatusTratativa) {
-    if (!isAdmin) { toast.error("Faça login como supervisor"); return; }
-    const anterior = new Map(tratativas);
-    setTratativas((m) => {
-      const n = new Map(m);
-      if (status === "pendente") n.delete(sku); else n.set(sku, status);
-      return n;
-    });
-    const sb = supabase as any;
-    const { error } = status === "pendente"
-      ? await sb.from("tratativas_divergencia").delete().eq("inventario_id", id).eq("sku", sku)
-      : await sb.from("tratativas_divergencia").upsert(
-          { inventario_id: id, sku, status, atualizado_em: new Date().toISOString() },
-          { onConflict: "inventario_id,sku" },
-        );
-    if (error) { setTratativas(anterior); toast.error(error.message); }
-  }
-
-  function exportarDiagnostico() {
-    const dados = diagFiltrado.map((d) => ({
-      Produto: d.item.sku,
-      Descrição: d.item.descricao,
-      Categoria: CAT_INFO[d.categoria].label,
-      "Ação sugerida": CAT_INFO[d.categoria].acao,
-      "Picking Δ": d.pick.divergente ? "divergente" : d.pick.delta ?? "",
-      "PBL Δ": d.pbl.divergente ? "divergente" : d.pbl.delta ?? "",
-      "Δ Total": d.categoria === "recontar" ? "divergente" : d.total,
-      "Fora do lugar": d.foraDoLugar ? "Sim" : "",
-      Tratativa: (STATUS_TRATATIVA.find((s) => s.value === (tratativas.get(d.item.sku) ?? "pendente"))?.label) ?? "Pendente",
-    }));
-    const ws = XLSX.utils.json_to_sheet(dados);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Diagnóstico");
-    const sufixo = filtroDiagCat === "todos" ? "" : `-${filtroDiagCat}`;
-    XLSX.writeFile(wb, `diagnostico${sufixo}-${inv?.nome ?? id}-${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
 
   async function encerrar() {
@@ -1057,16 +962,8 @@ function TelaResumo() {
             <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
           </div>
         ) : (
-          <Tabs defaultValue="diagnostico">
+          <Tabs defaultValue="itens">
             <TabsList className="flex-wrap h-auto gap-1 mb-4">
-              <TabsTrigger value="diagnostico">
-                Diagnóstico
-                {diagnostico.length > 0 ? (
-                  <Badge variant="destructive" className="ml-1.5 text-[10px] px-1.5 py-0 h-4">{diagnostico.length}</Badge>
-                ) : (
-                  <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0 h-4">0</Badge>
-                )}
-              </TabsTrigger>
               <TabsTrigger value="itens">
                 Por Item
                 <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0 h-4">{analisePorItem.length}</Badge>
@@ -1083,153 +980,6 @@ function TelaResumo() {
               </TabsTrigger>
               <TabsTrigger value="leituras">Leituras Brutas</TabsTrigger>
             </TabsList>
-
-            {/* ── Diagnóstico ────────────────────────────────────── */}
-            <TabsContent value="diagnostico" className="space-y-4">
-              {wmsMap.size === 0 ? (
-                <div className="rounded-xl border border-border bg-card p-12 text-center">
-                  <MapPin className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
-                  <p className="text-sm font-medium">Sincronize o WMS para gerar o diagnóstico</p>
-                  <p className="text-xs text-muted-foreground mt-1">A classificação compara o que foi contado com o saldo esperado no WMS.</p>
-                </div>
-              ) : diagnostico.length === 0 ? (
-                <div className="rounded-xl border border-border bg-card p-12 text-center">
-                  <CheckCircle2 className="h-10 w-10 text-emerald-500 mx-auto mb-3" />
-                  <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Nenhuma divergência a tratar</p>
-                  <p className="text-xs text-muted-foreground mt-1">Todos os itens contados batem com o WMS.</p>
-                </div>
-              ) : (
-                <>
-                  <p className="text-xs text-muted-foreground">
-                    Cada SKU com divergência é classificado por tipo e ação sugerida. <strong>Realocação</strong> é só troca de endereço (picking⇄PBL) e não afeta o estoque — foque em <strong>falta</strong> e <strong>sobra real</strong>. Clique num card para filtrar.
-                  </p>
-
-                  {/* Resumo de impacto (também funciona como filtro) */}
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-                    <button onClick={() => setFiltroDiagCat(filtroDiagCat === "falta_real" ? "todos" : "falta_real")}
-                      className={`rounded-xl border p-3 text-left transition-colors border-destructive/40 bg-destructive/5 hover:bg-destructive/10 ${filtroDiagCat === "falta_real" ? "ring-2 ring-destructive" : ""}`}>
-                      <p className="text-xs text-destructive mb-1">➖ Falta real</p>
-                      <p className="text-2xl font-bold tabular-nums text-destructive">{diagResumo.faltaRealUn.toLocaleString("pt-BR")} un</p>
-                      <p className="text-[10px] text-muted-foreground mt-0.5">{diagResumo.faltaRealCount} SKUs</p>
-                    </button>
-                    <button onClick={() => setFiltroDiagCat(filtroDiagCat === "sobra_real" ? "todos" : "sobra_real")}
-                      className={`rounded-xl border p-3 text-left transition-colors border-emerald-500/40 bg-emerald-500/5 hover:bg-emerald-500/10 ${filtroDiagCat === "sobra_real" ? "ring-2 ring-emerald-500" : ""}`}>
-                      <p className="text-xs text-emerald-600 dark:text-emerald-400 mb-1">➕ Sobra real</p>
-                      <p className="text-2xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400">+{diagResumo.sobraRealUn.toLocaleString("pt-BR")} un</p>
-                      <p className="text-[10px] text-muted-foreground mt-0.5">{diagResumo.sobraRealCount} SKUs</p>
-                    </button>
-                    <button onClick={() => setFiltroDiagCat(filtroDiagCat === "compensacao_parcial" ? "todos" : "compensacao_parcial")}
-                      className={`rounded-xl border p-3 text-left transition-colors border-amber-500/40 bg-amber-500/5 hover:bg-amber-500/10 ${filtroDiagCat === "compensacao_parcial" ? "ring-2 ring-amber-500" : ""}`}>
-                      <p className="text-xs text-amber-600 dark:text-amber-400 mb-1">↔️ Compensação parcial</p>
-                      <p className="text-2xl font-bold tabular-nums text-amber-600 dark:text-amber-400">{diagResumo.compensacaoParcial}</p>
-                      <p className="text-[10px] text-muted-foreground mt-0.5">SKUs a investigar</p>
-                    </button>
-                    <button onClick={() => setFiltroDiagCat(filtroDiagCat === "recontar" ? "todos" : "recontar")}
-                      className={`rounded-xl border p-3 text-left transition-colors border-orange-500/40 bg-orange-500/5 hover:bg-orange-500/10 ${filtroDiagCat === "recontar" ? "ring-2 ring-orange-500" : ""}`}>
-                      <p className="text-xs text-orange-600 dark:text-orange-400 mb-1">⚠️ Recontar</p>
-                      <p className="text-2xl font-bold tabular-nums text-orange-600 dark:text-orange-400">{diagResumo.recontar}</p>
-                      <p className="text-[10px] text-muted-foreground mt-0.5">contagens não batem</p>
-                    </button>
-                    <button onClick={() => setFiltroDiagCat(filtroDiagCat === "realocacao" ? "todos" : "realocacao")}
-                      className={`rounded-xl border p-3 text-left transition-colors border-violet-500/40 bg-violet-500/5 hover:bg-violet-500/10 ${filtroDiagCat === "realocacao" ? "ring-2 ring-violet-500" : ""}`}>
-                      <p className="text-xs text-violet-600 dark:text-violet-400 mb-1">🔄 Realocação</p>
-                      <p className="text-2xl font-bold tabular-nums text-violet-600 dark:text-violet-400">{diagResumo.realocacao}</p>
-                      <p className="text-[10px] text-muted-foreground mt-0.5">sem impacto de estoque</p>
-                    </button>
-                  </div>
-
-                  {/* Filtro + progresso + export */}
-                  <div className="flex gap-3 flex-wrap items-center">
-                    <Select value={filtroDiagCat} onValueChange={(v) => setFiltroDiagCat(v as typeof filtroDiagCat)}>
-                      <SelectTrigger className="h-8 w-[240px] text-sm"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="todos">Todas as categorias ({diagnostico.length})</SelectItem>
-                        <SelectItem value="falta_real">Falta real</SelectItem>
-                        <SelectItem value="sobra_real">Sobra real</SelectItem>
-                        <SelectItem value="compensacao_parcial">Compensação parcial</SelectItem>
-                        <SelectItem value="recontar">Recontar</SelectItem>
-                        <SelectItem value="realocacao">Realocação (saldo zero)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <span className="text-xs text-muted-foreground">{diagResumo.tratados}/{diagnostico.length} tratados</span>
-                    <Button onClick={exportarDiagnostico} variant="outline" size="sm" className="gap-1.5 h-8 ml-auto" title="Exporta o diagnóstico (respeita o filtro de categoria)">
-                      <FileSpreadsheet className="h-4 w-4" /> Exportar
-                    </Button>
-                  </div>
-
-                  {/* Tabela de diagnóstico */}
-                  <div className="rounded-xl border border-border overflow-hidden">
-                    <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
-                      <table className="w-full text-sm">
-                        <thead className="bg-secondary/60 sticky top-0 z-10">
-                          <tr>
-                            <th className="px-2 py-2 text-left text-[11px] font-semibold uppercase tracking-wide">Produto</th>
-                            <th className="px-2 py-2 text-left text-[11px] font-semibold uppercase tracking-wide hidden md:table-cell">Descrição</th>
-                            <th className="px-2 py-2 text-right text-[11px] font-semibold uppercase tracking-wide whitespace-nowrap">Pick Δ</th>
-                            <th className="px-2 py-2 text-right text-[11px] font-semibold uppercase tracking-wide whitespace-nowrap">PBL Δ</th>
-                            <th className="px-2 py-2 text-right text-[11px] font-semibold uppercase tracking-wide whitespace-nowrap">Δ Total</th>
-                            <th className="px-2 py-2 text-left text-[11px] font-semibold uppercase tracking-wide">Categoria / Ação</th>
-                            <th className="px-2 py-2 text-left text-[11px] font-semibold uppercase tracking-wide whitespace-nowrap">Tratativa</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-border/60">
-                          {diagFiltrado.map((d) => {
-                            const st = tratativas.get(d.item.sku) ?? "pendente";
-                            const renderDelta = (sec: SecaoInfo) => {
-                              if (sec.divergente) return <AlertTriangle className="inline h-3.5 w-3.5 text-amber-500" />;
-                              if (sec.delta === null) return <span className="text-muted-foreground/40">—</span>;
-                              if (sec.delta === 0) return <span className="text-emerald-500 font-semibold">0</span>;
-                              return <span className={`font-semibold ${sec.delta > 0 ? "text-emerald-500" : "text-destructive"}`}>{sec.delta > 0 ? `+${sec.delta}` : sec.delta}</span>;
-                            };
-                            return (
-                              <tr key={d.item.sku} className={`hover:bg-muted/30 ${st !== "pendente" ? "opacity-55" : ""}`}>
-                                <td className="px-2 py-1.5 font-mono text-[11px] font-semibold whitespace-nowrap" title={d.item.sku}>
-                                  <span className="inline-flex items-center gap-1">
-                                    {d.item.sku}
-                                    {d.foraDoLugar && <MapPin className="h-3 w-3 text-violet-500" aria-label="Tem item fora do lugar" />}
-                                  </span>
-                                </td>
-                                <td className="px-2 py-1.5 text-[11px] text-foreground/70 truncate max-w-[220px] hidden md:table-cell" title={d.item.descricao}>
-                                  {d.item.descricao || <span className="italic text-muted-foreground/50">—</span>}
-                                </td>
-                                <td className="px-2 py-1.5 text-right tabular-nums text-xs">{renderDelta(d.pick)}</td>
-                                <td className="px-2 py-1.5 text-right tabular-nums text-xs">{renderDelta(d.pbl)}</td>
-                                <td className="px-2 py-1.5 text-right tabular-nums text-xs font-bold">
-                                  {d.categoria === "recontar"
-                                    ? <AlertTriangle className="inline h-3.5 w-3.5 text-amber-500" />
-                                    : d.total === 0
-                                      ? <span className="text-violet-500">0</span>
-                                      : <span className={d.total > 0 ? "text-emerald-500" : "text-destructive"}>{d.total > 0 ? `+${d.total}` : d.total}</span>}
-                                </td>
-                                <td className="px-2 py-1.5">
-                                  <Badge variant="secondary" className={`text-[10px] px-1.5 py-0 h-4 font-medium ${CAT_INFO[d.categoria].badge}`}>
-                                    {CAT_INFO[d.categoria].label}
-                                  </Badge>
-                                  <p className="text-[10px] text-muted-foreground mt-0.5">{CAT_INFO[d.categoria].acao}</p>
-                                </td>
-                                <td className="px-2 py-1.5">
-                                  <Select value={st} onValueChange={(v) => void definirTratativa(d.item.sku, v as StatusTratativa)} disabled={!isAdmin}>
-                                    <SelectTrigger className="h-7 w-[130px] text-xs"><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                      {STATUS_TRATATIVA.map((s) => (
-                                        <SelectItem key={s.value} value={s.value} className="text-xs">{s.label}</SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                          {diagFiltrado.length === 0 && (
-                            <tr><td colSpan={7} className="px-3 py-10 text-center text-muted-foreground text-sm">Nenhum item nesta categoria</td></tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </>
-              )}
-            </TabsContent>
 
             {/* ── Por Item (Picking vs PBL) ──────────────────────── */}
             <TabsContent value="itens" className="space-y-3">
@@ -1303,6 +1053,15 @@ function TelaResumo() {
                             className="px-1.5 py-2 text-center text-[11px] font-bold text-violet-600 dark:text-violet-300 border-l-2 border-border border-b border-border align-bottom uppercase tracking-wider w-[64px]"
                           >
                             Δ Total
+                          </th>
+                        )}
+                        {wmsMap.size > 0 && (
+                          <th
+                            rowSpan={2}
+                            title="Saldo deste SKU contado em posições onde o WMS não o espera (inclui aéreas/técnica fora da análise)"
+                            className="px-1.5 py-2 text-center text-[11px] font-bold text-fuchsia-600 dark:text-fuchsia-300 border-l border-border border-b border-border align-bottom uppercase tracking-wider w-[92px]"
+                          >
+                            Outras pos.
                           </th>
                         )}
                       </tr>
@@ -1407,6 +1166,26 @@ function TelaResumo() {
                                 )}
                               </td>
                             )}
+                            {/* Saldo em outras posições (não esperadas pelo WMS) */}
+                            {wmsLoaded && (() => {
+                              const outras = outrasPosicoesPorSku.get(item.sku);
+                              if (!outras || outras.total <= 0) {
+                                return <td className="px-1.5 py-1.5 text-right text-xs border-l border-border text-muted-foreground/40">—</td>;
+                              }
+                              const detalhe = outras.posicoes
+                                .map((p) => `${formatPosicaoDisplay(p.pos)}: ${p.qtd}${p.foraAnalise ? " (fora da análise)" : ""}`)
+                                .join("\n");
+                              return (
+                                <td className="px-1.5 py-1.5 text-right tabular-nums text-xs border-l border-border" title={detalhe}>
+                                  <span className="font-bold text-fuchsia-600 dark:text-fuchsia-400">+{outras.total}</span>
+                                  {outras.totalForaAnalise > 0 && (
+                                    <span className="block text-[9px] text-fuchsia-500/80 leading-tight" title="Quantidade em posições aéreas/técnica, descartadas da análise">
+                                      {outras.totalForaAnalise} fora
+                                    </span>
+                                  )}
+                                </td>
+                              );
+                            })()}
                           </tr>
                         );
                       })}

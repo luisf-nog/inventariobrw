@@ -12,6 +12,7 @@ import {
   ArrowLeft, Download, FileSpreadsheet, Lock, AlertTriangle,
   Trash2, CheckCircle2, BarChart2, PackageX, Layers,
   RefreshCw, MapPin, RotateCcw, Pencil, Check, X,
+  ChevronLeft, ChevronRight,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { toast } from "sonner";
@@ -114,6 +115,43 @@ async function fetchWmsSnapshot(inventarioId: string): Promise<WmsRow[]> {
   return out.filter((r) => isPosicaoConsiderada(r.codigo_posicao));
 }
 
+function Paginacao({ page, pageSize, total, onPage, onPageSize }: {
+  page: number;
+  pageSize: number;
+  total: number;
+  onPage: (p: number) => void;
+  onPageSize: (s: number) => void;
+}) {
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  const p = Math.min(page, pageCount - 1);
+  const from = total === 0 ? 0 : p * pageSize + 1;
+  const to = Math.min(total, (p + 1) * pageSize);
+  return (
+    <div className="flex items-center justify-between gap-3 flex-wrap text-xs text-muted-foreground">
+      <span className="tabular-nums">
+        {total === 0 ? "Nenhum registro" : `Mostrando ${from}–${to} de ${total}`}
+      </span>
+      <div className="flex items-center gap-2">
+        <Select value={String(pageSize)} onValueChange={(v) => onPageSize(Number(v))}>
+          <SelectTrigger className="h-8 w-[120px] text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="50">50 / página</SelectItem>
+            <SelectItem value="100">100 / página</SelectItem>
+            <SelectItem value="200">200 / página</SelectItem>
+          </SelectContent>
+        </Select>
+        <Button variant="outline" size="icon" className="h-8 w-8" disabled={p <= 0} onClick={() => onPage(p - 1)} title="Página anterior">
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        <span className="tabular-nums whitespace-nowrap">{p + 1} / {pageCount}</span>
+        <Button variant="outline" size="icon" className="h-8 w-8" disabled={p >= pageCount - 1} onClick={() => onPage(p + 1)} title="Próxima página">
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function TelaResumo() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
@@ -139,6 +177,12 @@ function TelaResumo() {
   >("todos");
   const [filtroItemLocal, setFiltroItemLocal] = useState<"ambos" | "picking" | "pbl">("ambos");
   const [ordemItem, setOrdemItem] = useState<"sku" | "diferenca" | "dif_picking" | "dif_pbl" | "dif_total">("sku");
+
+  // Paginação (render) — dados continuam carregados inteiros para os agregados
+  const [pageLeituras, setPageLeituras] = useState(0);
+  const [sizeLeituras, setSizeLeituras] = useState(100);
+  const [pageItens, setPageItens] = useState(0);
+  const [sizeItens, setSizeItens] = useState(100);
 
   const [isAdmin, setIsAdmin] = useState(false);
   const [confirmandoEncerrar, setConfirmandoEncerrar] = useState(false);
@@ -387,6 +431,15 @@ function TelaResumo() {
     });
   }, [itensComputados, filtroItemProd, filtroItemStatus, filtroItemLocal, ordemItem]);
 
+  // Volta para a 1ª página quando o filtro/tamanho muda
+  useEffect(() => { setPageItens(0); }, [filtroItemProd, filtroItemStatus, filtroItemLocal, ordemItem, sizeItens]);
+
+  const itensPagina = useMemo((): ItemRow[] => {
+    const pageCount = Math.max(1, Math.ceil(itensFiltrados.length / sizeItens));
+    const p = Math.min(pageItens, pageCount - 1);
+    return itensFiltrados.slice(p * sizeItens, p * sizeItens + sizeItens);
+  }, [itensFiltrados, pageItens, sizeItens]);
+
   // Quantidade convergente por (posicao, sku) — base para comparação WMS
   const contadoPorPS = useMemo(() => {
     const byPP = new Map<string, Map<number, number>>();
@@ -528,6 +581,14 @@ function TelaResumo() {
       return true;
     });
   }, [linhas, filtroPos, filtroProd, filtroOp, soDivergentes, divergenciasSet, divergenciasWms, foraDoLugar]);
+
+  useEffect(() => { setPageLeituras(0); }, [filtroPos, filtroProd, filtroOp, soDivergentes, sizeLeituras]);
+
+  const leiturasPagina = useMemo(() => {
+    const pageCount = Math.max(1, Math.ceil(filtrados.length / sizeLeituras));
+    const p = Math.min(pageLeituras, pageCount - 1);
+    return filtrados.slice(p * sizeLeituras, p * sizeLeituras + sizeLeituras);
+  }, [filtrados, pageLeituras, sizeLeituras]);
 
   /* ── Ações ──────────────────────────────────────────────────────── */
 
@@ -866,15 +927,11 @@ function TelaResumo() {
                     <SelectItem value="dif_pbl">Maior Δ no PBL</SelectItem>
                   </SelectContent>
                 </Select>
-                <Button onClick={exportarItensXLSX} variant="outline" size="sm" className="gap-1.5 h-8">
+                <Button onClick={exportarItensXLSX} variant="outline" size="sm" className="gap-1.5 h-8" title="Exporta todos os itens filtrados (não só a página)">
                   <FileSpreadsheet className="h-4 w-4" /> Exportar
                 </Button>
-                {itensFiltrados.length !== analisePorItem.length && (
-                  <span className="text-[11px] text-muted-foreground">
-                    Exibindo {itensFiltrados.length} de {analisePorItem.length}
-                  </span>
-                )}
               </div>
+              <Paginacao page={pageItens} pageSize={sizeItens} total={itensFiltrados.length} onPage={setPageItens} onPageSize={setSizeItens} />
               <div className="rounded-xl border border-border overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm table-fixed">
@@ -929,7 +986,7 @@ function TelaResumo() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border/60">
-                      {itensFiltrados.map(({ item, pick, pbl, complementar, naoContado }) => {
+                      {itensPagina.map(({ item, pick, pbl, complementar, naoContado }) => {
                         const wmsLoaded = wmsMap.size > 0;
                         const deltaCell = (delta: number | null, divergente: boolean, semContagem: boolean) => {
                           if (semContagem) return <span className="text-muted-foreground/50 text-xs">—</span>;
@@ -1018,6 +1075,7 @@ function TelaResumo() {
                   </table>
                 </div>
               </div>
+              <Paginacao page={pageItens} pageSize={sizeItens} total={itensFiltrados.length} onPage={setPageItens} onPageSize={setSizeItens} />
             </TabsContent>
 
             {/* ── Pendências ─────────────────────────────────────── */}
@@ -1195,9 +1253,7 @@ function TelaResumo() {
                   Só divergentes
                 </label>
               </div>
-              {filtrados.length !== linhas.length && (
-                <p className="text-[11px] text-muted-foreground">Exibindo {filtrados.length} de {linhas.length} leituras</p>
-              )}
+              <Paginacao page={pageLeituras} pageSize={sizeLeituras} total={filtrados.length} onPage={setPageLeituras} onPageSize={setSizeLeituras} />
               <div className="rounded-xl border border-border overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -1216,7 +1272,7 @@ function TelaResumo() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border/50">
-                      {filtrados.map((l) => {
+                      {leiturasPagina.map((l) => {
                         const k = `${l.codigo_posicao}|${l.sku}`;
                         const div = divergenciasSet.has(k);
                         const wms = wmsMap.get(k);
@@ -1351,6 +1407,7 @@ function TelaResumo() {
                   </table>
                 </div>
               </div>
+              <Paginacao page={pageLeituras} pageSize={sizeLeituras} total={filtrados.length} onPage={setPageLeituras} onPageSize={setSizeLeituras} />
             </TabsContent>
           </Tabs>
         )}

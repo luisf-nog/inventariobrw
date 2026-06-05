@@ -10,8 +10,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   ArrowLeft, Download, FileSpreadsheet, Lock, AlertTriangle,
-  Trash2, Users, Package, CheckCircle2, BarChart2,
-  RefreshCw, MapPin, RotateCcw, ClipboardCheck, Pencil, Check, X,
+  Trash2, CheckCircle2, BarChart2, PackageX, Layers,
+  RefreshCw, MapPin, RotateCcw, Pencil, Check, X,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { toast } from "sonner";
@@ -57,6 +57,18 @@ type ItemAnalise = {
   pblWms: number;
   pickingContagens: Map<number, number>;
   pblContagens: Map<number, number>;
+};
+
+type SecaoInfo = { confirmed: number | null; delta: number | null; divergente: boolean };
+type ItemRow = {
+  item: ItemAnalise;
+  pick: SecaoInfo;
+  pbl: SecaoInfo;
+  complementar: boolean;
+  naoContado: boolean;
+  temPicking: boolean;
+  temPbl: boolean;
+  magnitude: number;
 };
 
 // Regras de classificação de posição (12 chars):
@@ -114,18 +126,19 @@ function TelaResumo() {
   const [loading, setLoading] = useState(true);
   const [sincronizando, setSincronizando] = useState(false);
 
-  // Filtros da aba Consolidado
-  const [filtroConsPos, setFiltroConsPos] = useState("");
-  const [filtroConsProd, setFiltroConsProd] = useState("");
-  const [filtroConsStatus, setFiltroConsStatus] = useState<"todos" | "ok" | "divergentes">("todos");
-
   // Filtros da aba Leituras Brutas
   const [filtroPos, setFiltroPos] = useState("");
   const [filtroProd, setFiltroProd] = useState("");
   const [filtroOp, setFiltroOp] = useState("");
   const [soDivergentes, setSoDivergentes] = useState(false);
+
+  // Filtros da aba Por Item
   const [filtroItemProd, setFiltroItemProd] = useState("");
-  const [apenasComplementar, setApenasComplementar] = useState(false);
+  const [filtroItemStatus, setFiltroItemStatus] = useState<
+    "todos" | "complementar" | "sobra" | "falta" | "divergente" | "diferenca" | "naocontado"
+  >("todos");
+  const [filtroItemLocal, setFiltroItemLocal] = useState<"ambos" | "picking" | "pbl">("ambos");
+  const [ordemItem, setOrdemItem] = useState<"sku" | "diferenca">("sku");
 
   const [isAdmin, setIsAdmin] = useState(false);
   const [confirmandoEncerrar, setConfirmandoEncerrar] = useState(false);
@@ -318,22 +331,54 @@ function TelaResumo() {
     return Array.from(map.values()).sort((a, b) => a.sku.localeCompare(b.sku));
   }, [linhasAnalisadas, wmsMap]);
 
-  const analisePorItemFiltrado = useMemo(() => {
+  // Cada item já com seus indicadores calculados (reusado por filtro, ordenação, render e export)
+  const itensComputados = useMemo((): ItemRow[] => {
     const wmsLoaded = wmsMap.size > 0;
-    return analisePorItem.filter((item) => {
-      if (filtroItemProd) {
-        const f = filtroItemProd.trim().toUpperCase();
-        if (!item.sku.toUpperCase().includes(f) && !item.descricao.toUpperCase().includes(f)) return false;
-      }
-      if (apenasComplementar) {
-        const pick = secaoInfo(item.pickingContagens, item.pickingWms, wmsLoaded);
-        const pbl = secaoInfo(item.pblContagens, item.pblWms, wmsLoaded);
-        const compl = pick.delta !== null && pbl.delta !== null && pick.delta !== 0 && pbl.delta !== 0 && Math.sign(pick.delta) !== Math.sign(pbl.delta);
-        if (!compl) return false;
-      }
-      return true;
+    return analisePorItem.map((item) => {
+      const pick = secaoInfo(item.pickingContagens, item.pickingWms, wmsLoaded);
+      const pbl = secaoInfo(item.pblContagens, item.pblWms, wmsLoaded);
+      const complementar = pick.delta !== null && pbl.delta !== null && pick.delta !== 0 && pbl.delta !== 0 && Math.sign(pick.delta) !== Math.sign(pbl.delta);
+      const semContagem = item.pickingContagens.size === 0 && item.pblContagens.size === 0;
+      const naoContado = semContagem && (item.pickingWms > 0 || item.pblWms > 0);
+      const temPicking = item.pickingWms > 0 || item.pickingContagens.size > 0;
+      const temPbl = item.pblWms > 0 || item.pblContagens.size > 0;
+      const divergente = pick.divergente || pbl.divergente;
+      // Magnitude para ordenar: divergências sem resolução vão para o topo.
+      const magnitude = divergente ? Number.POSITIVE_INFINITY : Math.abs(pick.delta ?? 0) + Math.abs(pbl.delta ?? 0);
+      return { item, pick, pbl, complementar, naoContado, temPicking, temPbl, magnitude };
     });
-  }, [analisePorItem, filtroItemProd, apenasComplementar, wmsMap]);
+  }, [analisePorItem, wmsMap]);
+
+  const itensFiltrados = useMemo((): ItemRow[] => {
+    const f = filtroItemProd.trim().toUpperCase();
+    const rows = itensComputados.filter(({ item, pick, pbl, complementar, naoContado, temPicking, temPbl }) => {
+      if (f && !item.sku.toUpperCase().includes(f) && !item.descricao.toUpperCase().includes(f)) return false;
+      if (filtroItemLocal === "picking" && !temPicking) return false;
+      if (filtroItemLocal === "pbl" && !temPbl) return false;
+      switch (filtroItemStatus) {
+        case "todos":
+          return true;
+        case "naocontado":
+          return naoContado;
+        case "complementar":
+          return complementar;
+        case "sobra":
+          return (pick.delta ?? 0) > 0 || (pbl.delta ?? 0) > 0;
+        case "falta":
+          return (pick.delta ?? 0) < 0 || (pbl.delta ?? 0) < 0;
+        case "divergente":
+          return pick.divergente || pbl.divergente;
+        case "diferenca":
+          return (pick.delta !== null && pick.delta !== 0) || (pbl.delta !== null && pbl.delta !== 0) || pick.divergente || pbl.divergente;
+        default:
+          return true;
+      }
+    });
+    return [...rows].sort((a, b) => {
+      if (ordemItem === "diferenca" && a.magnitude !== b.magnitude) return b.magnitude - a.magnitude;
+      return a.item.sku.localeCompare(b.item.sku);
+    });
+  }, [itensComputados, filtroItemProd, filtroItemStatus, filtroItemLocal, ordemItem]);
 
   // Quantidade convergente por (posicao, sku) — base para comparação WMS
   const contadoPorPS = useMemo(() => {
@@ -401,6 +446,47 @@ function TelaResumo() {
     return pend;
   }, [recontagens, linhas]);
 
+  /* ── Cobertura: posições não contadas / falta 2ª contagem ──────── */
+  const cobertura = useMemo(() => {
+    // rodadas de contagem presentes por posição
+    const roundsPorPosicao = new Map<string, Set<number>>();
+    for (const l of linhasAnalisadas) {
+      const s = roundsPorPosicao.get(l.codigo_posicao) ?? new Set<number>();
+      s.add(l.numero_contagem);
+      roundsPorPosicao.set(l.codigo_posicao, s);
+    }
+    // SKUs esperados por posição (do WMS)
+    const wmsPorPosicao = new Map<string, { sku: string; qtd: number }[]>();
+    for (const [k, qtd] of wmsMap) {
+      const sep = k.indexOf("|");
+      const pos = k.slice(0, sep);
+      const sku = k.slice(sep + 1);
+      const arr = wmsPorPosicao.get(pos) ?? [];
+      arr.push({ sku, qtd });
+      wmsPorPosicao.set(pos, arr);
+    }
+    const universo = new Set<string>([...wmsPorPosicao.keys(), ...roundsPorPosicao.keys()]);
+
+    type PosPend = { pos: string; rounds: number[]; itensWms: { sku: string; qtd: number }[]; pbl: boolean };
+    const naoContadas: PosPend[] = [];
+    const faltaSegunda: PosPend[] = [];
+    for (const pos of universo) {
+      const rounds = Array.from(roundsPorPosicao.get(pos) ?? []).sort((a, b) => a - b);
+      const maxRound = rounds.length ? rounds[rounds.length - 1] : 0;
+      const itensWms = (wmsPorPosicao.get(pos) ?? []).sort((a, b) => a.sku.localeCompare(b.sku));
+      const entry: PosPend = { pos, rounds, itensWms, pbl: isPosicaoPbl(pos) };
+      if (maxRound === 0) naoContadas.push(entry);
+      else if (maxRound < 2) faltaSegunda.push(entry);
+    }
+    const sortPos = (a: PosPend, b: PosPend) => a.pos.localeCompare(b.pos);
+    return {
+      naoContadas: naoContadas.sort(sortPos),
+      faltaSegunda: faltaSegunda.sort(sortPos),
+      universo: universo.size,
+      wmsConhecido: wmsMap.size > 0,
+    };
+  }, [linhasAnalisadas, wmsMap]);
+
   const stats = useMemo(() => {
     const totalUnidades = consolidado
       .filter((i) => !i.divergente)
@@ -410,36 +496,15 @@ function TelaResumo() {
       posicoes: new Set(linhasAnalisadas.map((l) => l.codigo_posicao)).size,
       produtos: new Set(linhasAnalisadas.map((l) => l.sku)).size,
       totalUnidades,
-      operadores: new Set(linhasAnalisadas.map((l) => l.operador_id).filter(Boolean)).size,
+      naoContadas: cobertura.naoContadas.length,
+      faltaSegunda: cobertura.faltaSegunda.length,
       divergencias: divergencias.length,
       divergenciasWms: divergenciasWms.size,
       foraDoLugar: foraDoLugar.size,
     };
-  }, [linhasAnalisadas, consolidado, divergencias, divergenciasWms, foraDoLugar]);
-
-  const statsPorOperador = useMemo(() => {
-    const map = new Map<string, { nome: string; count: number }>();
-    for (const l of linhasAnalisadas) {
-      const nome = l.operador_nome ?? "Desconhecido";
-      const ex = map.get(nome) ?? { nome, count: 0 };
-      map.set(nome, { nome, count: ex.count + 1 });
-    }
-    return Array.from(map.values()).sort((a, b) => b.count - a.count);
-  }, [linhas]);
+  }, [linhasAnalisadas, consolidado, cobertura, divergencias, divergenciasWms, foraDoLugar]);
 
   /* ── Filtros ────────────────────────────────────────────────────── */
-
-  const consolidadoFiltrado = useMemo(() => {
-    const fp = filtroConsPos.trim().toUpperCase();
-    const fr = filtroConsProd.trim().toUpperCase();
-    return consolidado.filter((item) => {
-      if (fp && !item.codigo_posicao.includes(fp)) return false;
-      if (fr && !(item.sku.includes(fr) || item.descricao.toUpperCase().includes(fr))) return false;
-      if (filtroConsStatus === "ok" && item.divergente) return false;
-      if (filtroConsStatus === "divergentes" && !item.divergente) return false;
-      return true;
-    });
-  }, [consolidado, filtroConsPos, filtroConsProd, filtroConsStatus]);
 
   const filtrados = useMemo(() => {
     return linhas.filter((l) => {
@@ -578,6 +643,37 @@ function TelaResumo() {
     XLSX.writeFile(wb, `${nome}.xlsx`);
   }
 
+  function statusItem(r: ItemRow): string {
+    if (r.naoContado) return "Não contado";
+    if (r.pick.divergente || r.pbl.divergente) return "Contagens divergentes";
+    if (r.complementar) return "Complementar (sobra ⇄ falta)";
+    const dp = r.pick.delta ?? 0;
+    const db = r.pbl.delta ?? 0;
+    if (dp === 0 && db === 0) return "OK";
+    if ((dp > 0 || db > 0) && (dp < 0 || db < 0)) return "Sobra e falta";
+    if (dp > 0 || db > 0) return "Sobra";
+    return "Falta";
+  }
+
+  function exportarItensXLSX() {
+    const wmsLoaded = wmsMap.size > 0;
+    const dados = itensFiltrados.map((r) => ({
+      Produto: r.item.sku,
+      Descrição: r.item.descricao,
+      "Picking esperado (WMS)": wmsLoaded ? r.item.pickingWms : "",
+      "Picking contado": r.pick.divergente ? "divergente" : r.pick.confirmed ?? "",
+      "Picking Δ": r.pick.divergente ? "" : r.pick.delta ?? "",
+      "PBL esperado (WMS)": wmsLoaded ? r.item.pblWms : "",
+      "PBL contado": r.pbl.divergente ? "divergente" : r.pbl.confirmed ?? "",
+      "PBL Δ": r.pbl.divergente ? "" : r.pbl.delta ?? "",
+      Status: statusItem(r),
+    }));
+    const ws = XLSX.utils.json_to_sheet(dados);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Por Item");
+    XLSX.writeFile(wb, `analise-itens-${inv?.nome ?? id}-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  }
+
   async function encerrar() {
     if (confirmTexto.trim().toUpperCase() !== "ENCERRAR") { toast.error("Digite ENCERRAR para confirmar"); return; }
     const { error } = await supabase
@@ -589,9 +685,6 @@ function TelaResumo() {
     setConfirmandoEncerrar(false);
     setInv((p) => p ? { ...p, status: "encerrado" } : p);
   }
-
-  const maxOpCount = statsPorOperador[0]?.count ?? 1;
-  const colunasCons = 3 + maxContagem + 2;
 
   /* ── Render ─────────────────────────────────────────────────────── */
   return (
@@ -614,10 +707,6 @@ function TelaResumo() {
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <Button onClick={() => navigate({ to: "/inventario/$id/analise", params: { id } })} variant="default" size="sm" className="gap-1.5" title="Análise final por posição">
-              <ClipboardCheck className="h-4 w-4" />
-              <span className="hidden sm:inline">Análise</span>
-            </Button>
             {isAdmin && (
               <Button onClick={sincronizar} disabled={sincronizando} variant="outline" size="sm" className="gap-1.5" title="Sincronizar estoque do WMS">
                 <RefreshCw className={`h-4 w-4 ${sincronizando ? "animate-spin" : ""}`} />
@@ -643,27 +732,31 @@ function TelaResumo() {
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
           <div className="rounded-xl border border-border bg-card p-4">
             <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1.5">
-              <BarChart2 className="h-3.5 w-3.5" /> Posições
+              <BarChart2 className="h-3.5 w-3.5" /> Posições contadas
             </p>
             <p className="text-3xl font-bold tabular-nums">{stats.posicoes}</p>
-          </div>
-
-          <div className="rounded-xl border border-border bg-card p-4">
-            <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1.5">
-              <Package className="h-3.5 w-3.5" /> Produtos
-            </p>
-            <p className="text-3xl font-bold tabular-nums">{stats.produtos}</p>
             <p className="text-[10px] text-muted-foreground mt-1">
-              {stats.totalUnidades.toLocaleString("pt-BR")} unidades confirmadas
+              {stats.produtos} produtos · {stats.totalUnidades.toLocaleString("pt-BR")} un.
             </p>
           </div>
 
-          <div className="rounded-xl border border-border bg-card p-4">
-            <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1.5">
-              <Users className="h-3.5 w-3.5" /> Operadores
+          <div className={`rounded-xl border p-4 ${stats.naoContadas > 0 ? "border-amber-500/40 bg-amber-500/5" : "border-border bg-card"}`}>
+            <p className={`text-xs mb-1 flex items-center gap-1.5 ${stats.naoContadas > 0 ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`}>
+              <PackageX className="h-3.5 w-3.5" /> Não contadas
             </p>
-            <p className="text-3xl font-bold tabular-nums">{stats.operadores}</p>
-            <p className="text-[10px] text-muted-foreground mt-1">{linhasAnalisadas.length} leituras</p>
+            <p className={`text-3xl font-bold tabular-nums ${stats.naoContadas > 0 ? "text-amber-600 dark:text-amber-400" : ""}`}>
+              {cobertura.wmsConhecido ? stats.naoContadas : "—"}
+            </p>
+            {!cobertura.wmsConhecido && <p className="text-[10px] text-muted-foreground mt-1">Sincronize o WMS</p>}
+          </div>
+
+          <div className={`rounded-xl border p-4 ${stats.faltaSegunda > 0 ? "border-sky-500/40 bg-sky-500/5" : "border-border bg-card"}`}>
+            <p className={`text-xs mb-1 flex items-center gap-1.5 ${stats.faltaSegunda > 0 ? "text-sky-600 dark:text-sky-400" : "text-muted-foreground"}`}>
+              <Layers className="h-3.5 w-3.5" /> Falta 2ª contagem
+            </p>
+            <p className={`text-3xl font-bold tabular-nums ${stats.faltaSegunda > 0 ? "text-sky-600 dark:text-sky-400" : ""}`}>
+              {stats.faltaSegunda}
+            </p>
           </div>
 
           <div className={`rounded-xl border p-4 ${stats.divergencias > 0 ? "border-destructive/40 bg-destructive/5" : "border-border bg-card"}`}>
@@ -705,104 +798,24 @@ function TelaResumo() {
             <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
           </div>
         ) : (
-          <Tabs defaultValue="consolidado">
+          <Tabs defaultValue="itens">
             <TabsList className="flex-wrap h-auto gap-1 mb-4">
-              <TabsTrigger value="consolidado">
-                Consolidado
-                <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0 h-4">{consolidado.length}</Badge>
-              </TabsTrigger>
               <TabsTrigger value="itens">
                 Por Item
                 <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0 h-4">{analisePorItem.length}</Badge>
               </TabsTrigger>
-              <TabsTrigger value="divergencias">
-                Divergências
-                {stats.divergencias > 0 ? (
-                  <Badge variant="destructive" className="ml-1.5 text-[10px] px-1.5 py-0 h-4">{stats.divergencias}</Badge>
+              <TabsTrigger value="pendencias">
+                Pendências
+                {stats.naoContadas + stats.faltaSegunda + stats.divergencias > 0 ? (
+                  <Badge variant="destructive" className="ml-1.5 text-[10px] px-1.5 py-0 h-4">
+                    {stats.naoContadas + stats.faltaSegunda + stats.divergencias}
+                  </Badge>
                 ) : (
                   <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0 h-4">0</Badge>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="operadores">Operadores</TabsTrigger>
               <TabsTrigger value="leituras">Leituras Brutas</TabsTrigger>
             </TabsList>
-
-            {/* ── Consolidado ────────────────────────────────────── */}
-            <TabsContent value="consolidado" className="space-y-3">
-              <p className="text-xs text-muted-foreground">
-                Uma linha por combinação posição + produto. Colunas de contagem mostram a quantidade registrada em cada rodada.
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                <Input placeholder="Filtrar posição" value={filtroConsPos} onChange={(e) => setFiltroConsPos(e.target.value)} />
-                <Input placeholder="Filtrar produto / descrição" value={filtroConsProd} onChange={(e) => setFiltroConsProd(e.target.value)} />
-                <Select value={filtroConsStatus} onValueChange={(v) => setFiltroConsStatus(v as typeof filtroConsStatus)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="todos">Todos</SelectItem>
-                    <SelectItem value="ok">Apenas confirmados</SelectItem>
-                    <SelectItem value="divergentes">Apenas divergentes</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              {consolidadoFiltrado.length !== consolidado.length && (
-                <p className="text-[11px] text-muted-foreground">Exibindo {consolidadoFiltrado.length} de {consolidado.length}</p>
-              )}
-              <div className="rounded-xl border border-border overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-secondary/50 border-b border-border">
-                      <tr>
-                        <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Posição</th>
-                        <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Produto</th>
-                        <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide hidden md:table-cell">Descrição</th>
-                        {Array.from({ length: maxContagem }, (_, i) => i + 1).map((ctg) => (
-                          <th key={ctg} className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap">
-                            {ctg}ª Ctg
-                          </th>
-                        ))}
-                        <th className="px-3 py-2.5 text-center text-xs font-medium text-muted-foreground uppercase tracking-wide">Status</th>
-                        <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide hidden lg:table-cell">Operador(es)</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border/50">
-                      {consolidadoFiltrado.map((item) => (
-                        <tr key={`${item.codigo_posicao}|${item.sku}`} className={item.divergente ? "bg-destructive/8" : "hover:bg-muted/20"}>
-                          <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{formatPosicaoDisplay(item.codigo_posicao)}</td>
-                          <td className="px-3 py-2 font-mono text-xs font-medium">{item.sku}</td>
-                          <td className="px-3 py-2 text-xs max-w-[200px] truncate text-muted-foreground hidden md:table-cell" title={item.descricao}>
-                            {item.descricao || <span className="italic">—</span>}
-                          </td>
-                          {Array.from({ length: maxContagem }, (_, i) => i + 1).map((ctg) => (
-                            <td key={ctg} className="px-3 py-2 text-right tabular-nums font-semibold">
-                              {item.contagens.has(ctg) ? item.contagens.get(ctg) : <span className="text-muted-foreground/40">—</span>}
-                            </td>
-                          ))}
-                          <td className="px-3 py-2 text-center">
-                            {item.divergente ? (
-                              <Badge variant="destructive" className="text-[10px] px-1.5 py-0 h-4 gap-1">
-                                <AlertTriangle className="h-2.5 w-2.5" /> Divergente
-                              </Badge>
-                            ) : (
-                              <Badge className="text-[10px] px-1.5 py-0 h-4 gap-1 text-emerald-700 bg-emerald-50 border-emerald-200 dark:bg-emerald-950/30 dark:border-emerald-800 dark:text-emerald-400 hover:bg-emerald-50">
-                                <CheckCircle2 className="h-2.5 w-2.5" /> OK
-                              </Badge>
-                            )}
-                          </td>
-                          <td className="px-3 py-2 text-xs text-muted-foreground hidden lg:table-cell truncate max-w-[140px]">
-                            {item.operadores.join(", ") || "—"}
-                          </td>
-                        </tr>
-                      ))}
-                      {consolidadoFiltrado.length === 0 && (
-                        <tr>
-                          <td colSpan={colunasCons} className="px-3 py-10 text-center text-muted-foreground text-sm">Nenhum resultado</td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </TabsContent>
 
             {/* ── Por Item (Picking vs PBL) ──────────────────────── */}
             <TabsContent value="itens" className="space-y-3">
@@ -816,18 +829,39 @@ function TelaResumo() {
                   onChange={(e) => setFiltroItemProd(e.target.value)}
                   className="max-w-xs h-8 text-sm"
                 />
-                <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={apenasComplementar}
-                    onChange={(e) => setApenasComplementar(e.target.checked)}
-                    className="h-3.5 w-3.5 accent-violet-500"
-                  />
-                  Só complementares
-                </label>
-                {analisePorItemFiltrado.length !== analisePorItem.length && (
+                <Select value={filtroItemStatus} onValueChange={(v) => setFiltroItemStatus(v as typeof filtroItemStatus)}>
+                  <SelectTrigger className="h-8 w-[210px] text-sm"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos os itens</SelectItem>
+                    <SelectItem value="diferenca">Com qualquer diferença</SelectItem>
+                    <SelectItem value="complementar">Complementares (sobra ⇄ falta)</SelectItem>
+                    <SelectItem value="sobra">Com sobra (vs WMS)</SelectItem>
+                    <SelectItem value="falta">Com falta (vs WMS)</SelectItem>
+                    <SelectItem value="divergente">Contagens divergentes</SelectItem>
+                    <SelectItem value="naocontado">Não contados (esperados no WMS)</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={filtroItemLocal} onValueChange={(v) => setFiltroItemLocal(v as typeof filtroItemLocal)}>
+                  <SelectTrigger className="h-8 w-[140px] text-sm"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ambos">Picking e PBL</SelectItem>
+                    <SelectItem value="picking">Só Picking</SelectItem>
+                    <SelectItem value="pbl">Só PBL</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={ordemItem} onValueChange={(v) => setOrdemItem(v as typeof ordemItem)}>
+                  <SelectTrigger className="h-8 w-[170px] text-sm"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="sku">Ordenar por produto</SelectItem>
+                    <SelectItem value="diferenca">Ordenar por maior diferença</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button onClick={exportarItensXLSX} variant="outline" size="sm" className="gap-1.5 h-8">
+                  <FileSpreadsheet className="h-4 w-4" /> Exportar
+                </Button>
+                {itensFiltrados.length !== analisePorItem.length && (
                   <span className="text-[11px] text-muted-foreground">
-                    Exibindo {analisePorItemFiltrado.length} de {analisePorItem.length}
+                    Exibindo {itensFiltrados.length} de {analisePorItem.length}
                   </span>
                 )}
               </div>
@@ -877,11 +911,8 @@ function TelaResumo() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border/50">
-                      {analisePorItemFiltrado.map((item) => {
+                      {itensFiltrados.map(({ item, pick, pbl, complementar, naoContado }) => {
                         const wmsLoaded = wmsMap.size > 0;
-                        const pick = secaoInfo(item.pickingContagens, item.pickingWms, wmsLoaded);
-                        const pbl = secaoInfo(item.pblContagens, item.pblWms, wmsLoaded);
-                        const complementar = pick.delta !== null && pbl.delta !== null && pick.delta !== 0 && pbl.delta !== 0 && Math.sign(pick.delta) !== Math.sign(pbl.delta);
                         const deltaCell = (delta: number | null, divergente: boolean, semContagem: boolean) => {
                           if (semContagem) return <span className="text-muted-foreground/30 text-xs">—</span>;
                           if (divergente) return <AlertTriangle className="inline h-3.5 w-3.5 text-amber-500" title="Contagens divergentes" />;
@@ -892,10 +923,13 @@ function TelaResumo() {
                         return (
                           <tr key={item.sku} className={complementar ? "bg-violet-500/8 hover:bg-violet-500/12" : "hover:bg-muted/20"}>
                             <td className="px-3 py-2 font-mono text-xs font-medium">
-                              <div className="flex items-center gap-1">
+                              <div className="flex items-center gap-1 flex-wrap">
                                 {item.sku}
                                 {complementar && (
                                   <span className="text-[9px] px-1 py-0.5 rounded bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 font-sans font-semibold">⇄</span>
+                                )}
+                                {naoContado && (
+                                  <span className="text-[9px] px-1 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 font-sans font-medium">não contado</span>
                                 )}
                               </div>
                             </td>
@@ -937,7 +971,7 @@ function TelaResumo() {
                           </tr>
                         );
                       })}
-                      {analisePorItemFiltrado.length === 0 && (
+                      {itensFiltrados.length === 0 && (
                         <tr>
                           <td colSpan={99} className="px-3 py-10 text-center text-muted-foreground text-sm">
                             Nenhum item encontrado
@@ -950,88 +984,164 @@ function TelaResumo() {
               </div>
             </TabsContent>
 
-            {/* ── Divergências ───────────────────────────────────── */}
-            <TabsContent value="divergencias">
-              {divergencias.length === 0 ? (
+            {/* ── Pendências ─────────────────────────────────────── */}
+            <TabsContent value="pendencias" className="space-y-6">
+              {stats.naoContadas === 0 && stats.faltaSegunda === 0 && stats.divergencias === 0 ? (
                 <div className="rounded-xl border border-border bg-card p-12 text-center">
                   <CheckCircle2 className="h-10 w-10 text-emerald-500 mx-auto mb-3" />
-                  <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Nenhuma divergência encontrada</p>
-                  <p className="text-xs text-muted-foreground mt-1">Todas as posições contadas em múltiplas rodadas apresentam a mesma quantidade.</p>
+                  <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Nenhuma pendência</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Todas as posições foram contadas ao menos duas vezes e as contagens batem.
+                  </p>
                 </div>
               ) : (
-                <div className="space-y-3">
-                  <p className="text-xs text-muted-foreground">
-                    {divergencias.length} posição+produto com contagens divergentes — revise e decida qual valor é o correto antes de encerrar.
-                  </p>
-                  <div className="rounded-xl border border-border overflow-hidden">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead className="bg-secondary/50 border-b border-border">
-                          <tr>
-                            <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Posição</th>
-                            <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Produto</th>
-                            <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide hidden md:table-cell">Descrição</th>
-                            {Array.from({ length: maxContagem }, (_, i) => i + 1).map((ctg) => (
-                              <th key={ctg} className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap">
-                                {ctg}ª Ctg
-                              </th>
-                            ))}
-                            <th className="px-3 py-2.5 text-right text-xs font-medium text-destructive uppercase tracking-wide">Diferença</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-border/50">
-                          {divergencias.map((item) => {
-                            const vals = Array.from(item.contagens.values());
-                            const diff = Math.max(...vals) - Math.min(...vals);
-                            return (
-                              <tr key={`${item.codigo_posicao}|${item.sku}`} className="bg-destructive/8">
-                                <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{formatPosicaoDisplay(item.codigo_posicao)}</td>
-                                <td className="px-3 py-2 font-mono text-xs font-medium">{item.sku}</td>
-                                <td className="px-3 py-2 text-xs text-muted-foreground max-w-[200px] truncate hidden md:table-cell" title={item.descricao}>
-                                  {item.descricao || <span className="italic">—</span>}
-                                </td>
-                                {Array.from({ length: maxContagem }, (_, i) => i + 1).map((ctg) => (
-                                  <td key={ctg} className="px-3 py-2 text-right tabular-nums font-bold">
-                                    {item.contagens.has(ctg) ? item.contagens.get(ctg) : <span className="text-muted-foreground/40">—</span>}
-                                  </td>
-                                ))}
-                                <td className="px-3 py-2 text-right font-bold tabular-nums text-destructive">±{diff}</td>
+                <>
+                  {/* Não contadas */}
+                  <section className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <PackageX className="h-4 w-4 text-amber-500" />
+                      <h3 className="text-sm font-semibold">Posições não contadas</h3>
+                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">{cobertura.naoContadas.length}</Badge>
+                    </div>
+                    {!cobertura.wmsConhecido ? (
+                      <p className="text-xs text-muted-foreground">
+                        Sincronize o WMS para saber quais posições com estoque ainda não foram contadas.
+                      </p>
+                    ) : cobertura.naoContadas.length === 0 ? (
+                      <p className="text-xs text-emerald-600 dark:text-emerald-400">Todas as posições do WMS foram visitadas.</p>
+                    ) : (
+                      <div className="rounded-xl border border-amber-500/30 overflow-hidden">
+                        <div className="overflow-x-auto max-h-[360px] overflow-y-auto">
+                          <table className="w-full text-sm">
+                            <thead className="bg-amber-500/10 sticky top-0">
+                              <tr>
+                                <th className="px-3 py-2 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Posição</th>
+                                <th className="px-3 py-2 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Local</th>
+                                <th className="px-3 py-2 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Esperado no WMS</th>
                               </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </TabsContent>
+                            </thead>
+                            <tbody className="divide-y divide-border/50">
+                              {cobertura.naoContadas.map((p) => (
+                                <tr key={p.pos} className="hover:bg-amber-500/5">
+                                  <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{formatPosicaoDisplay(p.pos)}</td>
+                                  <td className="px-3 py-2 text-xs">
+                                    <Badge variant="secondary" className={`text-[10px] px-1.5 py-0 h-4 ${p.pbl ? "text-emerald-700 dark:text-emerald-400" : "text-blue-700 dark:text-blue-400"}`}>
+                                      {p.pbl ? "PBL" : "Picking"}
+                                    </Badge>
+                                  </td>
+                                  <td className="px-3 py-2 text-xs text-muted-foreground">
+                                    {p.itensWms.length === 0 ? <span className="italic">—</span> : p.itensWms.map((i) => `${i.sku} (${i.qtd})`).join(", ")}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                  </section>
 
-            {/* ── Operadores ─────────────────────────────────────── */}
-            <TabsContent value="operadores">
-              <div className="rounded-xl border border-border bg-card p-4 space-y-3 max-w-lg">
-                {statsPorOperador.map((op) => (
-                  <div key={op.nome}>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm font-medium truncate max-w-[60%]">{op.nome}</span>
-                      <span className="text-sm font-bold tabular-nums">{op.count} leituras</span>
+                  {/* Falta 2ª contagem */}
+                  <section className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Layers className="h-4 w-4 text-sky-500" />
+                      <h3 className="text-sm font-semibold">Falta 2ª contagem</h3>
+                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">{cobertura.faltaSegunda.length}</Badge>
                     </div>
-                    <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-primary rounded-full transition-all duration-500"
-                        style={{ width: `${Math.round((op.count / maxOpCount) * 100)}%` }}
-                      />
+                    {cobertura.faltaSegunda.length === 0 ? (
+                      <p className="text-xs text-emerald-600 dark:text-emerald-400">Todas as posições contadas têm pelo menos 2 contagens.</p>
+                    ) : (
+                      <div className="rounded-xl border border-sky-500/30 overflow-hidden">
+                        <div className="overflow-x-auto max-h-[360px] overflow-y-auto">
+                          <table className="w-full text-sm">
+                            <thead className="bg-sky-500/10 sticky top-0">
+                              <tr>
+                                <th className="px-3 py-2 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Posição</th>
+                                <th className="px-3 py-2 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Local</th>
+                                <th className="px-3 py-2 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Contagens feitas</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-border/50">
+                              {cobertura.faltaSegunda.map((p) => (
+                                <tr key={p.pos} className="hover:bg-sky-500/5">
+                                  <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{formatPosicaoDisplay(p.pos)}</td>
+                                  <td className="px-3 py-2 text-xs">
+                                    <Badge variant="secondary" className={`text-[10px] px-1.5 py-0 h-4 ${p.pbl ? "text-emerald-700 dark:text-emerald-400" : "text-blue-700 dark:text-blue-400"}`}>
+                                      {p.pbl ? "PBL" : "Picking"}
+                                    </Badge>
+                                  </td>
+                                  <td className="px-3 py-2 text-xs text-muted-foreground">
+                                    {p.rounds.map((r) => `${r}ª`).join(", ")}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                  </section>
+
+                  {/* Divergentes entre contagens */}
+                  <section className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4 text-destructive" />
+                      <h3 className="text-sm font-semibold">Contagens divergentes</h3>
+                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">{divergencias.length}</Badge>
                     </div>
-                  </div>
-                ))}
-                {statsPorOperador.length === 0 && <p className="text-xs text-muted-foreground">Sem dados</p>}
-              </div>
+                    {divergencias.length === 0 ? (
+                      <p className="text-xs text-emerald-600 dark:text-emerald-400">Nenhuma divergência entre rodadas de contagem.</p>
+                    ) : (
+                      <div className="rounded-xl border border-destructive/30 overflow-hidden">
+                        <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
+                          <table className="w-full text-sm">
+                            <thead className="bg-destructive/10 sticky top-0">
+                              <tr>
+                                <th className="px-3 py-2 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Posição</th>
+                                <th className="px-3 py-2 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Produto</th>
+                                <th className="px-3 py-2 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wide hidden md:table-cell">Descrição</th>
+                                {Array.from({ length: maxContagem }, (_, i) => i + 1).map((ctg) => (
+                                  <th key={ctg} className="px-3 py-2 text-right text-[11px] font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap">
+                                    {ctg}ª Ctg
+                                  </th>
+                                ))}
+                                <th className="px-3 py-2 text-right text-[11px] font-medium text-destructive uppercase tracking-wide">Dif.</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-border/50">
+                              {divergencias.map((item) => {
+                                const vals = Array.from(item.contagens.values());
+                                const diff = Math.max(...vals) - Math.min(...vals);
+                                return (
+                                  <tr key={`${item.codigo_posicao}|${item.sku}`} className="bg-destructive/5">
+                                    <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{formatPosicaoDisplay(item.codigo_posicao)}</td>
+                                    <td className="px-3 py-2 font-mono text-xs font-medium">{item.sku}</td>
+                                    <td className="px-3 py-2 text-xs text-muted-foreground max-w-[200px] truncate hidden md:table-cell" title={item.descricao}>
+                                      {item.descricao || <span className="italic">—</span>}
+                                    </td>
+                                    {Array.from({ length: maxContagem }, (_, i) => i + 1).map((ctg) => (
+                                      <td key={ctg} className="px-3 py-2 text-right tabular-nums font-bold">
+                                        {item.contagens.has(ctg) ? item.contagens.get(ctg) : <span className="text-muted-foreground/40">—</span>}
+                                      </td>
+                                    ))}
+                                    <td className="px-3 py-2 text-right font-bold tabular-nums text-destructive">±{diff}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                  </section>
+                </>
+              )}
             </TabsContent>
 
             {/* ── Leituras Brutas ────────────────────────────────── */}
             <TabsContent value="leituras" className="space-y-3">
               <p className="text-xs text-muted-foreground">
-                Registros brutos — uma linha por scan. Use a aba Consolidado para a visão analítica.
+                Registros brutos — uma linha por scan. Use a aba Por Item para a visão analítica.
               </p>
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-2 flex-1">

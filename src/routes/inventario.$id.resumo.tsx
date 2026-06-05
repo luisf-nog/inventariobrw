@@ -535,8 +535,11 @@ function TelaResumo() {
       const maxRound = rounds.length ? rounds[rounds.length - 1] : 0;
       const itensWms = (wmsPorPosicao.get(pos) ?? []).sort((a, b) => a.sku.localeCompare(b.sku));
       const entry: PosPend = { pos, rounds, itensWms, pbl: isPosicaoPbl(pos) };
-      if (maxRound === 0) naoContadas.push(entry);
-      else if (maxRound < 2) faltaSegunda.push(entry);
+      if (maxRound === 0) {
+        // Ignora posições cujo saldo esperado no WMS é 0 — nada a contar
+        const saldo = itensWms.reduce((s, i) => s + i.qtd, 0);
+        if (saldo > 0) naoContadas.push(entry);
+      } else if (maxRound < 2) faltaSegunda.push(entry);
     }
     const sortPos = (a: PosPend, b: PosPend) => a.pos.localeCompare(b.pos);
     return {
@@ -725,21 +728,57 @@ function TelaResumo() {
 
   function exportarItensXLSX() {
     const wmsLoaded = wmsMap.size > 0;
-    const dados = itensFiltrados.map((r) => ({
-      Produto: r.item.sku,
-      Descrição: r.item.descricao,
-      "Picking esperado (WMS)": wmsLoaded ? r.item.pickingWms : "",
-      "Picking contado": r.pick.divergente ? "divergente" : r.pick.confirmed ?? "",
-      "Picking Δ": r.pick.divergente ? "" : r.pick.delta ?? "",
-      "PBL esperado (WMS)": wmsLoaded ? r.item.pblWms : "",
-      "PBL contado": r.pbl.divergente ? "divergente" : r.pbl.confirmed ?? "",
-      "PBL Δ": r.pbl.divergente ? "" : r.pbl.delta ?? "",
-      Status: statusItem(r),
-    }));
+    const dados = itensFiltrados.map((r) => {
+      const row: Record<string, string | number> = {
+        Produto: r.item.sku,
+        Descrição: r.item.descricao,
+      };
+      if (wmsLoaded) row["Picking esperado (WMS)"] = r.item.pickingWms;
+      for (let c = 1; c <= maxContagem; c++) row[`Picking ${c}ª ctg`] = r.item.pickingContagens.get(c) ?? "";
+      if (wmsLoaded) row["Picking Δ"] = r.pick.divergente ? "divergente" : r.pick.delta ?? "";
+      if (wmsLoaded) row["PBL esperado (WMS)"] = r.item.pblWms;
+      for (let c = 1; c <= maxContagem; c++) row[`PBL ${c}ª ctg`] = r.item.pblContagens.get(c) ?? "";
+      if (wmsLoaded) row["PBL Δ"] = r.pbl.divergente ? "divergente" : r.pbl.delta ?? "";
+      row["Status"] = statusItem(r);
+      return row;
+    });
     const ws = XLSX.utils.json_to_sheet(dados);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Por Item");
     XLSX.writeFile(wb, `analise-itens-${inv?.nome ?? id}-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  }
+
+  // Saldo total esperado no WMS para uma posição pendente
+  function saldoWmsPos(itensWms: { sku: string; qtd: number }[]) {
+    return itensWms.reduce((s, i) => s + i.qtd, 0);
+  }
+
+  function exportarNaoContadas() {
+    const dados = cobertura.naoContadas.map((p) => ({
+      Posição: formatPosicaoDisplay(p.pos),
+      "Posição (código)": p.pos,
+      Local: p.pbl ? "PBL" : "Picking",
+      "Itens esperados (WMS)": p.itensWms.map((i) => `${i.sku} (${i.qtd})`).join(", "),
+      "Saldo WMS": saldoWmsPos(p.itensWms),
+    }));
+    const ws = XLSX.utils.json_to_sheet(dados);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Pendentes 1a contagem");
+    XLSX.writeFile(wb, `pendentes-1a-contagem-${inv?.nome ?? id}-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  }
+
+  function exportarFaltaSegunda() {
+    const dados = cobertura.faltaSegunda.map((p) => ({
+      Posição: formatPosicaoDisplay(p.pos),
+      "Posição (código)": p.pos,
+      Local: p.pbl ? "PBL" : "Picking",
+      "Contagens feitas": p.rounds.map((r) => `${r}ª`).join(", "),
+      "Itens esperados (WMS)": p.itensWms.map((i) => `${i.sku} (${i.qtd})`).join(", "),
+    }));
+    const ws = XLSX.utils.json_to_sheet(dados);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Falta 2a contagem");
+    XLSX.writeFile(wb, `falta-2a-contagem-${inv?.nome ?? id}-${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
 
   async function encerrar() {
@@ -1096,6 +1135,14 @@ function TelaResumo() {
                       <PackageX className="h-4 w-4 text-amber-500" />
                       <h3 className="text-sm font-semibold">Posições não contadas</h3>
                       <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">{cobertura.naoContadas.length}</Badge>
+                      <Button
+                        onClick={exportarNaoContadas}
+                        disabled={cobertura.naoContadas.length === 0}
+                        variant="outline" size="sm" className="ml-auto gap-1.5 h-8"
+                        title="Exporta pendentes de 1ª contagem (ignora saldo WMS 0)"
+                      >
+                        <FileSpreadsheet className="h-4 w-4" /> Exportar
+                      </Button>
                     </div>
                     {!cobertura.wmsConhecido ? (
                       <p className="text-xs text-muted-foreground">
@@ -1141,6 +1188,14 @@ function TelaResumo() {
                       <Layers className="h-4 w-4 text-sky-500" />
                       <h3 className="text-sm font-semibold">Falta 2ª contagem</h3>
                       <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">{cobertura.faltaSegunda.length}</Badge>
+                      <Button
+                        onClick={exportarFaltaSegunda}
+                        disabled={cobertura.faltaSegunda.length === 0}
+                        variant="outline" size="sm" className="ml-auto gap-1.5 h-8"
+                        title="Exporta a listagem de posições que faltam 2ª contagem"
+                      >
+                        <FileSpreadsheet className="h-4 w-4" /> Exportar
+                      </Button>
                     </div>
                     {cobertura.faltaSegunda.length === 0 ? (
                       <p className="text-xs text-emerald-600 dark:text-emerald-400">Todas as posições contadas têm pelo menos 2 contagens.</p>

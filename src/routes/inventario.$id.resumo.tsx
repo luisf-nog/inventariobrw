@@ -50,28 +50,38 @@ type ConsolidadoItem = {
 
 type WmsRow = { codigo_posicao: string; sku: string; qtde_unidades: number };
 
-function getNivel(codigo: string): string {
-  const c = codigo.trim();
-  if (c.length === 10) return c.slice(5, 7);
-  if (c.length === 12) return c.slice(6, 8);
-  return "??";
-}
+type ItemAnalise = {
+  sku: string;
+  descricao: string;
+  pickingWms: number;
+  pblWms: number;
+  pickingContagens: Map<number, number>;
+  pblContagens: Map<number, number>;
+};
 
 // Regras de classificação de posição (12 chars):
-//   ruas 001–899 → estoque normal (picking porta-pallet)
-//   rua 995      → PBL (flowrack)
-//   ruas técnicas 990+ (exceto PBL) são IGNORADAS nas análises.
+//   ruas 001–899, nível 01 → estoque normal (picking porta-pallet)
+//   rua 995                → PBL (flowrack) — sem restrição de nível
+//   ruas técnicas 990+ (exceto PBL) e qualquer nível ≠ 01 em ruas normais são IGNORADOS.
 export const RUA_PBL = "995";
 export function isPosicaoNormal(c: string) {
   if (c.length !== 12) return false;
   const rua = Number(c.slice(2, 5));
-  return Number.isInteger(rua) && rua >= 1 && rua <= 899;
+  if (!Number.isInteger(rua) || rua < 1 || rua > 899) return false;
+  return c.slice(8, 10) === "01"; // nível 01 = térreo; nível 02+ = aéreo
 }
 export function isPosicaoPbl(c: string) {
   return c.length === 12 && c.slice(2, 5) === RUA_PBL;
 }
 export function isPosicaoConsiderada(c: string) {
   return isPosicaoNormal(c) || isPosicaoPbl(c);
+}
+
+function secaoInfo(contagens: Map<number, number>, wms: number, wmsLoaded: boolean) {
+  const vals = Array.from(contagens.values());
+  const confirmed = contagens.size > 0 && vals.every((v) => v === vals[0]) ? vals[0] : null;
+  const delta = wmsLoaded && confirmed !== null ? confirmed - wms : null;
+  return { confirmed, delta, divergente: contagens.size > 1 && confirmed === null };
 }
 
 async function fetchWmsSnapshot(inventarioId: string): Promise<WmsRow[]> {
@@ -114,6 +124,8 @@ function TelaResumo() {
   const [filtroProd, setFiltroProd] = useState("");
   const [filtroOp, setFiltroOp] = useState("");
   const [soDivergentes, setSoDivergentes] = useState(false);
+  const [filtroItemProd, setFiltroItemProd] = useState("");
+  const [apenasComplementar, setApenasComplementar] = useState(false);
 
   const [isAdmin, setIsAdmin] = useState(false);
   const [confirmandoEncerrar, setConfirmandoEncerrar] = useState(false);
@@ -227,11 +239,17 @@ function TelaResumo() {
     };
   }, [id]);
 
+  /* ── Exclui posições aéreas (nível ≠ 01) de toda a análise ─────── */
+  const linhasAnalisadas = useMemo(
+    () => linhas.filter((l) => isPosicaoConsiderada(l.codigo_posicao)),
+    [linhas],
+  );
+
   /* ── Consolidado: uma linha por posição+produto ─────────────────── */
 
   const consolidado = useMemo((): ConsolidadoItem[] => {
     const map = new Map<string, ConsolidadoItem>();
-    for (const l of linhas) {
+    for (const l of linhasAnalisadas) {
       const key = `${l.codigo_posicao}|${l.sku}`;
       if (!map.has(key)) {
         map.set(key, {
@@ -259,8 +277,8 @@ function TelaResumo() {
   }, [linhas]);
 
   const maxContagem = useMemo(
-    () => linhas.reduce((m, l) => Math.max(m, l.numero_contagem), 1),
-    [linhas],
+    () => linhasAnalisadas.reduce((m, l) => Math.max(m, l.numero_contagem), 1),
+    [linhasAnalisadas],
   );
 
   const divergencias = useMemo(
@@ -273,24 +291,54 @@ function TelaResumo() {
     [divergencias],
   );
 
-  const porProduto = useMemo(() => {
-    const map = new Map<string, {
-      sku: string; descricao: string; posicoes: number; totalConfirmado: number; temDivergencia: boolean;
-    }>();
-    for (const item of consolidado) {
-      const ex = map.get(item.sku) ?? { sku: item.sku, descricao: item.descricao, posicoes: 0, totalConfirmado: 0, temDivergencia: false };
-      ex.posicoes += 1;
-      if (!item.divergente) ex.totalConfirmado += Array.from(item.contagens.values())[0];
-      ex.temDivergencia = ex.temDivergencia || item.divergente;
-      map.set(item.sku, ex);
+  const analisePorItem = useMemo((): ItemAnalise[] => {
+    const map = new Map<string, ItemAnalise>();
+    const getOrCreate = (sku: string, descricao = ""): ItemAnalise => {
+      if (!map.has(sku)) {
+        map.set(sku, { sku, descricao, pickingWms: 0, pblWms: 0, pickingContagens: new Map(), pblContagens: new Map() });
+      }
+      return map.get(sku)!;
+    };
+    for (const l of linhasAnalisadas) {
+      const e = getOrCreate(l.sku, l.descricao);
+      if (!e.descricao && l.descricao) e.descricao = l.descricao;
+      const ctgs = isPosicaoPbl(l.codigo_posicao) ? e.pblContagens : e.pickingContagens;
+      ctgs.set(l.numero_contagem, (ctgs.get(l.numero_contagem) ?? 0) + l.quantidade);
     }
-    return Array.from(map.values()).sort((a, b) => b.totalConfirmado - a.totalConfirmado);
-  }, [consolidado]);
+    if (wmsMap.size > 0) {
+      for (const [k, qtd] of wmsMap) {
+        const sep = k.indexOf("|");
+        const pos = k.slice(0, sep);
+        const sku = k.slice(sep + 1);
+        const e = getOrCreate(sku);
+        if (isPosicaoPbl(pos)) e.pblWms += qtd;
+        else e.pickingWms += qtd;
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => a.sku.localeCompare(b.sku));
+  }, [linhasAnalisadas, wmsMap]);
+
+  const analisePorItemFiltrado = useMemo(() => {
+    const wmsLoaded = wmsMap.size > 0;
+    return analisePorItem.filter((item) => {
+      if (filtroItemProd) {
+        const f = filtroItemProd.trim().toUpperCase();
+        if (!item.sku.toUpperCase().includes(f) && !item.descricao.toUpperCase().includes(f)) return false;
+      }
+      if (apenasComplementar) {
+        const pick = secaoInfo(item.pickingContagens, item.pickingWms, wmsLoaded);
+        const pbl = secaoInfo(item.pblContagens, item.pblWms, wmsLoaded);
+        const compl = pick.delta !== null && pbl.delta !== null && pick.delta !== 0 && pbl.delta !== 0 && Math.sign(pick.delta) !== Math.sign(pbl.delta);
+        if (!compl) return false;
+      }
+      return true;
+    });
+  }, [analisePorItem, filtroItemProd, apenasComplementar, wmsMap]);
 
   // Quantidade convergente por (posicao, sku) — base para comparação WMS
   const contadoPorPS = useMemo(() => {
     const byPP = new Map<string, Map<number, number>>();
-    for (const l of linhas) {
+    for (const l of linhasAnalisadas) {
       const k = `${l.codigo_posicao}|${l.sku}`;
       const m = byPP.get(k) ?? new Map();
       m.set(l.numero_contagem, (m.get(l.numero_contagem) ?? 0) + l.quantidade);
@@ -303,7 +351,7 @@ function TelaResumo() {
       out.set(k, { qtd: vals[0] ?? 0, convergente });
     }
     return out;
-  }, [linhas]);
+  }, [linhasAnalisadas]);
 
   // Divergências vs WMS: contado convergente ≠ WMS, ou posição não existe no WMS
   const divergenciasWms = useMemo(() => {
@@ -319,8 +367,6 @@ function TelaResumo() {
 
   // SKU bipado em posição onde WMS não tem este SKU, mas tem em posição compatível
   const foraDoLugar = useMemo(() => {
-    const isNivel1Normal = (c: string) => isPosicaoNormal(c) && c.slice(8, 10) === "01";
-    const isPblValida = (c: string) => isPosicaoPbl(c);
     const map = new Map<string, string[]>();
     if (skuPositions.size === 0) return map;
     for (const [k, info] of contadoPorPS) {
@@ -331,7 +377,7 @@ function TelaResumo() {
       if (info.qtd === 0) continue;
       const contadaPbl = isPosicaoPbl(pos);
       const compativeis = Array.from(wmsPosicoes).filter((p) =>
-        contadaPbl ? isPblValida(p) : isNivel1Normal(p),
+        contadaPbl ? isPosicaoPbl(p) : isPosicaoNormal(p),
       );
       if (compativeis.length === 0) continue;
       map.set(k, compativeis.sort());
@@ -342,7 +388,7 @@ function TelaResumo() {
   // Recontagens pendentes: solicitação ainda não atendida
   const recontagensPendentes = useMemo(() => {
     const maxContPorPS = new Map<string, number>();
-    for (const l of linhas) {
+    for (const l of linhasAnalisadas) {
       const k = `${l.codigo_posicao}|${l.sku}`;
       maxContPorPS.set(k, Math.max(maxContPorPS.get(k) ?? 0, l.numero_contagem));
     }
@@ -360,25 +406,20 @@ function TelaResumo() {
       .filter((i) => !i.divergente)
       .reduce((sum, i) => sum + Array.from(i.contagens.values())[0], 0);
 
-    const posicoesAereas = new Set(
-      linhas.filter((l) => getNivel(l.codigo_posicao) !== "01").map((l) => l.codigo_posicao),
-    ).size;
-
     return {
-      posicoes: new Set(linhas.map((l) => l.codigo_posicao)).size,
-      posicoesAereas,
-      produtos: new Set(linhas.map((l) => l.sku)).size,
+      posicoes: new Set(linhasAnalisadas.map((l) => l.codigo_posicao)).size,
+      produtos: new Set(linhasAnalisadas.map((l) => l.sku)).size,
       totalUnidades,
-      operadores: new Set(linhas.map((l) => l.operador_id).filter(Boolean)).size,
+      operadores: new Set(linhasAnalisadas.map((l) => l.operador_id).filter(Boolean)).size,
       divergencias: divergencias.length,
       divergenciasWms: divergenciasWms.size,
       foraDoLugar: foraDoLugar.size,
     };
-  }, [linhas, consolidado, divergencias, divergenciasWms, foraDoLugar]);
+  }, [linhasAnalisadas, consolidado, divergencias, divergenciasWms, foraDoLugar]);
 
   const statsPorOperador = useMemo(() => {
     const map = new Map<string, { nome: string; count: number }>();
-    for (const l of linhas) {
+    for (const l of linhasAnalisadas) {
       const nome = l.operador_nome ?? "Desconhecido";
       const ex = map.get(nome) ?? { nome, count: 0 };
       map.set(nome, { nome, count: ex.count + 1 });
@@ -605,12 +646,6 @@ function TelaResumo() {
               <BarChart2 className="h-3.5 w-3.5" /> Posições
             </p>
             <p className="text-3xl font-bold tabular-nums">{stats.posicoes}</p>
-            {stats.posicoesAereas > 0 && (
-              <p className="text-[10px] text-amber-500 mt-1 flex items-center gap-1">
-                <AlertTriangle className="h-3 w-3" />
-                {stats.posicoesAereas} aérea{stats.posicoesAereas > 1 ? "s" : ""}
-              </p>
-            )}
           </div>
 
           <div className="rounded-xl border border-border bg-card p-4">
@@ -628,7 +663,7 @@ function TelaResumo() {
               <Users className="h-3.5 w-3.5" /> Operadores
             </p>
             <p className="text-3xl font-bold tabular-nums">{stats.operadores}</p>
-            <p className="text-[10px] text-muted-foreground mt-1">{linhas.length} leituras brutas</p>
+            <p className="text-[10px] text-muted-foreground mt-1">{linhasAnalisadas.length} leituras</p>
           </div>
 
           <div className={`rounded-xl border p-4 ${stats.divergencias > 0 ? "border-destructive/40 bg-destructive/5" : "border-border bg-card"}`}>
@@ -664,21 +699,6 @@ function TelaResumo() {
           </div>
         </div>
 
-        {/* ── Alerta posições aéreas ─────────────────────────────── */}
-        {stats.posicoesAereas > 0 && (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 px-4 py-3 flex items-start gap-3">
-            <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
-            <div>
-              <p className="text-sm font-medium text-amber-800 dark:text-amber-400">
-                {stats.posicoesAereas} posição{stats.posicoesAereas !== 1 ? "ões" : ""} aérea{stats.posicoesAereas !== 1 ? "s" : ""} detectada{stats.posicoesAereas !== 1 ? "s" : ""}
-              </p>
-              <p className="text-xs text-amber-700 dark:text-amber-500 mt-0.5">
-                Posições com nível diferente de 01 (ex: 02, 03…) foram encontradas. Verifique se houve leituras acidentais de posições aéreas.
-              </p>
-            </div>
-          </div>
-        )}
-
         {/* ── Tabs de análise ────────────────────────────────────── */}
         {loading ? (
           <div className="flex justify-center py-16">
@@ -691,9 +711,9 @@ function TelaResumo() {
                 Consolidado
                 <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0 h-4">{consolidado.length}</Badge>
               </TabsTrigger>
-              <TabsTrigger value="produtos">
-                Por Produto
-                <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0 h-4">{porProduto.length}</Badge>
+              <TabsTrigger value="itens">
+                Por Item
+                <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0 h-4">{analisePorItem.length}</Badge>
               </TabsTrigger>
               <TabsTrigger value="divergencias">
                 Divergências
@@ -784,50 +804,144 @@ function TelaResumo() {
               </div>
             </TabsContent>
 
-            {/* ── Por Produto ────────────────────────────────────── */}
-            <TabsContent value="produtos">
-              <p className="text-xs text-muted-foreground mb-3">
-                Total confirmado por SKU somando todas as posições. Posições com divergência não entram no total.
+            {/* ── Por Item (Picking vs PBL) ──────────────────────── */}
+            <TabsContent value="itens" className="space-y-3">
+              <p className="text-xs text-muted-foreground">
+                Totais por SKU separados por local. Linhas em roxo indicam divergência complementar — sobra num local que pode corresponder à falta no outro.
               </p>
+              <div className="flex gap-3 flex-wrap items-center">
+                <Input
+                  placeholder="Filtrar produto / descrição"
+                  value={filtroItemProd}
+                  onChange={(e) => setFiltroItemProd(e.target.value)}
+                  className="max-w-xs h-8 text-sm"
+                />
+                <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={apenasComplementar}
+                    onChange={(e) => setApenasComplementar(e.target.checked)}
+                    className="h-3.5 w-3.5 accent-violet-500"
+                  />
+                  Só complementares
+                </label>
+                {analisePorItemFiltrado.length !== analisePorItem.length && (
+                  <span className="text-[11px] text-muted-foreground">
+                    Exibindo {analisePorItemFiltrado.length} de {analisePorItem.length}
+                  </span>
+                )}
+              </div>
               <div className="rounded-xl border border-border overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
-                    <thead className="bg-secondary/50 border-b border-border">
+                    <thead className="bg-secondary/50">
                       <tr>
-                        <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Produto</th>
-                        <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide hidden md:table-cell">Descrição</th>
-                        <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide">Posições</th>
-                        <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide">Total Unid.</th>
-                        <th className="px-3 py-2.5 text-center text-xs font-medium text-muted-foreground uppercase tracking-wide">Status</th>
+                        <th rowSpan={2} className="px-3 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide align-bottom border-b border-border">Produto</th>
+                        <th rowSpan={2} className="px-3 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide align-bottom border-b border-border max-w-[160px]">Descrição</th>
+                        <th
+                          colSpan={wmsMap.size > 0 ? maxContagem + 2 : maxContagem}
+                          className="px-3 py-1.5 text-center text-[11px] font-semibold text-blue-700 dark:text-blue-400 border-l border-border border-b border-border/40 bg-blue-50/50 dark:bg-blue-950/20 uppercase tracking-wide"
+                        >
+                          Picking
+                        </th>
+                        <th
+                          colSpan={wmsMap.size > 0 ? maxContagem + 2 : maxContagem}
+                          className="px-3 py-1.5 text-center text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 border-l border-border border-b border-border/40 bg-emerald-50/50 dark:bg-emerald-950/20 uppercase tracking-wide"
+                        >
+                          PBL (995)
+                        </th>
+                      </tr>
+                      <tr className="border-b border-border">
+                        {wmsMap.size > 0 && (
+                          <th className="px-3 py-2 text-right text-[11px] font-medium text-muted-foreground whitespace-nowrap border-l border-border bg-blue-50/30 dark:bg-blue-950/10">Esp.</th>
+                        )}
+                        {Array.from({ length: maxContagem }, (_, i) => i + 1).map((c) => (
+                          <th key={c} className={`px-3 py-2 text-right text-[11px] font-medium text-muted-foreground whitespace-nowrap bg-blue-50/30 dark:bg-blue-950/10 ${wmsMap.size === 0 && c === 1 ? "border-l border-border" : ""}`}>
+                            {c}ª Ctg
+                          </th>
+                        ))}
+                        {wmsMap.size > 0 && (
+                          <th className="px-3 py-2 text-right text-[11px] font-medium text-muted-foreground bg-blue-50/30 dark:bg-blue-950/10">Δ</th>
+                        )}
+                        {wmsMap.size > 0 && (
+                          <th className="px-3 py-2 text-right text-[11px] font-medium text-muted-foreground whitespace-nowrap border-l border-border bg-emerald-50/30 dark:bg-emerald-950/10">Esp.</th>
+                        )}
+                        {Array.from({ length: maxContagem }, (_, i) => i + 1).map((c) => (
+                          <th key={c} className={`px-3 py-2 text-right text-[11px] font-medium text-muted-foreground whitespace-nowrap bg-emerald-50/30 dark:bg-emerald-950/10 ${wmsMap.size === 0 && c === 1 ? "border-l border-border" : ""}`}>
+                            {c}ª Ctg
+                          </th>
+                        ))}
+                        {wmsMap.size > 0 && (
+                          <th className="px-3 py-2 text-right text-[11px] font-medium text-muted-foreground bg-emerald-50/30 dark:bg-emerald-950/10">Δ</th>
+                        )}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border/50">
-                      {porProduto.map((prod) => (
-                        <tr key={prod.sku} className={prod.temDivergencia ? "bg-destructive/8" : "hover:bg-muted/20"}>
-                          <td className="px-3 py-2 font-mono text-xs font-medium">{prod.sku}</td>
-                          <td className="px-3 py-2 text-xs text-muted-foreground max-w-[240px] truncate hidden md:table-cell" title={prod.descricao}>
-                            {prod.descricao || <span className="italic">—</span>}
-                          </td>
-                          <td className="px-3 py-2 text-right tabular-nums">{prod.posicoes}</td>
-                          <td className="px-3 py-2 text-right font-bold tabular-nums">
-                            {prod.totalConfirmado > 0 ? prod.totalConfirmado.toLocaleString("pt-BR") : <span className="text-muted-foreground text-xs italic">—</span>}
-                          </td>
-                          <td className="px-3 py-2 text-center">
-                            {prod.temDivergencia ? (
-                              <Badge variant="destructive" className="text-[10px] px-1.5 py-0 h-4 gap-1">
-                                <AlertTriangle className="h-2.5 w-2.5" /> Divergente
-                              </Badge>
-                            ) : (
-                              <Badge className="text-[10px] px-1.5 py-0 h-4 gap-1 text-emerald-700 bg-emerald-50 border-emerald-200 dark:bg-emerald-950/30 dark:border-emerald-800 dark:text-emerald-400 hover:bg-emerald-50">
-                                <CheckCircle2 className="h-2.5 w-2.5" /> OK
-                              </Badge>
+                      {analisePorItemFiltrado.map((item) => {
+                        const wmsLoaded = wmsMap.size > 0;
+                        const pick = secaoInfo(item.pickingContagens, item.pickingWms, wmsLoaded);
+                        const pbl = secaoInfo(item.pblContagens, item.pblWms, wmsLoaded);
+                        const complementar = pick.delta !== null && pbl.delta !== null && pick.delta !== 0 && pbl.delta !== 0 && Math.sign(pick.delta) !== Math.sign(pbl.delta);
+                        const deltaCell = (delta: number | null, divergente: boolean, semContagem: boolean) => {
+                          if (semContagem) return <span className="text-muted-foreground/30 text-xs">—</span>;
+                          if (divergente) return <AlertTriangle className="inline h-3.5 w-3.5 text-amber-500" title="Contagens divergentes" />;
+                          if (delta === null) return <span className="text-muted-foreground/40 text-xs">—</span>;
+                          if (delta === 0) return <span className="text-emerald-600 dark:text-emerald-400 font-bold">0</span>;
+                          return <span className={`font-bold ${delta > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"}`}>{delta > 0 ? `+${delta}` : delta}</span>;
+                        };
+                        return (
+                          <tr key={item.sku} className={complementar ? "bg-violet-500/8 hover:bg-violet-500/12" : "hover:bg-muted/20"}>
+                            <td className="px-3 py-2 font-mono text-xs font-medium">
+                              <div className="flex items-center gap-1">
+                                {item.sku}
+                                {complementar && (
+                                  <span className="text-[9px] px-1 py-0.5 rounded bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 font-sans font-semibold">⇄</span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-3 py-2 text-xs text-muted-foreground max-w-[160px] truncate" title={item.descricao}>
+                              {item.descricao || <span className="italic">—</span>}
+                            </td>
+                            {/* Picking */}
+                            {wmsLoaded && (
+                              <td className="px-3 py-2 text-right tabular-nums text-xs text-muted-foreground border-l border-border">
+                                {item.pickingWms > 0 ? item.pickingWms : <span className="text-muted-foreground/40">—</span>}
+                              </td>
                             )}
-                          </td>
-                        </tr>
-                      ))}
-                      {porProduto.length === 0 && (
+                            {Array.from({ length: maxContagem }, (_, i) => i + 1).map((c) => (
+                              <td key={c} className={`px-3 py-2 text-right tabular-nums font-semibold ${!wmsLoaded && c === 1 ? "border-l border-border" : ""} ${pick.divergente ? "text-amber-600 dark:text-amber-400" : ""}`}>
+                                {item.pickingContagens.has(c) ? item.pickingContagens.get(c) : <span className="text-muted-foreground/25">—</span>}
+                              </td>
+                            ))}
+                            {wmsLoaded && (
+                              <td className="px-3 py-2 text-right tabular-nums">
+                                {deltaCell(pick.delta, pick.divergente, item.pickingContagens.size === 0)}
+                              </td>
+                            )}
+                            {/* PBL */}
+                            {wmsLoaded && (
+                              <td className="px-3 py-2 text-right tabular-nums text-xs text-muted-foreground border-l border-border">
+                                {item.pblWms > 0 ? item.pblWms : <span className="text-muted-foreground/40">—</span>}
+                              </td>
+                            )}
+                            {Array.from({ length: maxContagem }, (_, i) => i + 1).map((c) => (
+                              <td key={c} className={`px-3 py-2 text-right tabular-nums font-semibold ${!wmsLoaded && c === 1 ? "border-l border-border" : ""} ${pbl.divergente ? "text-amber-600 dark:text-amber-400" : ""}`}>
+                                {item.pblContagens.has(c) ? item.pblContagens.get(c) : <span className="text-muted-foreground/25">—</span>}
+                              </td>
+                            ))}
+                            {wmsLoaded && (
+                              <td className="px-3 py-2 text-right tabular-nums">
+                                {deltaCell(pbl.delta, pbl.divergente, item.pblContagens.size === 0)}
+                              </td>
+                            )}
+                          </tr>
+                        );
+                      })}
+                      {analisePorItemFiltrado.length === 0 && (
                         <tr>
-                          <td colSpan={5} className="px-3 py-10 text-center text-muted-foreground text-sm">Nenhum dado</td>
+                          <td colSpan={99} className="px-3 py-10 text-center text-muted-foreground text-sm">
+                            Nenhum item encontrado
+                          </td>
                         </tr>
                       )}
                     </tbody>

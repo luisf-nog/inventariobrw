@@ -138,7 +138,7 @@ function TelaResumo() {
     "todos" | "complementar" | "sobra" | "falta" | "divergente" | "diferenca" | "naocontado"
   >("todos");
   const [filtroItemLocal, setFiltroItemLocal] = useState<"ambos" | "picking" | "pbl">("ambos");
-  const [ordemItem, setOrdemItem] = useState<"sku" | "diferenca">("sku");
+  const [ordemItem, setOrdemItem] = useState<"sku" | "diferenca" | "dif_picking" | "dif_pbl" | "dif_total">("sku");
 
   const [isAdmin, setIsAdmin] = useState(false);
   const [confirmandoEncerrar, setConfirmandoEncerrar] = useState(false);

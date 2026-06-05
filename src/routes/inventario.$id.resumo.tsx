@@ -857,10 +857,13 @@ function TelaResumo() {
                   </SelectContent>
                 </Select>
                 <Select value={ordemItem} onValueChange={(v) => setOrdemItem(v as typeof ordemItem)}>
-                  <SelectTrigger className="h-8 w-[170px] text-sm"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-8 w-[220px] text-sm"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="sku">Ordenar por produto</SelectItem>
-                    <SelectItem value="diferenca">Ordenar por maior diferença</SelectItem>
+                    <SelectItem value="diferenca">Maior diferença (geral)</SelectItem>
+                    <SelectItem value="dif_total">Maior Δ total (|pick|+|pbl|)</SelectItem>
+                    <SelectItem value="dif_picking">Maior Δ no Picking</SelectItem>
+                    <SelectItem value="dif_pbl">Maior Δ no PBL</SelectItem>
                   </SelectContent>
                 </Select>
                 <Button onClick={exportarItensXLSX} variant="outline" size="sm" className="gap-1.5 h-8">

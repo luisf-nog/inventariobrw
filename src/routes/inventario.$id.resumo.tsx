@@ -280,23 +280,32 @@ function TelaResumo() {
       if (cancelado) return;
       if (error) { toast.error(error.message); setLoading(false); return; }
 
-      const { wm, sp, embal } = construirMapasWms(wmsData);
+      const { wm, sp, embal, desc: wmsDescMap } = construirMapasWms(wmsData);
       setWmsMap(wm);
       setSkuPositions(sp);
       setWmsEmbal(embal);
+      setWmsDesc(wmsDescMap);
 
       const codigosLidos: string[] = Array.from(new Set(((data ?? []) as any[]).map((d: any) => d.codigo_produto as string)));
       const eanToSku = await traduzirEansParaSkus(codigosLidos);
       const skuPorCodigo = (codigo: string) => eanToSku[codigo.replace(/\D/g, "")] ?? codigo;
-      const descricoes = await buscarDescricoesPorSku(codigosLidos.map(skuPorCodigo));
+      const skusLidos = codigosLidos.map(skuPorCodigo);
+      const todosSkus = Array.from(new Set([...skusLidos, ...wmsDescMap.keys(), ...Array.from(sp.keys())]));
+      const descricoes = await buscarDescricoesPorSku(todosSkus);
       if (cancelado) return;
+
+      const resolverDesc = (sku: string) => {
+        const d = (descricoes[sku] ?? "").trim();
+        if (d) return d;
+        return wmsDescMap.get(sku) ?? "";
+      };
 
       const ls: Linha[] = (data ?? []).map((d: any) => ({
         id: d.id,
         codigo_posicao: d.codigo_posicao,
         codigo_produto: d.codigo_produto,
         sku: skuPorCodigo(d.codigo_produto),
-        descricao: descricoes[skuPorCodigo(d.codigo_produto)] ?? "",
+        descricao: resolverDesc(skuPorCodigo(d.codigo_produto)),
         numero_contagem: d.numero_contagem,
         quantidade: Number(d.quantidade),
         operador_id: d.operador_id,

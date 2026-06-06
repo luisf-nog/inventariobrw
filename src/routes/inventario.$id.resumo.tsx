@@ -743,7 +743,7 @@ function TelaResumo() {
     if (error) { toast.error(error.message); return; }
     setLinhas((prev) => prev.map((x) => x.id === l.id ? { ...x, quantidade: novo } : x));
     setEditandoId(null);
-    toast.success(`Quantidade atualizada: ${l.quantidade} → ${novo}`);
+    toast.success(`Quantidade atualizada: ${fmtNum(l.quantidade)} → ${novo}`);
   }
 
   async function solicitarRecontagem(l: Linha) {
@@ -989,7 +989,7 @@ function TelaResumo() {
               <PackageX className="h-3.5 w-3.5" /> Não contadas
             </p>
             <p className={`text-3xl font-bold tabular-nums ${stats.naoContadas > 0 ? "text-amber-600 dark:text-amber-400" : ""}`}>
-              {cobertura.wmsConhecido ? stats.naoContadas : "—"}
+              {cobertura.wmsConhecido ? fmtNum(stats.naoContadas) : "—"}
             </p>
             {!cobertura.wmsConhecido && <p className="text-[10px] text-muted-foreground mt-1">Sincronize o WMS</p>}
           </div>
@@ -999,7 +999,7 @@ function TelaResumo() {
               <Layers className="h-3.5 w-3.5" /> Falta 2ª contagem
             </p>
             <p className={`text-3xl font-bold tabular-nums ${stats.faltaSegunda > 0 ? "text-sky-600 dark:text-sky-400" : ""}`}>
-              {stats.faltaSegunda}
+              {fmtNum(stats.faltaSegunda)}
             </p>
           </div>
 
@@ -1008,7 +1008,7 @@ function TelaResumo() {
               <AlertTriangle className="h-3.5 w-3.5" /> Entre contagens
             </p>
             <p className={`text-3xl font-bold tabular-nums ${stats.divergencias > 0 ? "text-destructive" : ""}`}>
-              {stats.divergencias}
+              {fmtNum(stats.divergencias)}
             </p>
             {stats.divergencias === 0 && consolidado.length > 0 && (
               <p className="text-[10px] text-emerald-600 mt-1 flex items-center gap-1">
@@ -1022,7 +1022,7 @@ function TelaResumo() {
               <AlertTriangle className="h-3.5 w-3.5" /> vs WMS
             </p>
             <p className={`text-3xl font-bold tabular-nums ${stats.divergenciasWms > 0 ? "text-amber-600 dark:text-amber-400" : ""}`}>
-              {wmsMap.size === 0 ? "—" : stats.divergenciasWms}
+              {wmsMap.size === 0 ? "—" : fmtNum(stats.divergenciasWms)}
             </p>
           </div>
 
@@ -1031,7 +1031,7 @@ function TelaResumo() {
               <MapPin className="h-3.5 w-3.5" /> Fora do lugar
             </p>
             <p className={`text-3xl font-bold tabular-nums ${stats.foraDoLugar > 0 ? "text-violet-600 dark:text-violet-400" : ""}`}>
-              {wmsMap.size === 0 ? "—" : stats.foraDoLugar}
+              {wmsMap.size === 0 ? "—" : fmtNum(stats.foraDoLugar)}
             </p>
           </div>
         </div>
@@ -1052,7 +1052,7 @@ function TelaResumo() {
                 Pendências
                 {stats.naoContadas + stats.faltaSegunda + stats.divergencias + stats.fracionamento > 0 ? (
                   <Badge variant="destructive" className="ml-1.5 text-[10px] px-1.5 py-0 h-4">
-                    {stats.naoContadas + stats.faltaSegunda + stats.divergencias + stats.fracionamento}
+                    {fmtNum(stats.naoContadas + stats.faltaSegunda + stats.divergencias + stats.fracionamento)}
                   </Badge>
                 ) : (
                   <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0 h-4">0</Badge>
@@ -1190,7 +1190,7 @@ function TelaResumo() {
                           if (divergente) return <span title="Contagens divergentes"><AlertTriangle className="inline h-3.5 w-3.5 text-amber-500" /></span>;
                           if (delta === null) return <span className="text-muted-foreground/50 text-xs">—</span>;
                           if (delta === 0) return <span className="text-emerald-500 font-bold">0</span>;
-                          return <span className={`font-bold ${delta > 0 ? "text-emerald-500" : "text-destructive"}`}>{delta > 0 ? `+${delta}` : delta}</span>;
+                          return <span className={`font-bold ${delta > 0 ? "text-emerald-500" : "text-destructive"}`}>{fmtDelta(delta)}</span>;
                         };
                         const deltaTotal = (pick.delta ?? 0) + (pbl.delta ?? 0);
                         const semQualquer = item.pickingContagens.size === 0 && item.pblContagens.size === 0;
@@ -1216,12 +1216,12 @@ function TelaResumo() {
                             {/* Picking */}
                             {wmsLoaded && (
                               <td className="px-1.5 py-1.5 text-right tabular-nums text-[11px] text-foreground/60 border-l border-border">
-                                {item.pickingWms > 0 ? item.pickingWms : <span className="text-muted-foreground/40">—</span>}
+                                {item.pickingWms > 0 ? fmtNum(item.pickingWms) : <span className="text-muted-foreground/40">—</span>}
                               </td>
                             )}
                             {Array.from({ length: maxContagem }, (_, i) => i + 1).map((c) => (
                               <td key={c} className={`px-1.5 py-1.5 text-right tabular-nums text-xs font-semibold ${!wmsLoaded && c === 1 ? "border-l border-border" : ""} ${pick.divergente ? "text-amber-500" : "text-foreground"}`}>
-                                {item.pickingContagens.has(c) ? item.pickingContagens.get(c) : <span className="text-muted-foreground/40 font-normal">—</span>}
+                                {item.pickingContagens.has(c) ? fmtNum(item.pickingContagens.get(c)) : <span className="text-muted-foreground/40 font-normal">—</span>}
                               </td>
                             ))}
                             {wmsLoaded && (
@@ -1232,12 +1232,12 @@ function TelaResumo() {
                             {/* PBL */}
                             {wmsLoaded && (
                               <td className="px-1.5 py-1.5 text-right tabular-nums text-[11px] text-foreground/60 border-l border-border">
-                                {item.pblWms > 0 ? item.pblWms : <span className="text-muted-foreground/40">—</span>}
+                                {item.pblWms > 0 ? fmtNum(item.pblWms) : <span className="text-muted-foreground/40">—</span>}
                               </td>
                             )}
                             {Array.from({ length: maxContagem }, (_, i) => i + 1).map((c) => (
                               <td key={c} className={`px-1.5 py-1.5 text-right tabular-nums text-xs font-semibold ${!wmsLoaded && c === 1 ? "border-l border-border" : ""} ${pbl.divergente ? "text-amber-500" : "text-foreground"}`}>
-                                {item.pblContagens.has(c) ? item.pblContagens.get(c) : <span className="text-muted-foreground/40 font-normal">—</span>}
+                                {item.pblContagens.has(c) ? fmtNum(item.pblContagens.get(c)) : <span className="text-muted-foreground/40 font-normal">—</span>}
                               </td>
                             ))}
                             {wmsLoaded && (
@@ -1256,7 +1256,7 @@ function TelaResumo() {
                                   <span className="text-emerald-500 font-bold">0</span>
                                 ) : (
                                   <span className={`font-bold ${deltaTotal > 0 ? "text-emerald-500" : "text-destructive"}`}>
-                                    {deltaTotal > 0 ? `+${deltaTotal}` : deltaTotal}
+                                    {fmtDelta(deltaTotal)}
                                   </span>
                                 )}
                               </td>
@@ -1272,10 +1272,10 @@ function TelaResumo() {
                                 .join("\n");
                               return (
                                 <td className="px-1.5 py-1.5 text-right tabular-nums text-xs border-l border-border" title={detalhe}>
-                                  <span className="font-bold text-fuchsia-600 dark:text-fuchsia-400">+{outras.total}</span>
+                                  <span className="font-bold text-fuchsia-600 dark:text-fuchsia-400">+{fmtNum(outras.total)}</span>
                                   {outras.totalForaAnalise > 0 && (
                                     <span className="block text-[9px] text-fuchsia-500/80 leading-tight" title="Quantidade em posições aéreas/técnica, descartadas da análise">
-                                      {outras.totalForaAnalise} fora
+                                      {fmtNum(outras.totalForaAnalise)} fora
                                     </span>
                                   )}
                                 </td>
@@ -1352,7 +1352,7 @@ function TelaResumo() {
                                     </Badge>
                                   </td>
                                   <td className="px-3 py-2 text-xs text-muted-foreground">
-                                    {p.itensWms.length === 0 ? <span className="italic">—</span> : p.itensWms.map((i) => `${i.sku} (${i.qtd})`).join(", ")}
+                                    {p.itensWms.length === 0 ? <span className="italic">—</span> : p.itensWms.map((i) => `${i.sku} (${fmtNum(i.qtd)})`).join(", ")}
                                   </td>
                                 </tr>
                               ))}
@@ -1459,10 +1459,10 @@ function TelaResumo() {
                                     </td>
                                     {Array.from({ length: maxContagem }, (_, i) => i + 1).map((ctg) => (
                                       <td key={ctg} className="px-3 py-2 text-right tabular-nums font-bold">
-                                        {item.contagens.has(ctg) ? item.contagens.get(ctg) : <span className="text-muted-foreground/40">—</span>}
+                                        {item.contagens.has(ctg) ? fmtNum(item.contagens.get(ctg)) : <span className="text-muted-foreground/40">—</span>}
                                       </td>
                                     ))}
-                                    <td className="px-3 py-2 text-right font-bold tabular-nums text-destructive">±{diff}</td>
+                                    <td className="px-3 py-2 text-right font-bold tabular-nums text-destructive">±{fmtNum(diff)}</td>
                                   </tr>
                                 );
                               })}
@@ -1519,10 +1519,10 @@ function TelaResumo() {
                                     <td className="px-3 py-2 text-xs text-muted-foreground max-w-[200px] truncate hidden md:table-cell" title={f.descricao}>
                                       {f.descricao || <span className="italic">—</span>}
                                     </td>
-                                    <td className="px-3 py-2 text-right tabular-nums font-bold">{f.qtd}</td>
-                                    <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{f.embal}</td>
-                                    <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{f.caixas}</td>
-                                    <td className="px-3 py-2 text-right tabular-nums font-bold text-rose-600 dark:text-rose-400">+{f.fracao}</td>
+                                    <td className="px-3 py-2 text-right tabular-nums font-bold">{fmtNum(f.qtd)}</td>
+                                    <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{fmtNum(f.embal)}</td>
+                                    <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{fmtNum(f.caixas)}</td>
+                                    <td className="px-3 py-2 text-right tabular-nums font-bold text-rose-600 dark:text-rose-400">+{fmtNum(f.fracao)}</td>
                                   </tr>
                                 ))}
                               </tbody>
@@ -1642,16 +1642,16 @@ function TelaResumo() {
                                 </div>
                               ) : (
                                 <>
-                                  {l.quantidade}
+                                  {fmtNum(l.quantidade)}
                                   {div && <AlertTriangle className="inline h-3 w-3 ml-1 text-destructive" />}
                                 </>
                               )}
                             </td>
                             <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">
-                              {wmsMap.size === 0 ? <span className="text-[10px]">—</span> : wms === undefined ? <span className="text-[10px] italic">não há</span> : wms}
+                              {wmsMap.size === 0 ? <span className="text-[10px]">—</span> : wms === undefined ? <span className="text-[10px] italic">não há</span> : fmtNum(wms)}
                             </td>
                             <td className={`px-3 py-2 text-right tabular-nums font-medium ${dif === null ? "" : dif === 0 ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`}>
-                              {dif === null ? "" : dif > 0 ? `+${dif}` : dif}
+                              {dif === null ? "" : fmtDelta(dif)}
                             </td>
                             <td className="px-3 py-2 text-xs text-muted-foreground hidden sm:table-cell">{l.operador_nome ?? "—"}</td>
                             <td className="px-3 py-2 text-xs text-muted-foreground tabular-nums hidden lg:table-cell">

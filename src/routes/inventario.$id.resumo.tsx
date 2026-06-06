@@ -140,6 +140,7 @@ function construirMapasWms(rows: WmsRow[]) {
   const wm = new Map<string, number>();
   const sp = new Map<string, Set<string>>();
   const embal = new Map<string, number>(); // pos|sku -> qtde da master (caixa)
+  const desc = new Map<string, string>(); // sku -> descricao do WMS
   for (const w of rows) {
     const k = `${w.codigo_posicao}|${w.sku}`;
     wm.set(k, (wm.get(k) ?? 0) + Number(w.qtde_unidades ?? 0));
@@ -147,8 +148,10 @@ function construirMapasWms(rows: WmsRow[]) {
     set.add(w.codigo_posicao);
     sp.set(w.sku, set);
     embal.set(k, Math.max(embal.get(k) ?? 0, Number(w.qtde_embal ?? 0)));
+    const d = (w.descricao ?? "").trim();
+    if (d && !desc.has(w.sku)) desc.set(w.sku, d);
   }
-  return { wm, sp, embal };
+  return { wm, sp, embal, desc };
 }
 
 function Paginacao({ page, pageSize, total, onPage, onPageSize }: {

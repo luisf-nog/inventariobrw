@@ -49,7 +49,7 @@ type ConsolidadoItem = {
   divergente: boolean;
 };
 
-type WmsRow = { codigo_posicao: string; sku: string; qtde_unidades: number; qtde_embal?: number | null };
+type WmsRow = { codigo_posicao: string; sku: string; qtde_unidades: number; qtde_embal?: number | null; descricao?: string | null };
 
 type ItemAnalise = {
   sku: string;

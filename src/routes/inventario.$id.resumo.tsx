@@ -743,7 +743,7 @@ function TelaResumo() {
     if (error) { toast.error(error.message); return; }
     setLinhas((prev) => prev.map((x) => x.id === l.id ? { ...x, quantidade: novo } : x));
     setEditandoId(null);
-    toast.success(`Quantidade atualizada: ${fmtNum(l.quantidade)} → ${novo}`);
+    toast.success(`Quantidade atualizada: ${fmtNum(l.quantidade)} → ${fmtNum(novo)}`);
   }
 
   async function solicitarRecontagem(l: Linha) {

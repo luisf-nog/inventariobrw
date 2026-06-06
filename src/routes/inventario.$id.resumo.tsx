@@ -407,10 +407,14 @@ function TelaResumo() {
         const sep = k.indexOf("|");
         const pos = k.slice(0, sep);
         const sku = k.slice(sep + 1);
-        const e = getOrCreate(sku);
+        const e = getOrCreate(sku, wmsDesc.get(sku) ?? "");
+        if (!e.descricao) e.descricao = wmsDesc.get(sku) ?? "";
         if (isPosicaoPbl(pos)) e.pblWms += qtd;
         else e.pickingWms += qtd;
       }
+    }
+    for (const item of map.values()) {
+      if (!item.descricao) item.descricao = wmsDesc.get(item.sku) ?? "";
     }
     return Array.from(map.values()).sort((a, b) => a.sku.localeCompare(b.sku));
   }, [linhasAnalisadas, wmsMap]);

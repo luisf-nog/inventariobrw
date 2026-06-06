@@ -704,10 +704,11 @@ function TelaResumo() {
       const r = await sincronizarWms({ data: { inventarioId: id } });
       toast.success(`WMS sincronizado: ${r.posicoes} posições, ${r.total_inserido} registros`);
       const wmsData = await fetchWmsSnapshot(id);
-      const { wm, sp, embal } = construirMapasWms(wmsData);
+      const { wm, sp, embal, desc } = construirMapasWms(wmsData);
       setWmsMap(wm);
       setSkuPositions(sp);
       setWmsEmbal(embal);
+      setWmsDesc(desc);
       setInv((p) => p ? { ...p, wms_sincronizado_em: r.sincronizado_em } : p);
     } catch (err: any) {
       toast.error(`Falha ao sincronizar WMS: ${err.message ?? err}`);

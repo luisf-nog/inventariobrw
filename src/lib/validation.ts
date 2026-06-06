@@ -30,3 +30,14 @@ export function parseQuantidade(raw: string): number | null {
   if (!Number.isFinite(n) || n < 0) return null;
   return n;
 }
+
+export function fmtNum(n: number | null | undefined): string {
+  if (n == null || !Number.isFinite(n)) return "";
+  return n.toLocaleString("pt-BR");
+}
+
+export function fmtDelta(n: number | null | undefined): string {
+  if (n == null || !Number.isFinite(n)) return "";
+  const s = n.toLocaleString("pt-BR");
+  return n > 0 ? `+${s}` : s;
+}

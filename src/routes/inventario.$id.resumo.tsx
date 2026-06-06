@@ -123,7 +123,7 @@ async function fetchWmsSnapshot(inventarioId: string): Promise<WmsRow[]> {
   for (let offset = 0; ; offset += PAGE) {
     const { data, error } = await supabase
       .from("estoque_wms_snapshot")
-      .select("codigo_posicao, sku, qtde_unidades, qtde_embal")
+      .select("codigo_posicao, sku, qtde_unidades, qtde_embal, descricao")
       .eq("inventario_id", inventarioId)
       .order("id", { ascending: true })
       .range(offset, offset + PAGE - 1);

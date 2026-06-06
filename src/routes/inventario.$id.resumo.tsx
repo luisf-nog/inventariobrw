@@ -17,7 +17,7 @@ import {
 import * as XLSX from "xlsx";
 import { toast } from "sonner";
 import { buscarDescricoesPorSku, traduzirEansParaSkus } from "@/lib/produtos";
-import { formatPosicaoDisplay } from "@/lib/validation";
+import { formatPosicaoDisplay, fmtNum, fmtDelta } from "@/lib/validation";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,

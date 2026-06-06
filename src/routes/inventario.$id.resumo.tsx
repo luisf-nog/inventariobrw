@@ -49,7 +49,7 @@ type ConsolidadoItem = {
   divergente: boolean;
 };
 
-type WmsRow = { codigo_posicao: string; sku: string; qtde_unidades: number };
+type WmsRow = { codigo_posicao: string; sku: string; qtde_unidades: number; qtde_embal?: number | null };
 
 type ItemAnalise = {
   sku: string;
@@ -123,7 +123,7 @@ async function fetchWmsSnapshot(inventarioId: string): Promise<WmsRow[]> {
   for (let offset = 0; ; offset += PAGE) {
     const { data, error } = await supabase
       .from("estoque_wms_snapshot")
-      .select("codigo_posicao, sku, qtde_unidades")
+      .select("codigo_posicao, sku, qtde_unidades, qtde_embal")
       .eq("inventario_id", inventarioId)
       .order("id", { ascending: true })
       .range(offset, offset + PAGE - 1);
@@ -133,6 +133,22 @@ async function fetchWmsSnapshot(inventarioId: string): Promise<WmsRow[]> {
     if (rows.length < PAGE) break;
   }
   return out.filter((r) => isPosicaoConsiderada(r.codigo_posicao));
+}
+
+// Monta os mapas derivados do snapshot WMS (usado no carregamento e na sincronização)
+function construirMapasWms(rows: WmsRow[]) {
+  const wm = new Map<string, number>();
+  const sp = new Map<string, Set<string>>();
+  const embal = new Map<string, number>(); // pos|sku -> qtde da master (caixa)
+  for (const w of rows) {
+    const k = `${w.codigo_posicao}|${w.sku}`;
+    wm.set(k, (wm.get(k) ?? 0) + Number(w.qtde_unidades ?? 0));
+    const set = sp.get(w.sku) ?? new Set<string>();
+    set.add(w.codigo_posicao);
+    sp.set(w.sku, set);
+    embal.set(k, Math.max(embal.get(k) ?? 0, Number(w.qtde_embal ?? 0)));
+  }
+  return { wm, sp, embal };
 }
 
 function Paginacao({ page, pageSize, total, onPage, onPageSize }: {
@@ -181,6 +197,7 @@ function TelaResumo() {
   const [linhas, setLinhas] = useState<Linha[]>([]);
   const [wmsMap, setWmsMap] = useState<Map<string, number>>(new Map());
   const [skuPositions, setSkuPositions] = useState<Map<string, Set<string>>>(new Map());
+  const [wmsEmbal, setWmsEmbal] = useState<Map<string, number>>(new Map());
   const [loading, setLoading] = useState(true);
   const [sincronizando, setSincronizando] = useState(false);
 
@@ -259,17 +276,10 @@ function TelaResumo() {
       if (cancelado) return;
       if (error) { toast.error(error.message); setLoading(false); return; }
 
-      const wm = new Map<string, number>();
-      const sp = new Map<string, Set<string>>();
-      for (const w of wmsData) {
-        const k = `${w.codigo_posicao}|${w.sku}`;
-        wm.set(k, (wm.get(k) ?? 0) + Number(w.qtde_unidades ?? 0));
-        const set = sp.get(w.sku) ?? new Set<string>();
-        set.add(w.codigo_posicao);
-        sp.set(w.sku, set);
-      }
+      const { wm, sp, embal } = construirMapasWms(wmsData);
       setWmsMap(wm);
       setSkuPositions(sp);
+      setWmsEmbal(embal);
 
       const codigosLidos: string[] = Array.from(new Set(((data ?? []) as any[]).map((d: any) => d.codigo_produto as string)));
       const eanToSku = await traduzirEansParaSkus(codigosLidos);
@@ -538,6 +548,31 @@ function TelaResumo() {
     return map;
   }, [contadoPorPS, skuPositions]);
 
+  // Fracionamento em picking de caixa fechada: posições de picking cuja qtd confirmada
+  // NÃO é múltiplo do master (embal). Caixa fechada = WMS guarda caixas inteiras (un % embal == 0).
+  const fracionamentoPicking = useMemo(() => {
+    const out: { pos: string; sku: string; descricao: string; qtd: number; embal: number; caixas: number; fracao: number }[] = [];
+    if (wmsEmbal.size === 0) return out;
+    const desc = new Map<string, string>();
+    for (const l of linhasAnalisadas) if (!desc.has(l.sku) && l.descricao) desc.set(l.sku, l.descricao);
+    for (const [k, info] of contadoPorPS) {
+      if (!info.convergente || info.qtd <= 0) continue; // só quantidades confirmadas/positivas
+      const sep = k.indexOf("|");
+      const pos = k.slice(0, sep);
+      const sku = k.slice(sep + 1);
+      if (!isPosicaoNormal(pos)) continue; // só picking (rua 001–899, nível 01)
+      const embal = wmsEmbal.get(k) ?? 0;
+      if (embal <= 1) continue;
+      const wmsUn = wmsMap.get(k);
+      if (wmsUn === undefined || wmsUn <= 0 || wmsUn % embal !== 0) continue; // caixa fechada confirmada pelo WMS
+      if (info.qtd % embal === 0) continue; // múltiplo do master → ok
+      out.push({ pos, sku, descricao: desc.get(sku) ?? "", qtd: info.qtd, embal, caixas: Math.floor(info.qtd / embal), fracao: info.qtd % embal });
+    }
+    return out.sort((a, b) => a.pos.localeCompare(b.pos));
+  }, [contadoPorPS, wmsEmbal, wmsMap, linhasAnalisadas]);
+
+  const skusFracionados = useMemo(() => new Set(fracionamentoPicking.map((f) => f.sku)), [fracionamentoPicking]);
+
 
   // Recontagens pendentes: solicitação ainda não atendida
   const recontagensPendentes = useMemo(() => {
@@ -613,8 +648,9 @@ function TelaResumo() {
       divergencias: divergencias.length,
       divergenciasWms: divergenciasWms.size,
       foraDoLugar: foraDoLugar.size,
+      fracionamento: fracionamentoPicking.length,
     };
-  }, [linhasAnalisadas, consolidado, cobertura, divergencias, divergenciasWms, foraDoLugar]);
+  }, [linhasAnalisadas, consolidado, cobertura, divergencias, divergenciasWms, foraDoLugar, fracionamentoPicking]);
 
   /* ── Filtros ────────────────────────────────────────────────────── */
 
@@ -651,17 +687,10 @@ function TelaResumo() {
       const r = await sincronizarWms({ data: { inventarioId: id } });
       toast.success(`WMS sincronizado: ${r.posicoes} posições, ${r.total_inserido} registros`);
       const wmsData = await fetchWmsSnapshot(id);
-      const wm = new Map<string, number>();
-      const sp = new Map<string, Set<string>>();
-      for (const w of wmsData) {
-        const k = `${w.codigo_posicao}|${w.sku}`;
-        wm.set(k, (wm.get(k) ?? 0) + Number(w.qtde_unidades ?? 0));
-        const set = sp.get(w.sku) ?? new Set<string>();
-        set.add(w.codigo_posicao);
-        sp.set(w.sku, set);
-      }
+      const { wm, sp, embal } = construirMapasWms(wmsData);
       setWmsMap(wm);
       setSkuPositions(sp);
+      setWmsEmbal(embal);
       setInv((p) => p ? { ...p, wms_sincronizado_em: r.sincronizado_em } : p);
     } catch (err: any) {
       toast.error(`Falha ao sincronizar WMS: ${err.message ?? err}`);
@@ -854,6 +883,23 @@ function TelaResumo() {
     XLSX.writeFile(wb, `contagens-divergentes-${inv?.nome ?? id}-${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
 
+  function exportarFracionamento() {
+    const dados = fracionamentoPicking.map((f) => ({
+      Posição: formatPosicaoDisplay(f.pos),
+      "Posição (código)": f.pos,
+      Produto: f.sku,
+      Descrição: f.descricao,
+      "Qtd contada": f.qtd,
+      "Master (caixa)": f.embal,
+      "Caixas cheias": f.caixas,
+      "Fração (sobra solta)": f.fracao,
+    }));
+    const ws = XLSX.utils.json_to_sheet(dados);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Fracionamento picking");
+    XLSX.writeFile(wb, `fracionamento-picking-${inv?.nome ?? id}-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  }
+
   async function encerrar() {
     if (confirmTexto.trim().toUpperCase() !== "ENCERRAR") { toast.error("Digite ENCERRAR para confirmar"); return; }
     const { error } = await supabase
@@ -986,9 +1032,9 @@ function TelaResumo() {
               </TabsTrigger>
               <TabsTrigger value="pendencias">
                 Pendências
-                {stats.naoContadas + stats.faltaSegunda + stats.divergencias > 0 ? (
+                {stats.naoContadas + stats.faltaSegunda + stats.divergencias + stats.fracionamento > 0 ? (
                   <Badge variant="destructive" className="ml-1.5 text-[10px] px-1.5 py-0 h-4">
-                    {stats.naoContadas + stats.faltaSegunda + stats.divergencias}
+                    {stats.naoContadas + stats.faltaSegunda + stats.divergencias + stats.fracionamento}
                   </Badge>
                 ) : (
                   <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0 h-4">0</Badge>
@@ -1141,6 +1187,9 @@ function TelaResumo() {
                                 {naoContado && (
                                   <span className="text-[9px] px-1 rounded bg-amber-500/20 text-amber-300 font-sans font-medium shrink-0">novo</span>
                                 )}
+                                {skusFracionados.has(item.sku) && (
+                                  <span title="Quantidade em picking de caixa fechada não é múltiplo do master (produto fracionado — corrigir)" className="text-[9px] px-1 rounded bg-rose-500/20 text-rose-400 font-sans font-semibold shrink-0">fração</span>
+                                )}
                               </div>
                             </td>
                             <td className="px-2 py-1.5 text-[11px] text-foreground/70 truncate" title={item.descricao}>
@@ -1233,7 +1282,7 @@ function TelaResumo() {
 
             {/* ── Pendências ─────────────────────────────────────── */}
             <TabsContent value="pendencias" className="space-y-6">
-              {stats.naoContadas === 0 && stats.faltaSegunda === 0 && stats.divergencias === 0 ? (
+              {stats.naoContadas === 0 && stats.faltaSegunda === 0 && stats.divergencias === 0 && stats.fracionamento === 0 ? (
                 <div className="rounded-xl border border-border bg-card p-12 text-center">
                   <CheckCircle2 className="h-10 w-10 text-emerald-500 mx-auto mb-3" />
                   <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Nenhuma pendência</p>
@@ -1403,6 +1452,66 @@ function TelaResumo() {
                           </table>
                         </div>
                       </div>
+                    )}
+                  </section>
+
+                  {/* Fracionamento em picking de caixa fechada */}
+                  <section className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <PackageX className="h-4 w-4 text-rose-500" />
+                      <h3 className="text-sm font-semibold">Fracionamento (picking caixa fechada)</h3>
+                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">{fracionamentoPicking.length}</Badge>
+                      <Button
+                        onClick={exportarFracionamento}
+                        disabled={fracionamentoPicking.length === 0}
+                        variant="outline" size="sm" className="ml-auto gap-1.5 h-8"
+                        title="Exporta posições de picking caixa-fechada cuja quantidade não é múltiplo do master"
+                      >
+                        <FileSpreadsheet className="h-4 w-4" /> Exportar
+                      </Button>
+                    </div>
+                    {wmsMap.size === 0 ? (
+                      <p className="text-xs text-muted-foreground">Sincronize o WMS para identificar fracionamento.</p>
+                    ) : fracionamentoPicking.length === 0 ? (
+                      <p className="text-xs text-emerald-600 dark:text-emerald-400">Nenhum fracionamento em picking de caixa fechada.</p>
+                    ) : (
+                      <>
+                        <p className="text-xs text-muted-foreground">
+                          Quantidade contada que <strong>não é múltiplo do master</strong> — proibido em caixa fechada. Corrigir sistemicamente ou fisicamente.
+                        </p>
+                        <div className="rounded-xl border border-rose-500/30 overflow-hidden">
+                          <div className="overflow-x-auto max-h-[360px] overflow-y-auto">
+                            <table className="w-full text-sm">
+                              <thead className="bg-rose-500/10 sticky top-0">
+                                <tr>
+                                  <th className="px-3 py-2 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Posição</th>
+                                  <th className="px-3 py-2 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Produto</th>
+                                  <th className="px-3 py-2 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wide hidden md:table-cell">Descrição</th>
+                                  <th className="px-3 py-2 text-right text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Qtd</th>
+                                  <th className="px-3 py-2 text-right text-[11px] font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap">Master</th>
+                                  <th className="px-3 py-2 text-right text-[11px] font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap">Caixas</th>
+                                  <th className="px-3 py-2 text-right text-[11px] font-medium text-rose-600 dark:text-rose-400 uppercase tracking-wide whitespace-nowrap">Fração</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-border/50">
+                                {fracionamentoPicking.map((f) => (
+                                  <tr key={`${f.pos}|${f.sku}`} className="bg-rose-500/5">
+                                    <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{formatPosicaoDisplay(f.pos)}</td>
+                                    <td className="px-3 py-2 font-mono text-xs font-medium">{f.sku}</td>
+                                    <td className="px-3 py-2 text-xs text-muted-foreground max-w-[200px] truncate hidden md:table-cell" title={f.descricao}>
+                                      {f.descricao || <span className="italic">—</span>}
+                                    </td>
+                                    <td className="px-3 py-2 text-right tabular-nums font-bold">{f.qtd}</td>
+                                    <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{f.embal}</td>
+                                    <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{f.caixas}</td>
+                                    <td className="px-3 py-2 text-right tabular-nums font-bold text-rose-600 dark:text-rose-400">+{f.fracao}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </>
                     )}
                   </section>
                 </>

@@ -14,6 +14,63 @@ export type Database = {
   }
   public: {
     Tables: {
+      ajustes_caixa: {
+        Row: {
+          aplicado_em: string
+          codigo_posicao: string
+          codigo_produto: string
+          criterio: string
+          embal: number
+          id: string
+          inventario_id: string
+          leitura_id: string
+          numero_contagem: number
+          quantidade_antiga: number
+          quantidade_nova: number
+        }
+        Insert: {
+          aplicado_em?: string
+          codigo_posicao: string
+          codigo_produto: string
+          criterio: string
+          embal: number
+          id?: string
+          inventario_id: string
+          leitura_id: string
+          numero_contagem: number
+          quantidade_antiga: number
+          quantidade_nova: number
+        }
+        Update: {
+          aplicado_em?: string
+          codigo_posicao?: string
+          codigo_produto?: string
+          criterio?: string
+          embal?: number
+          id?: string
+          inventario_id?: string
+          leitura_id?: string
+          numero_contagem?: number
+          quantidade_antiga?: number
+          quantidade_nova?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ajustes_caixa_inventario_id_fkey"
+            columns: ["inventario_id"]
+            isOneToOne: false
+            referencedRelation: "inventarios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ajustes_caixa_leitura_id_fkey"
+            columns: ["leitura_id"]
+            isOneToOne: true
+            referencedRelation: "leituras"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       estoque_wms_snapshot: {
         Row: {
           capturado_em: string
@@ -161,6 +218,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      leituras_bkp_dup1a_20260605: {
+        Row: {
+          backup_em: string | null
+          codigo_posicao: string | null
+          codigo_produto: string | null
+          id: string
+          inventario_id: string | null
+          lido_em: string | null
+          numero_contagem_antigo: number | null
+          numero_contagem_novo: number | null
+        }
+        Insert: {
+          backup_em?: string | null
+          codigo_posicao?: string | null
+          codigo_produto?: string | null
+          id: string
+          inventario_id?: string | null
+          lido_em?: string | null
+          numero_contagem_antigo?: number | null
+          numero_contagem_novo?: number | null
+        }
+        Update: {
+          backup_em?: string | null
+          codigo_posicao?: string | null
+          codigo_produto?: string | null
+          id?: string
+          inventario_id?: string | null
+          lido_em?: string | null
+          numero_contagem_antigo?: number | null
+          numero_contagem_novo?: number | null
+        }
+        Relationships: []
       }
       operadores: {
         Row: {

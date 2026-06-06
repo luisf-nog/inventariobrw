@@ -49,7 +49,7 @@ type ConsolidadoItem = {
   divergente: boolean;
 };
 
-type WmsRow = { codigo_posicao: string; sku: string; qtde_unidades: number; qtde_embal?: number | null };
+type WmsRow = { codigo_posicao: string; sku: string; qtde_unidades: number; qtde_embal?: number | null; descricao?: string | null };
 
 type ItemAnalise = {
   sku: string;
@@ -123,7 +123,7 @@ async function fetchWmsSnapshot(inventarioId: string): Promise<WmsRow[]> {
   for (let offset = 0; ; offset += PAGE) {
     const { data, error } = await supabase
       .from("estoque_wms_snapshot")
-      .select("codigo_posicao, sku, qtde_unidades, qtde_embal")
+      .select("codigo_posicao, sku, qtde_unidades, qtde_embal, descricao")
       .eq("inventario_id", inventarioId)
       .order("id", { ascending: true })
       .range(offset, offset + PAGE - 1);
@@ -140,6 +140,7 @@ function construirMapasWms(rows: WmsRow[]) {
   const wm = new Map<string, number>();
   const sp = new Map<string, Set<string>>();
   const embal = new Map<string, number>(); // pos|sku -> qtde da master (caixa)
+  const desc = new Map<string, string>(); // sku -> descricao do WMS
   for (const w of rows) {
     const k = `${w.codigo_posicao}|${w.sku}`;
     wm.set(k, (wm.get(k) ?? 0) + Number(w.qtde_unidades ?? 0));
@@ -147,8 +148,10 @@ function construirMapasWms(rows: WmsRow[]) {
     set.add(w.codigo_posicao);
     sp.set(w.sku, set);
     embal.set(k, Math.max(embal.get(k) ?? 0, Number(w.qtde_embal ?? 0)));
+    const d = (w.descricao ?? "").trim();
+    if (d && !desc.has(w.sku)) desc.set(w.sku, d);
   }
-  return { wm, sp, embal };
+  return { wm, sp, embal, desc };
 }
 
 function Paginacao({ page, pageSize, total, onPage, onPageSize }: {
@@ -198,6 +201,7 @@ function TelaResumo() {
   const [wmsMap, setWmsMap] = useState<Map<string, number>>(new Map());
   const [skuPositions, setSkuPositions] = useState<Map<string, Set<string>>>(new Map());
   const [wmsEmbal, setWmsEmbal] = useState<Map<string, number>>(new Map());
+  const [wmsDesc, setWmsDesc] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [sincronizando, setSincronizando] = useState(false);
 
@@ -276,23 +280,32 @@ function TelaResumo() {
       if (cancelado) return;
       if (error) { toast.error(error.message); setLoading(false); return; }
 
-      const { wm, sp, embal } = construirMapasWms(wmsData);
+      const { wm, sp, embal, desc: wmsDescMap } = construirMapasWms(wmsData);
       setWmsMap(wm);
       setSkuPositions(sp);
       setWmsEmbal(embal);
+      setWmsDesc(wmsDescMap);
 
       const codigosLidos: string[] = Array.from(new Set(((data ?? []) as any[]).map((d: any) => d.codigo_produto as string)));
       const eanToSku = await traduzirEansParaSkus(codigosLidos);
       const skuPorCodigo = (codigo: string) => eanToSku[codigo.replace(/\D/g, "")] ?? codigo;
-      const descricoes = await buscarDescricoesPorSku(codigosLidos.map(skuPorCodigo));
+      const skusLidos = codigosLidos.map(skuPorCodigo);
+      const todosSkus = Array.from(new Set([...skusLidos, ...wmsDescMap.keys(), ...Array.from(sp.keys())]));
+      const descricoes = await buscarDescricoesPorSku(todosSkus);
       if (cancelado) return;
+
+      const resolverDesc = (sku: string) => {
+        const d = (descricoes[sku] ?? "").trim();
+        if (d) return d;
+        return wmsDescMap.get(sku) ?? "";
+      };
 
       const ls: Linha[] = (data ?? []).map((d: any) => ({
         id: d.id,
         codigo_posicao: d.codigo_posicao,
         codigo_produto: d.codigo_produto,
         sku: skuPorCodigo(d.codigo_produto),
-        descricao: descricoes[skuPorCodigo(d.codigo_produto)] ?? "",
+        descricao: resolverDesc(skuPorCodigo(d.codigo_produto)),
         numero_contagem: d.numero_contagem,
         quantidade: Number(d.quantidade),
         operador_id: d.operador_id,
@@ -394,13 +407,17 @@ function TelaResumo() {
         const sep = k.indexOf("|");
         const pos = k.slice(0, sep);
         const sku = k.slice(sep + 1);
-        const e = getOrCreate(sku);
+        const e = getOrCreate(sku, wmsDesc.get(sku) ?? "");
+        if (!e.descricao) e.descricao = wmsDesc.get(sku) ?? "";
         if (isPosicaoPbl(pos)) e.pblWms += qtd;
         else e.pickingWms += qtd;
       }
     }
+    for (const item of map.values()) {
+      if (!item.descricao) item.descricao = wmsDesc.get(item.sku) ?? "";
+    }
     return Array.from(map.values()).sort((a, b) => a.sku.localeCompare(b.sku));
-  }, [linhasAnalisadas, wmsMap]);
+  }, [linhasAnalisadas, wmsMap, wmsDesc]);
 
   // Saldo do mesmo SKU encontrado em posições onde o WMS NÃO o espera.
   // Usa `linhas` cru (não `linhasAnalisadas`) de propósito: assim captura também as
@@ -687,10 +704,11 @@ function TelaResumo() {
       const r = await sincronizarWms({ data: { inventarioId: id } });
       toast.success(`WMS sincronizado: ${r.posicoes} posições, ${r.total_inserido} registros`);
       const wmsData = await fetchWmsSnapshot(id);
-      const { wm, sp, embal } = construirMapasWms(wmsData);
+      const { wm, sp, embal, desc } = construirMapasWms(wmsData);
       setWmsMap(wm);
       setSkuPositions(sp);
       setWmsEmbal(embal);
+      setWmsDesc(desc);
       setInv((p) => p ? { ...p, wms_sincronizado_em: r.sincronizado_em } : p);
     } catch (err: any) {
       toast.error(`Falha ao sincronizar WMS: ${err.message ?? err}`);

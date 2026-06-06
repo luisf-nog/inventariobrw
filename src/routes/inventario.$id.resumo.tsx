@@ -417,7 +417,7 @@ function TelaResumo() {
       if (!item.descricao) item.descricao = wmsDesc.get(item.sku) ?? "";
     }
     return Array.from(map.values()).sort((a, b) => a.sku.localeCompare(b.sku));
-  }, [linhasAnalisadas, wmsMap]);
+  }, [linhasAnalisadas, wmsMap, wmsDesc]);
 
   // Saldo do mesmo SKU encontrado em posições onde o WMS NÃO o espera.
   // Usa `linhas` cru (não `linhasAnalisadas`) de propósito: assim captura também as

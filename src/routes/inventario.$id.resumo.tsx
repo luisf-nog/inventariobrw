@@ -201,6 +201,7 @@ function TelaResumo() {
   const [wmsMap, setWmsMap] = useState<Map<string, number>>(new Map());
   const [skuPositions, setSkuPositions] = useState<Map<string, Set<string>>>(new Map());
   const [wmsEmbal, setWmsEmbal] = useState<Map<string, number>>(new Map());
+  const [wmsDesc, setWmsDesc] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [sincronizando, setSincronizando] = useState(false);
 

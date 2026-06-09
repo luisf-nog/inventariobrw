@@ -168,6 +168,33 @@ export type Database = {
           },
         ]
       }
+      itens_pedidos_sap: {
+        Row: {
+          atualizado_em: string
+          descricao: string | null
+          id: string
+          pedido: string | null
+          qtde: number | null
+          sku: string
+        }
+        Insert: {
+          atualizado_em?: string
+          descricao?: string | null
+          id?: string
+          pedido?: string | null
+          qtde?: number | null
+          sku: string
+        }
+        Update: {
+          atualizado_em?: string
+          descricao?: string | null
+          id?: string
+          pedido?: string | null
+          qtde?: number | null
+          sku?: string
+        }
+        Relationships: []
+      }
       leituras: {
         Row: {
           codigo_posicao: string

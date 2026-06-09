@@ -22,6 +22,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { RecontagemSap, type RecontagemItem } from "@/components/RecontagemSap";
 
 export const Route = createFileRoute("/inventario/$id/resumo")({
   component: TelaResumo,
@@ -468,6 +469,23 @@ function TelaResumo() {
       return { item, pick, pbl, complementar, naoContado, temPicking, temPbl, magnitude };
     });
   }, [analisePorItem, wmsMap]);
+
+  // Itens candidatos a recontagem: divergentes, com diferença ou não contados.
+  const itensRecontagem = useMemo((): RecontagemItem[] => {
+    return itensComputados
+      .filter(({ pick, pbl, naoContado }) =>
+        naoContado || pick.divergente || pbl.divergente ||
+        (pick.delta !== null && pick.delta !== 0) || (pbl.delta !== null && pbl.delta !== 0)
+      )
+      .map(({ item, pick, pbl, naoContado }) => ({
+        sku: item.sku,
+        descricao: item.descricao,
+        deltaPicking: pick.delta,
+        deltaPbl: pbl.delta,
+        divergente: pick.divergente || pbl.divergente,
+        naoContado,
+      }));
+  }, [itensComputados]);
 
   const itensFiltrados = useMemo((): ItemRow[] => {
     const f = filtroItemProd.trim().toUpperCase();
@@ -1059,6 +1077,10 @@ function TelaResumo() {
                 )}
               </TabsTrigger>
               <TabsTrigger value="leituras">Leituras Brutas</TabsTrigger>
+              <TabsTrigger value="recontagem">
+                Recontagem SAP
+                <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0 h-4">{itensRecontagem.length}</Badge>
+              </TabsTrigger>
             </TabsList>
 
             {/* ── Por Item (Picking vs PBL) ──────────────────────── */}
@@ -1712,6 +1734,11 @@ function TelaResumo() {
                 </div>
               </div>
               <Paginacao page={pageLeituras} pageSize={sizeLeituras} total={filtrados.length} onPage={setPageLeituras} onPageSize={setSizeLeituras} />
+            </TabsContent>
+
+            {/* ── Recontagem SAP ─────────────────────────────────── */}
+            <TabsContent value="recontagem" className="space-y-3">
+              <RecontagemSap itens={itensRecontagem} isAdmin={isAdmin} />
             </TabsContent>
           </Tabs>
         )}

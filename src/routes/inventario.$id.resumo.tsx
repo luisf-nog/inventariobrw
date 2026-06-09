@@ -527,6 +527,35 @@ function TelaResumo() {
   // Volta para a 1ª página quando o filtro/tamanho muda
   useEffect(() => { setPageItens(0); }, [filtroItemProd, filtroItemStatus, filtroItemLocal, ordemItem, sizeItens]);
 
+  // Base SAP (itens em pedido — Indicador 17). Atualiza em tempo real.
+  useEffect(() => {
+    const carregar = async () => {
+      const PAGE = 1000;
+      const out: Array<{ sku: string; qtde: number | null }> = [];
+      let ultima: string | null = null;
+      for (let offset = 0; ; offset += PAGE) {
+        const { data, error } = await supabase
+          .from("itens_pedidos_sap")
+          .select("sku, qtde, atualizado_em")
+          .order("atualizado_em", { ascending: false })
+          .range(offset, offset + PAGE - 1);
+        if (error) break;
+        const rows = (data ?? []) as any[];
+        if (rows.length && !ultima) ultima = rows[0].atualizado_em;
+        out.push(...rows.map((r) => ({ sku: r.sku, qtde: r.qtde })));
+        if (rows.length < PAGE) break;
+      }
+      setPedidosSap(out);
+      setAtualizadoEmSap(ultima);
+    };
+    carregar();
+    const ch = supabase
+      .channel("itens-pedidos-sap-resumo")
+      .on("postgres_changes", { event: "*", schema: "public", table: "itens_pedidos_sap" }, () => carregar())
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, []);
+
   const itensPagina = useMemo((): ItemRow[] => {
     const pageCount = Math.max(1, Math.ceil(itensFiltrados.length / sizeItens));
     const p = Math.min(pageItens, pageCount - 1);

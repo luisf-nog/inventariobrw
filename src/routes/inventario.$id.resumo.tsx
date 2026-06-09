@@ -1402,6 +1402,21 @@ function TelaResumo() {
                                 </td>
                               );
                             })()}
+                            {/* Em pedido SAP */}
+                            {(() => {
+                              const ped = totaisPedidoSap.get(item.sku);
+                              if (!ped || ped.qtd <= 0) {
+                                return <td className="px-1.5 py-1.5 text-right text-xs border-l border-border text-muted-foreground/40">—</td>;
+                              }
+                              return (
+                                <td className="px-1.5 py-1.5 text-right tabular-nums text-xs border-l border-border" title={`${ped.pedidos} pedido(s) em produção · recontagem BLOQUEADA enquanto houver pedido`}>
+                                  <span className="font-bold text-amber-600 dark:text-amber-400">{fmtNum(ped.qtd)}</span>
+                                  <span className="block text-[9px] text-amber-500/80 leading-tight">
+                                    {ped.pedidos} ped.
+                                  </span>
+                                </td>
+                              );
+                            })()}
                           </tr>
                         );
                       })}

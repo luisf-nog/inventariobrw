@@ -22,6 +22,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { RecontagemSap, type RecontagemItem } from "@/components/RecontagemSap";
 
 export const Route = createFileRoute("/inventario/$id/resumo")({
   component: TelaResumo,

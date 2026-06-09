@@ -470,6 +470,23 @@ function TelaResumo() {
     });
   }, [analisePorItem, wmsMap]);
 
+  // Itens candidatos a recontagem: divergentes, com diferença ou não contados.
+  const itensRecontagem = useMemo((): RecontagemItem[] => {
+    return itensComputados
+      .filter(({ pick, pbl, naoContado }) =>
+        naoContado || pick.divergente || pbl.divergente ||
+        (pick.delta !== null && pick.delta !== 0) || (pbl.delta !== null && pbl.delta !== 0)
+      )
+      .map(({ item, pick, pbl, naoContado }) => ({
+        sku: item.sku,
+        descricao: item.descricao,
+        deltaPicking: pick.delta,
+        deltaPbl: pbl.delta,
+        divergente: pick.divergente || pbl.divergente,
+        naoContado,
+      }));
+  }, [itensComputados]);
+
   const itensFiltrados = useMemo((): ItemRow[] => {
     const f = filtroItemProd.trim().toUpperCase();
     const rows = itensComputados.filter(({ item, pick, pbl, complementar, naoContado, temPicking, temPbl }) => {

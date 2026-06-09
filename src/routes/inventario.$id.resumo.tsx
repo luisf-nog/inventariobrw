@@ -12,8 +12,9 @@ import {
   ArrowLeft, Download, FileSpreadsheet, Lock, AlertTriangle,
   Trash2, CheckCircle2, BarChart2, PackageX, Layers,
   RefreshCw, MapPin, RotateCcw, Pencil, Check, X,
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, Upload,
 } from "lucide-react";
+import { useRef } from "react";
 import * as XLSX from "xlsx";
 import { toast } from "sonner";
 import { buscarDescricoesPorSku, traduzirEansParaSkus } from "@/lib/produtos";
@@ -22,7 +23,6 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { RecontagemSap, type RecontagemItem } from "@/components/RecontagemSap";
 
 export const Route = createFileRoute("/inventario/$id/resumo")({
   component: TelaResumo,
@@ -235,6 +235,10 @@ function TelaResumo() {
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [editValor, setEditValor] = useState<string>("");
   const [salvandoId, setSalvandoId] = useState<string | null>(null);
+  const [pedidosSap, setPedidosSap] = useState<Array<{ sku: string; qtde: number | null }>>([]);
+  const [atualizadoEmSap, setAtualizadoEmSap] = useState<string | null>(null);
+  const [importandoSap, setImportandoSap] = useState(false);
+  const sapFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setIsAdmin(!!data.user));
@@ -470,22 +474,17 @@ function TelaResumo() {
     });
   }, [analisePorItem, wmsMap]);
 
-  // Itens candidatos a recontagem: divergentes, com diferença ou não contados.
-  const itensRecontagem = useMemo((): RecontagemItem[] => {
-    return itensComputados
-      .filter(({ pick, pbl, naoContado }) =>
-        naoContado || pick.divergente || pbl.divergente ||
-        (pick.delta !== null && pick.delta !== 0) || (pbl.delta !== null && pbl.delta !== 0)
-      )
-      .map(({ item, pick, pbl, naoContado }) => ({
-        sku: item.sku,
-        descricao: item.descricao,
-        deltaPicking: pick.delta,
-        deltaPbl: pbl.delta,
-        divergente: pick.divergente || pbl.divergente,
-        naoContado,
-      }));
-  }, [itensComputados]);
+  // Total em pedidos SAP por SKU (Indicador 17) — bloqueia recontagem
+  const totaisPedidoSap = useMemo(() => {
+    const m = new Map<string, { qtd: number; pedidos: number }>();
+    for (const p of pedidosSap) {
+      const prev = m.get(p.sku) ?? { qtd: 0, pedidos: 0 };
+      prev.qtd += p.qtde ?? 0;
+      prev.pedidos += 1;
+      m.set(p.sku, prev);
+    }
+    return m;
+  }, [pedidosSap]);
 
   const itensFiltrados = useMemo((): ItemRow[] => {
     const f = filtroItemProd.trim().toUpperCase();
@@ -527,6 +526,35 @@ function TelaResumo() {
 
   // Volta para a 1ª página quando o filtro/tamanho muda
   useEffect(() => { setPageItens(0); }, [filtroItemProd, filtroItemStatus, filtroItemLocal, ordemItem, sizeItens]);
+
+  // Base SAP (itens em pedido — Indicador 17). Atualiza em tempo real.
+  useEffect(() => {
+    const carregar = async () => {
+      const PAGE = 1000;
+      const out: Array<{ sku: string; qtde: number | null }> = [];
+      let ultima: string | null = null;
+      for (let offset = 0; ; offset += PAGE) {
+        const { data, error } = await supabase
+          .from("itens_pedidos_sap")
+          .select("sku, qtde, atualizado_em")
+          .order("atualizado_em", { ascending: false })
+          .range(offset, offset + PAGE - 1);
+        if (error) break;
+        const rows = (data ?? []) as any[];
+        if (rows.length && !ultima) ultima = rows[0].atualizado_em;
+        out.push(...rows.map((r) => ({ sku: r.sku, qtde: r.qtde })));
+        if (rows.length < PAGE) break;
+      }
+      setPedidosSap(out);
+      setAtualizadoEmSap(ultima);
+    };
+    carregar();
+    const ch = supabase
+      .channel("itens-pedidos-sap-resumo")
+      .on("postgres_changes", { event: "*", schema: "public", table: "itens_pedidos_sap" }, () => carregar())
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, []);
 
   const itensPagina = useMemo((): ItemRow[] => {
     const pageCount = Math.max(1, Math.ceil(itensFiltrados.length / sizeItens));
@@ -869,6 +897,8 @@ function TelaResumo() {
           ? outras.posicoes.map((p) => `${formatPosicaoDisplay(p.pos)}: ${p.qtd}${p.foraAnalise ? " (fora)" : ""}`).join(" | ")
           : "";
       }
+      row["Em pedido SAP (qtd)"] = totaisPedidoSap.get(item.sku)?.qtd ?? 0;
+      row["Em pedido SAP (# pedidos)"] = totaisPedidoSap.get(item.sku)?.pedidos ?? 0;
       row["Status"] = statusItem(r);
       return row;
     });
@@ -877,6 +907,49 @@ function TelaResumo() {
     XLSX.utils.book_append_sheet(wb, ws, "Por Item");
     XLSX.writeFile(wb, `analise-itens-${inv?.nome ?? id}-${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
+
+  async function importarBaseSap(file: File) {
+    setImportandoSap(true);
+    try {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: "array" });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json<Record<string, any>>(ws, { defval: "" });
+      const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+      const cols = Object.keys(rows[0] ?? {});
+      const findCol = (re: RegExp) => cols.find((c) => re.test(norm(c)));
+      const indCol = findCol(/indicador/) ?? "Indicador";
+      const skuCol = findCol(/cod.*item|sku/) ?? "Cod. Item";
+      const pedCol = findCol(/pedido/) ?? "Nº Pedido";
+      const qtdCol = findCol(/qtde|quant/) ?? "Qtde";
+      const descCol = findCol(/descric/) ?? "Descrição item";
+
+      const toInsert = rows
+        .filter((r) => Number(r[indCol]) === 17)
+        .map((r) => ({
+          sku: String(r[skuCol] ?? "").trim().toUpperCase(),
+          pedido: String(r[pedCol] ?? "").trim() || null,
+          qtde: Number(r[qtdCol]) || null,
+          descricao: String(r[descCol] ?? "").trim() || null,
+        }))
+        .filter((r) => r.sku);
+
+      const { error: delErr } = await supabase.from("itens_pedidos_sap").delete().neq("sku", "__never__");
+      if (delErr) throw delErr;
+      const chunk = <T,>(arr: T[], n: number) => arr.reduce<T[][]>((acc, _, i) => (i % n ? acc : [...acc, arr.slice(i, i + n)]), []);
+      for (const batch of chunk(toInsert, 500)) {
+        const { error } = await supabase.from("itens_pedidos_sap").insert(batch);
+        if (error) throw error;
+      }
+      toast.success(`Base SAP atualizada: ${fmtNum(toInsert.length)} linhas (Indicador 17)`);
+    } catch (e: any) {
+      toast.error("Erro ao importar SAP: " + (e?.message ?? String(e)));
+    } finally {
+      setImportandoSap(false);
+      if (sapFileRef.current) sapFileRef.current.value = "";
+    }
+  }
+
 
   function exportarNaoContadas() {
     const dados = cobertura.naoContadas.map((p) => ({
@@ -1077,10 +1150,6 @@ function TelaResumo() {
                 )}
               </TabsTrigger>
               <TabsTrigger value="leituras">Leituras Brutas</TabsTrigger>
-              <TabsTrigger value="recontagem">
-                Recontagem SAP
-                <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0 h-4">{itensRecontagem.length}</Badge>
-              </TabsTrigger>
             </TabsList>
 
             {/* ── Por Item (Picking vs PBL) ──────────────────────── */}
@@ -1140,6 +1209,29 @@ function TelaResumo() {
                 <Button onClick={exportarItensXLSX} variant="outline" size="sm" className="gap-1.5 h-8" title="Exporta todos os itens filtrados (não só a página)">
                   <FileSpreadsheet className="h-4 w-4" /> Exportar
                 </Button>
+                {isAdmin && (
+                  <>
+                    <input ref={sapFileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden"
+                      onChange={(e) => e.target.files?.[0] && importarBaseSap(e.target.files[0])} />
+                    <Button
+                      onClick={() => sapFileRef.current?.click()}
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5 h-8"
+                      disabled={importandoSap}
+                      title="Substituir base SAP de itens em pedido (Indicador 17). Itens em pedido bloqueiam a recontagem."
+                    >
+                      {importandoSap
+                        ? <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                        : <Upload className="h-3.5 w-3.5" />}
+                      Base SAP
+                    </Button>
+                  </>
+                )}
+                <span className="text-[11px] text-muted-foreground ml-auto">
+                  SAP: {fmtNum(totaisPedidoSap.size)} SKUs em pedido
+                  {atualizadoEmSap && ` · ${new Date(atualizadoEmSap).toLocaleString("pt-BR")}`}
+                </span>
               </div>
               <Paginacao page={pageItens} pageSize={sizeItens} total={itensFiltrados.length} onPage={setPageItens} onPageSize={setSizeItens} />
               <div className="rounded-xl border border-border overflow-hidden">
@@ -1178,6 +1270,13 @@ function TelaResumo() {
                             Outras pos.
                           </th>
                         )}
+                        <th
+                          rowSpan={2}
+                          title="Quantidade total deste SKU em pedidos SAP (Indicador 17). Itens com qtd > 0 estão BLOQUEADOS para recontagem."
+                          className="px-1.5 py-2 text-center text-[11px] font-bold text-amber-600 dark:text-amber-300 border-l border-border border-b border-border align-bottom uppercase tracking-wider w-[88px]"
+                        >
+                          Em pedido
+                        </th>
                       </tr>
                       <tr className="border-b border-border">
                         {wmsMap.size > 0 && (
@@ -1300,6 +1399,21 @@ function TelaResumo() {
                                       {fmtNum(outras.totalForaAnalise)} fora
                                     </span>
                                   )}
+                                </td>
+                              );
+                            })()}
+                            {/* Em pedido SAP */}
+                            {(() => {
+                              const ped = totaisPedidoSap.get(item.sku);
+                              if (!ped || ped.qtd <= 0) {
+                                return <td className="px-1.5 py-1.5 text-right text-xs border-l border-border text-muted-foreground/40">—</td>;
+                              }
+                              return (
+                                <td className="px-1.5 py-1.5 text-right tabular-nums text-xs border-l border-border" title={`${ped.pedidos} pedido(s) em produção · recontagem BLOQUEADA enquanto houver pedido`}>
+                                  <span className="font-bold text-amber-600 dark:text-amber-400">{fmtNum(ped.qtd)}</span>
+                                  <span className="block text-[9px] text-amber-500/80 leading-tight">
+                                    {ped.pedidos} ped.
+                                  </span>
                                 </td>
                               );
                             })()}
@@ -1736,10 +1850,6 @@ function TelaResumo() {
               <Paginacao page={pageLeituras} pageSize={sizeLeituras} total={filtrados.length} onPage={setPageLeituras} onPageSize={setSizeLeituras} />
             </TabsContent>
 
-            {/* ── Recontagem SAP ─────────────────────────────────── */}
-            <TabsContent value="recontagem" className="space-y-3">
-              <RecontagemSap itens={itensRecontagem} isAdmin={isAdmin} />
-            </TabsContent>
           </Tabs>
         )}
 

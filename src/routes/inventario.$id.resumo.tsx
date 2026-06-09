@@ -470,22 +470,17 @@ function TelaResumo() {
     });
   }, [analisePorItem, wmsMap]);
 
-  // Itens candidatos a recontagem: divergentes, com diferença ou não contados.
-  const itensRecontagem = useMemo((): RecontagemItem[] => {
-    return itensComputados
-      .filter(({ pick, pbl, naoContado }) =>
-        naoContado || pick.divergente || pbl.divergente ||
-        (pick.delta !== null && pick.delta !== 0) || (pbl.delta !== null && pbl.delta !== 0)
-      )
-      .map(({ item, pick, pbl, naoContado }) => ({
-        sku: item.sku,
-        descricao: item.descricao,
-        deltaPicking: pick.delta,
-        deltaPbl: pbl.delta,
-        divergente: pick.divergente || pbl.divergente,
-        naoContado,
-      }));
-  }, [itensComputados]);
+  // Total em pedidos SAP por SKU (Indicador 17) — bloqueia recontagem
+  const totaisPedidoSap = useMemo(() => {
+    const m = new Map<string, { qtd: number; pedidos: number }>();
+    for (const p of pedidosSap) {
+      const prev = m.get(p.sku) ?? { qtd: 0, pedidos: 0 };
+      prev.qtd += p.qtde ?? 0;
+      prev.pedidos += 1;
+      m.set(p.sku, prev);
+    }
+    return m;
+  }, [pedidosSap]);
 
   const itensFiltrados = useMemo((): ItemRow[] => {
     const f = filtroItemProd.trim().toUpperCase();

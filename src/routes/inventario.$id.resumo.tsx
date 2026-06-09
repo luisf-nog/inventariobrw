@@ -1077,6 +1077,10 @@ function TelaResumo() {
                 )}
               </TabsTrigger>
               <TabsTrigger value="leituras">Leituras Brutas</TabsTrigger>
+              <TabsTrigger value="recontagem">
+                Recontagem SAP
+                <Badge variant="secondary" className="ml-1.5 text-[10px] px-1.5 py-0 h-4">{itensRecontagem.length}</Badge>
+              </TabsTrigger>
             </TabsList>
 
             {/* ── Por Item (Picking vs PBL) ──────────────────────── */}

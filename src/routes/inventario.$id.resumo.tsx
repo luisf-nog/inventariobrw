@@ -897,6 +897,8 @@ function TelaResumo() {
           ? outras.posicoes.map((p) => `${formatPosicaoDisplay(p.pos)}: ${p.qtd}${p.foraAnalise ? " (fora)" : ""}`).join(" | ")
           : "";
       }
+      row["Em pedido SAP (qtd)"] = totaisPedidoSap.get(item.sku)?.qtd ?? 0;
+      row["Em pedido SAP (# pedidos)"] = totaisPedidoSap.get(item.sku)?.pedidos ?? 0;
       row["Status"] = statusItem(r);
       return row;
     });

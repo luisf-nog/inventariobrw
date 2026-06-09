@@ -235,6 +235,10 @@ function TelaResumo() {
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [editValor, setEditValor] = useState<string>("");
   const [salvandoId, setSalvandoId] = useState<string | null>(null);
+  const [pedidosSap, setPedidosSap] = useState<Array<{ sku: string; qtde: number | null }>>([]);
+  const [atualizadoEmSap, setAtualizadoEmSap] = useState<string | null>(null);
+  const [importandoSap, setImportandoSap] = useState(false);
+  const sapFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setIsAdmin(!!data.user));

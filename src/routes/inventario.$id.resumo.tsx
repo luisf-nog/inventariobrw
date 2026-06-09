@@ -908,6 +908,49 @@ function TelaResumo() {
     XLSX.writeFile(wb, `analise-itens-${inv?.nome ?? id}-${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
 
+  async function importarBaseSap(file: File) {
+    setImportandoSap(true);
+    try {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: "array" });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json<Record<string, any>>(ws, { defval: "" });
+      const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+      const cols = Object.keys(rows[0] ?? {});
+      const findCol = (re: RegExp) => cols.find((c) => re.test(norm(c)));
+      const indCol = findCol(/indicador/) ?? "Indicador";
+      const skuCol = findCol(/cod.*item|sku/) ?? "Cod. Item";
+      const pedCol = findCol(/pedido/) ?? "Nº Pedido";
+      const qtdCol = findCol(/qtde|quant/) ?? "Qtde";
+      const descCol = findCol(/descric/) ?? "Descrição item";
+
+      const toInsert = rows
+        .filter((r) => Number(r[indCol]) === 17)
+        .map((r) => ({
+          sku: String(r[skuCol] ?? "").trim().toUpperCase(),
+          pedido: String(r[pedCol] ?? "").trim() || null,
+          qtde: Number(r[qtdCol]) || null,
+          descricao: String(r[descCol] ?? "").trim() || null,
+        }))
+        .filter((r) => r.sku);
+
+      const { error: delErr } = await supabase.from("itens_pedidos_sap").delete().neq("sku", "__never__");
+      if (delErr) throw delErr;
+      const chunk = <T,>(arr: T[], n: number) => arr.reduce<T[][]>((acc, _, i) => (i % n ? acc : [...acc, arr.slice(i, i + n)]), []);
+      for (const batch of chunk(toInsert, 500)) {
+        const { error } = await supabase.from("itens_pedidos_sap").insert(batch);
+        if (error) throw error;
+      }
+      toast.success(`Base SAP atualizada: ${fmtNum(toInsert.length)} linhas (Indicador 17)`);
+    } catch (e: any) {
+      toast.error("Erro ao importar SAP: " + (e?.message ?? String(e)));
+    } finally {
+      setImportandoSap(false);
+      if (sapFileRef.current) sapFileRef.current.value = "";
+    }
+  }
+
+
   function exportarNaoContadas() {
     const dados = cobertura.naoContadas.map((p) => ({
       Posição: formatPosicaoDisplay(p.pos),

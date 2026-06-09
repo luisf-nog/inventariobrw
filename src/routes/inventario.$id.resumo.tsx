@@ -1735,6 +1735,11 @@ function TelaResumo() {
               </div>
               <Paginacao page={pageLeituras} pageSize={sizeLeituras} total={filtrados.length} onPage={setPageLeituras} onPageSize={setSizeLeituras} />
             </TabsContent>
+
+            {/* ── Recontagem SAP ─────────────────────────────────── */}
+            <TabsContent value="recontagem" className="space-y-3">
+              <RecontagemSap itens={itensRecontagem} isAdmin={isAdmin} />
+            </TabsContent>
           </Tabs>
         )}
 

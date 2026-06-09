@@ -1209,6 +1209,29 @@ function TelaResumo() {
                 <Button onClick={exportarItensXLSX} variant="outline" size="sm" className="gap-1.5 h-8" title="Exporta todos os itens filtrados (não só a página)">
                   <FileSpreadsheet className="h-4 w-4" /> Exportar
                 </Button>
+                {isAdmin && (
+                  <>
+                    <input ref={sapFileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden"
+                      onChange={(e) => e.target.files?.[0] && importarBaseSap(e.target.files[0])} />
+                    <Button
+                      onClick={() => sapFileRef.current?.click()}
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5 h-8"
+                      disabled={importandoSap}
+                      title="Substituir base SAP de itens em pedido (Indicador 17). Itens em pedido bloqueiam a recontagem."
+                    >
+                      {importandoSap
+                        ? <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                        : <Upload className="h-3.5 w-3.5" />}
+                      Base SAP
+                    </Button>
+                  </>
+                )}
+                <span className="text-[11px] text-muted-foreground ml-auto">
+                  SAP: {fmtNum(totaisPedidoSap.size)} SKUs em pedido
+                  {atualizadoEmSap && ` · ${new Date(atualizadoEmSap).toLocaleString("pt-BR")}`}
+                </span>
               </div>
               <Paginacao page={pageItens} pageSize={sizeItens} total={itensFiltrados.length} onPage={setPageItens} onPageSize={setSizeItens} />
               <div className="rounded-xl border border-border overflow-hidden">

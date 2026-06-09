@@ -12,8 +12,9 @@ import {
   ArrowLeft, Download, FileSpreadsheet, Lock, AlertTriangle,
   Trash2, CheckCircle2, BarChart2, PackageX, Layers,
   RefreshCw, MapPin, RotateCcw, Pencil, Check, X,
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, Upload,
 } from "lucide-react";
+import { useRef } from "react";
 import * as XLSX from "xlsx";
 import { toast } from "sonner";
 import { buscarDescricoesPorSku, traduzirEansParaSkus } from "@/lib/produtos";
@@ -22,7 +23,6 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { RecontagemSap, type RecontagemItem } from "@/components/RecontagemSap";
 
 export const Route = createFileRoute("/inventario/$id/resumo")({
   component: TelaResumo,

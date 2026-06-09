@@ -1270,6 +1270,13 @@ function TelaResumo() {
                             Outras pos.
                           </th>
                         )}
+                        <th
+                          rowSpan={2}
+                          title="Quantidade total deste SKU em pedidos SAP (Indicador 17). Itens com qtd > 0 estão BLOQUEADOS para recontagem."
+                          className="px-1.5 py-2 text-center text-[11px] font-bold text-amber-600 dark:text-amber-300 border-l border-border border-b border-border align-bottom uppercase tracking-wider w-[88px]"
+                        >
+                          Em pedido
+                        </th>
                       </tr>
                       <tr className="border-b border-border">
                         {wmsMap.size > 0 && (

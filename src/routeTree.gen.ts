@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as InventariosRouteImport } from './routes/inventarios'
 import { Route as HubRouteImport } from './routes/hub'
+import { Route as ConferenciaRouteImport } from './routes/conferencia'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
@@ -27,6 +28,11 @@ const InventariosRoute = InventariosRouteImport.update({
 const HubRoute = HubRouteImport.update({
   id: '/hub',
   path: '/hub',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConferenciaRoute = ConferenciaRouteImport.update({
+  id: '/conferencia',
+  path: '/conferencia',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminRoute = AdminRouteImport.update({
@@ -68,6 +74,7 @@ const InventarioIdContagemRoute = InventarioIdContagemRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
+  '/conferencia': typeof ConferenciaRoute
   '/hub': typeof HubRoute
   '/inventarios': typeof InventariosRoute
   '/admin/operadores': typeof AdminOperadoresRoute
@@ -78,6 +85,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/conferencia': typeof ConferenciaRoute
   '/hub': typeof HubRoute
   '/inventarios': typeof InventariosRoute
   '/admin/operadores': typeof AdminOperadoresRoute
@@ -90,6 +98,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
+  '/conferencia': typeof ConferenciaRoute
   '/hub': typeof HubRoute
   '/inventarios': typeof InventariosRoute
   '/admin/operadores': typeof AdminOperadoresRoute
@@ -103,6 +112,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/admin'
+    | '/conferencia'
     | '/hub'
     | '/inventarios'
     | '/admin/operadores'
@@ -113,6 +123,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/conferencia'
     | '/hub'
     | '/inventarios'
     | '/admin/operadores'
@@ -124,6 +135,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/admin'
+    | '/conferencia'
     | '/hub'
     | '/inventarios'
     | '/admin/operadores'
@@ -136,6 +148,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRouteWithChildren
+  ConferenciaRoute: typeof ConferenciaRoute
   HubRoute: typeof HubRoute
   InventariosRoute: typeof InventariosRoute
   InventarioIdContagemRoute: typeof InventarioIdContagemRoute
@@ -156,6 +169,13 @@ declare module '@tanstack/react-router' {
       path: '/hub'
       fullPath: '/hub'
       preLoaderRoute: typeof HubRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/conferencia': {
+      id: '/conferencia'
+      path: '/conferencia'
+      fullPath: '/conferencia'
+      preLoaderRoute: typeof ConferenciaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin': {
@@ -227,6 +247,7 @@ const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRouteWithChildren,
+  ConferenciaRoute: ConferenciaRoute,
   HubRoute: HubRoute,
   InventariosRoute: InventariosRoute,
   InventarioIdContagemRoute: InventarioIdContagemRoute,

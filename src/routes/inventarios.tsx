@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { getOperador, clearOperador } from "@/lib/operador-session";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { LogOut, Package2, PackageOpen, ChevronRight } from "lucide-react";
+import { LogOut, Package2, PackageOpen, ChevronRight, ArrowLeft } from "lucide-react";
 
 type RankEntry = { id: string; nome: string; count: number };
 
@@ -64,9 +64,14 @@ function ListaInventarios() {
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b border-border">
         <div className="max-w-lg mx-auto px-4 h-14 flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Operador</p>
-            <p className="text-sm font-semibold truncate leading-tight">{op?.nome}</p>
+          <div className="flex items-center gap-2 min-w-0">
+            <Link to="/hub" className="text-muted-foreground hover:text-foreground">
+              <ArrowLeft className="h-5 w-5" />
+            </Link>
+            <div className="min-w-0">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Operador</p>
+              <p className="text-sm font-semibold truncate leading-tight">{op?.nome}</p>
+            </div>
           </div>
           <Button variant="ghost" size="sm" onClick={sair} className="gap-1.5 text-muted-foreground hover:text-foreground shrink-0">
             <LogOut className="h-4 w-4" /> Trocar

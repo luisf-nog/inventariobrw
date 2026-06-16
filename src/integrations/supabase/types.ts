@@ -71,6 +71,56 @@ export type Database = {
           },
         ]
       }
+      conferencias_posicao: {
+        Row: {
+          codigo_posicao: string
+          criado_em: string
+          descricao: string | null
+          id: string
+          lote: string | null
+          observacao: string | null
+          operador_id: string | null
+          operador_nome: string | null
+          qtde_informada: number
+          qtde_sistema: number | null
+          sku: string
+        }
+        Insert: {
+          codigo_posicao: string
+          criado_em?: string
+          descricao?: string | null
+          id?: string
+          lote?: string | null
+          observacao?: string | null
+          operador_id?: string | null
+          operador_nome?: string | null
+          qtde_informada: number
+          qtde_sistema?: number | null
+          sku: string
+        }
+        Update: {
+          codigo_posicao?: string
+          criado_em?: string
+          descricao?: string | null
+          id?: string
+          lote?: string | null
+          observacao?: string | null
+          operador_id?: string | null
+          operador_nome?: string | null
+          qtde_informada?: number
+          qtde_sistema?: number | null
+          sku?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conferencias_posicao_operador_id_fkey"
+            columns: ["operador_id"]
+            isOneToOne: false
+            referencedRelation: "operadores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       estoque_wms_snapshot: {
         Row: {
           capturado_em: string

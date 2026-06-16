@@ -10,6 +10,8 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as InventariosRouteImport } from './routes/inventarios'
+import { Route as HubRouteImport } from './routes/hub'
+import { Route as ConferenciaRouteImport } from './routes/conferencia'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
@@ -21,6 +23,16 @@ import { Route as InventarioIdContagemRouteImport } from './routes/inventario.$i
 const InventariosRoute = InventariosRouteImport.update({
   id: '/inventarios',
   path: '/inventarios',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HubRoute = HubRouteImport.update({
+  id: '/hub',
+  path: '/hub',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConferenciaRoute = ConferenciaRouteImport.update({
+  id: '/conferencia',
+  path: '/conferencia',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminRoute = AdminRouteImport.update({
@@ -62,6 +74,8 @@ const InventarioIdContagemRoute = InventarioIdContagemRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
+  '/conferencia': typeof ConferenciaRoute
+  '/hub': typeof HubRoute
   '/inventarios': typeof InventariosRoute
   '/admin/operadores': typeof AdminOperadoresRoute
   '/admin/produtos': typeof AdminProdutosRoute
@@ -71,6 +85,8 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/conferencia': typeof ConferenciaRoute
+  '/hub': typeof HubRoute
   '/inventarios': typeof InventariosRoute
   '/admin/operadores': typeof AdminOperadoresRoute
   '/admin/produtos': typeof AdminProdutosRoute
@@ -82,6 +98,8 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
+  '/conferencia': typeof ConferenciaRoute
+  '/hub': typeof HubRoute
   '/inventarios': typeof InventariosRoute
   '/admin/operadores': typeof AdminOperadoresRoute
   '/admin/produtos': typeof AdminProdutosRoute
@@ -94,6 +112,8 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/admin'
+    | '/conferencia'
+    | '/hub'
     | '/inventarios'
     | '/admin/operadores'
     | '/admin/produtos'
@@ -103,6 +123,8 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/conferencia'
+    | '/hub'
     | '/inventarios'
     | '/admin/operadores'
     | '/admin/produtos'
@@ -113,6 +135,8 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/admin'
+    | '/conferencia'
+    | '/hub'
     | '/inventarios'
     | '/admin/operadores'
     | '/admin/produtos'
@@ -124,6 +148,8 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRouteWithChildren
+  ConferenciaRoute: typeof ConferenciaRoute
+  HubRoute: typeof HubRoute
   InventariosRoute: typeof InventariosRoute
   InventarioIdContagemRoute: typeof InventarioIdContagemRoute
   InventarioIdResumoRoute: typeof InventarioIdResumoRoute
@@ -136,6 +162,20 @@ declare module '@tanstack/react-router' {
       path: '/inventarios'
       fullPath: '/inventarios'
       preLoaderRoute: typeof InventariosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/hub': {
+      id: '/hub'
+      path: '/hub'
+      fullPath: '/hub'
+      preLoaderRoute: typeof HubRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/conferencia': {
+      id: '/conferencia'
+      path: '/conferencia'
+      fullPath: '/conferencia'
+      preLoaderRoute: typeof ConferenciaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin': {
@@ -207,6 +247,8 @@ const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRouteWithChildren,
+  ConferenciaRoute: ConferenciaRoute,
+  HubRoute: HubRoute,
   InventariosRoute: InventariosRoute,
   InventarioIdContagemRoute: InventarioIdContagemRoute,
   InventarioIdResumoRoute: InventarioIdResumoRoute,
@@ -214,13 +256,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

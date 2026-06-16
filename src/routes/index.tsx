@@ -101,7 +101,7 @@ function SelecaoOperador() {
       if (error || !valido) { toast.error("PIN incorreto"); return; }
     }
     setOperador({ id: op.id, nome: op.nome });
-    navigate({ to: "/inventarios" });
+    navigate({ to: "/hub" });
   }
 
   return (

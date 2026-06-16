@@ -17,6 +17,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminProdutosRouteImport } from './routes/admin.produtos'
 import { Route as AdminOperadoresRouteImport } from './routes/admin.operadores'
+import { Route as AdminConferenciasRouteImport } from './routes/admin.conferencias'
 import { Route as InventarioIdResumoRouteImport } from './routes/inventario.$id.resumo'
 import { Route as InventarioIdContagemRouteImport } from './routes/inventario.$id.contagem'
 
@@ -60,6 +61,11 @@ const AdminOperadoresRoute = AdminOperadoresRouteImport.update({
   path: '/operadores',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminConferenciasRoute = AdminConferenciasRouteImport.update({
+  id: '/conferencias',
+  path: '/conferencias',
+  getParentRoute: () => AdminRoute,
+} as any)
 const InventarioIdResumoRoute = InventarioIdResumoRouteImport.update({
   id: '/inventario/$id/resumo',
   path: '/inventario/$id/resumo',
@@ -77,6 +83,7 @@ export interface FileRoutesByFullPath {
   '/conferencia': typeof ConferenciaRoute
   '/hub': typeof HubRoute
   '/inventarios': typeof InventariosRoute
+  '/admin/conferencias': typeof AdminConferenciasRoute
   '/admin/operadores': typeof AdminOperadoresRoute
   '/admin/produtos': typeof AdminProdutosRoute
   '/admin/': typeof AdminIndexRoute
@@ -88,6 +95,7 @@ export interface FileRoutesByTo {
   '/conferencia': typeof ConferenciaRoute
   '/hub': typeof HubRoute
   '/inventarios': typeof InventariosRoute
+  '/admin/conferencias': typeof AdminConferenciasRoute
   '/admin/operadores': typeof AdminOperadoresRoute
   '/admin/produtos': typeof AdminProdutosRoute
   '/admin': typeof AdminIndexRoute
@@ -101,6 +109,7 @@ export interface FileRoutesById {
   '/conferencia': typeof ConferenciaRoute
   '/hub': typeof HubRoute
   '/inventarios': typeof InventariosRoute
+  '/admin/conferencias': typeof AdminConferenciasRoute
   '/admin/operadores': typeof AdminOperadoresRoute
   '/admin/produtos': typeof AdminProdutosRoute
   '/admin/': typeof AdminIndexRoute
@@ -115,6 +124,7 @@ export interface FileRouteTypes {
     | '/conferencia'
     | '/hub'
     | '/inventarios'
+    | '/admin/conferencias'
     | '/admin/operadores'
     | '/admin/produtos'
     | '/admin/'
@@ -126,6 +136,7 @@ export interface FileRouteTypes {
     | '/conferencia'
     | '/hub'
     | '/inventarios'
+    | '/admin/conferencias'
     | '/admin/operadores'
     | '/admin/produtos'
     | '/admin'
@@ -138,6 +149,7 @@ export interface FileRouteTypes {
     | '/conferencia'
     | '/hub'
     | '/inventarios'
+    | '/admin/conferencias'
     | '/admin/operadores'
     | '/admin/produtos'
     | '/admin/'
@@ -213,6 +225,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminOperadoresRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/conferencias': {
+      id: '/admin/conferencias'
+      path: '/conferencias'
+      fullPath: '/admin/conferencias'
+      preLoaderRoute: typeof AdminConferenciasRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/inventario/$id/resumo': {
       id: '/inventario/$id/resumo'
       path: '/inventario/$id/resumo'
@@ -231,12 +250,14 @@ declare module '@tanstack/react-router' {
 }
 
 interface AdminRouteChildren {
+  AdminConferenciasRoute: typeof AdminConferenciasRoute
   AdminOperadoresRoute: typeof AdminOperadoresRoute
   AdminProdutosRoute: typeof AdminProdutosRoute
   AdminIndexRoute: typeof AdminIndexRoute
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
+  AdminConferenciasRoute: AdminConferenciasRoute,
   AdminOperadoresRoute: AdminOperadoresRoute,
   AdminProdutosRoute: AdminProdutosRoute,
   AdminIndexRoute: AdminIndexRoute,

@@ -106,6 +106,7 @@ function AdminLayout() {
         <nav className="max-w-5xl mx-auto px-4 flex gap-1 border-t border-border/50">
           {[
             { to: "/admin" as const, label: "Inventários", exact: true },
+            { to: "/admin/conferencias" as const, label: "Conferências", exact: false },
             { to: "/admin/operadores" as const, label: "Operadores", exact: false },
             { to: "/admin/produtos" as const, label: "Produtos", exact: false },
           ].map(({ to, label, exact }) => (

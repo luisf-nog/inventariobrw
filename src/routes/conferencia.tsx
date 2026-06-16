@@ -50,6 +50,8 @@ function ConferenciaPosicao() {
   const [codigo, setCodigo] = useState("");
   const [posicao, setPosicao] = useState<string | null>(null);
   const [consultadoEm, setConsultadoEm] = useState<string | null>(null);
+  const [estoqueEm, setEstoqueEm] = useState<string | null>(null);
+  const [doCache, setDoCache] = useState(false);
   const [linhas, setLinhas] = useState<Linha[]>([]);
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -72,15 +74,17 @@ function ConferenciaPosicao() {
     setHistorico((data ?? []) as Registro[]);
   }
 
-  async function buscar(codigoBruto: string) {
+  async function buscar(codigoBruto: string, forcar = false) {
     const limpo = codigoBruto.trim().toUpperCase();
     if (!limpo) return;
     setCarregando(true);
     setErro(null);
     try {
-      const r = await consultar({ data: { codigoPosicao: limpo } });
+      const r = await consultar({ data: { codigoPosicao: limpo, forcar } });
       setPosicao(r.posicao);
       setConsultadoEm(r.consultado_em);
+      setEstoqueEm(r.estoque_carregado_em);
+      setDoCache(r.do_cache);
       setLinhas(r.itens.map((it, i) => ({
         ...it,
         key: `${it.sku}|${it.lote ?? ""}|${i}`,
@@ -223,7 +227,10 @@ function ConferenciaPosicao() {
                 <h2 className="text-2xl font-bold tracking-tight font-mono">{posicao}</h2>
                 {consultadoEm && (
                   <p className="text-[11px] text-muted-foreground mt-1">
-                    Consultado às {new Date(consultadoEm).toLocaleTimeString("pt-BR")} · tempo real WMS
+                    Consultado às {new Date(consultadoEm).toLocaleTimeString("pt-BR")}
+                    {doCache && estoqueEm
+                      ? ` · estoque WMS de ${new Date(estoqueEm).toLocaleTimeString("pt-BR")} (cache)`
+                      : " · tempo real WMS"}
                   </p>
                 )}
               </div>
@@ -237,9 +244,10 @@ function ConferenciaPosicao() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => void buscar(posicao)}
+                  onClick={() => void buscar(posicao, true)}
                   disabled={carregando}
                   className="gap-1.5"
+                  title="Recarrega o estoque do WMS agora (ignora o cache)"
                 >
                   <RefreshCw className={`h-3.5 w-3.5 ${carregando ? "animate-spin" : ""}`} />
                   Atualizar

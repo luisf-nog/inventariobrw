@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { getOperador } from "@/lib/operador-session";
-import { buscarProdutoWms, type PosicaoProduto } from "@/lib/produto-busca.functions";
+import { buscarProdutoWms, sugerirProdutosWms, type PosicaoProduto, type SugestaoProduto } from "@/lib/produto-busca.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -36,6 +36,7 @@ type Resultado = {
 function BuscaProduto() {
   const navigate = useNavigate();
   const buscar = useServerFn(buscarProdutoWms);
+  const sugerir = useServerFn(sugerirProdutosWms);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const [op, setOp] = useState<{ id: string; nome: string } | null>(null);
@@ -43,6 +44,10 @@ function BuscaProduto() {
   const [carregando, setCarregando] = useState(false);
   const [resultado, setResultado] = useState<Resultado | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  const [sugestoes, setSugestoes] = useState<SugestaoProduto[]>([]);
+  const [mostrarSug, setMostrarSug] = useState(false);
+  const [destacado, setDestacado] = useState(0);
+  const sugReqId = useRef(0);
 
   useEffect(() => {
     const o = getOperador();
@@ -51,9 +56,32 @@ function BuscaProduto() {
     inputRef.current?.focus();
   }, [navigate]);
 
+  useEffect(() => {
+    const termo = codigo.trim();
+    if (termo.length < 2) {
+      setSugestoes([]);
+      setMostrarSug(false);
+      return;
+    }
+    const id = ++sugReqId.current;
+    const t = setTimeout(async () => {
+      try {
+        const r = await sugerir({ data: { termo, limite: 15 } });
+        if (id !== sugReqId.current) return;
+        setSugestoes(r.sugestoes);
+        setMostrarSug(true);
+        setDestacado(0);
+      } catch {
+        // silencioso para typeahead
+      }
+    }, 180);
+    return () => clearTimeout(t);
+  }, [codigo, sugerir]);
+
   async function executar(c: string, forcar = false) {
     const code = c.trim();
     if (!code) return;
+    setMostrarSug(false);
     setCarregando(true);
     setErro(null);
     try {
@@ -69,11 +97,36 @@ function BuscaProduto() {
     }
   }
 
+  function escolher(s: SugestaoProduto) {
+    setCodigo("");
+    setMostrarSug(false);
+    setSugestoes([]);
+    executar(s.sku);
+  }
+
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (mostrarSug && sugestoes[destacado]) {
+      escolher(sugestoes[destacado]);
+      return;
+    }
     executar(codigo);
     setCodigo("");
   }
+
+  function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (!mostrarSug || sugestoes.length === 0) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setDestacado((d) => Math.min(d + 1, sugestoes.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setDestacado((d) => Math.max(d - 1, 0));
+    } else if (e.key === "Escape") {
+      setMostrarSug(false);
+    }
+  }
+
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -99,21 +152,49 @@ function BuscaProduto() {
           </p>
         </div>
 
-        <form onSubmit={onSubmit} className="flex gap-2">
-          <Input
-            ref={inputRef}
-            value={codigo}
-            onChange={(e) => setCodigo(e.target.value)}
-            placeholder="SKU ou EAN do produto"
-            inputMode="text"
-            autoComplete="off"
-            className="font-mono"
-            disabled={carregando}
-          />
+        <form onSubmit={onSubmit} className="relative flex gap-2">
+          <div className="relative flex-1">
+            <Input
+              ref={inputRef}
+              value={codigo}
+              onChange={(e) => setCodigo(e.target.value)}
+              onKeyDown={onKeyDown}
+              onFocus={() => sugestoes.length > 0 && setMostrarSug(true)}
+              onBlur={() => setTimeout(() => setMostrarSug(false), 150)}
+              placeholder="SKU, descrição ou EAN"
+              inputMode="text"
+              autoComplete="off"
+              className="font-mono"
+              disabled={carregando}
+            />
+            {mostrarSug && sugestoes.length > 0 && (
+              <ul className="absolute z-20 top-full mt-1 left-0 right-0 max-h-72 overflow-auto bg-popover border border-border rounded-lg shadow-lg">
+                {sugestoes.map((s, i) => (
+                  <li
+                    key={s.sku}
+                    onMouseDown={(e) => { e.preventDefault(); escolher(s); }}
+                    onMouseEnter={() => setDestacado(i)}
+                    className={`px-3 py-2 cursor-pointer text-sm border-b border-border/40 last:border-0 ${i === destacado ? "bg-accent" : ""}`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono font-semibold text-foreground">{s.sku}</span>
+                      <span className="text-[10px] text-muted-foreground shrink-0">
+                        {s.posicoes} pos{s.posicoes === 1 ? "" : "."}
+                      </span>
+                    </div>
+                    {s.descricao && (
+                      <p className="text-xs text-muted-foreground truncate">{s.descricao}</p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
           <Button type="submit" disabled={carregando || !codigo.trim()}>
             {carregando ? <Loader2 className="h-4 w-4 animate-spin" /> : "Buscar"}
           </Button>
         </form>
+
 
         {erro && (
           <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm flex gap-2">

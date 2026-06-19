@@ -145,3 +145,68 @@ export const buscarProdutoWms = createServerFn({ method: "POST" })
       do_cache: doCache,
     };
   });
+
+export type SugestaoProduto = {
+  sku: string;
+  descricao: string;
+  ean: string | null;
+  posicoes: number;
+};
+
+export const sugerirProdutosWms = createServerFn({ method: "POST" })
+  .inputValidator((input) =>
+    z.object({
+      termo: z.string().min(1).max(64),
+      limite: z.number().int().min(1).max(50).optional(),
+    }).parse(input),
+  )
+  .handler(async ({ data }) => {
+    const termo = data.termo.trim().toUpperCase();
+    if (!termo) return { sugestoes: [] as SugestaoProduto[] };
+    const limite = data.limite ?? 20;
+    const termoDigits = termo.replace(/\D/g, "");
+    const { rows } = await obter(false);
+
+    type Agg = { sku: string; descricao: string; ean: string | null; posicoes: Set<string> };
+    const mapa = new Map<string, Agg>();
+
+    for (const r of rows) {
+      const sku = String(r.COD_PROD_ERP ?? r.COD_PRODUTO ?? "").trim().toUpperCase();
+      if (!sku) continue;
+      const descricao = String(r.DESCR_PRODUTO ?? "").trim();
+      const ean = String(r.CODIGO_BARRAS ?? "").replace(/\D/g, "");
+      const skuUp = sku.toUpperCase();
+      const descUp = descricao.toUpperCase();
+      const bateSku = skuUp.includes(termo);
+      const bateDesc = termo.length >= 2 && descUp.includes(termo);
+      const bateEan = termoDigits.length >= 3 && ean.includes(termoDigits);
+      if (!bateSku && !bateDesc && !bateEan) continue;
+      const ex = mapa.get(sku);
+      const pos = String(r.COD_ENDERECO ?? "").trim();
+      if (ex) {
+        if (pos) ex.posicoes.add(pos);
+        if (!ex.descricao && descricao) ex.descricao = descricao;
+        if (!ex.ean && ean) ex.ean = ean;
+      } else {
+        mapa.set(sku, {
+          sku,
+          descricao,
+          ean: ean || null,
+          posicoes: new Set(pos ? [pos] : []),
+        });
+      }
+    }
+
+    const sugestoes: SugestaoProduto[] = Array.from(mapa.values())
+      .map((a) => ({ sku: a.sku, descricao: a.descricao, ean: a.ean, posicoes: a.posicoes.size }))
+      .sort((a, b) => {
+        const aStart = a.sku.startsWith(termo) ? 0 : 1;
+        const bStart = b.sku.startsWith(termo) ? 0 : 1;
+        if (aStart !== bStart) return aStart - bStart;
+        return a.sku.localeCompare(b.sku);
+      })
+      .slice(0, limite);
+
+    return { sugestoes };
+  });
+

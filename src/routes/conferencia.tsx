@@ -395,7 +395,7 @@ function ConferenciaPosicao() {
                     )}
                     <details className="rounded-lg border border-dashed border-border p-3">
                       <summary className="text-[11px] font-semibold text-muted-foreground cursor-pointer">
-                        + Adicionar item não listado em {pos}
+                        + Adicionar item não listado em {formatarApelido(pos)}
                       </summary>
                       <div className="mt-3">
                         <ItemExtraForm onSalvar={(sku, q, o) => salvarItemNovo(pos, sku, q, o)} />

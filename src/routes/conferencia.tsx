@@ -369,7 +369,7 @@ function ConferenciaPosicao() {
                       <div className="flex items-center justify-between gap-2 px-1">
                         <div className="flex items-center gap-2 min-w-0">
                           <MapPin className={`h-4 w-4 shrink-0 ${pos === posicaoBipada ? "text-primary" : "text-muted-foreground"}`} />
-                          <span className="font-mono font-semibold text-sm truncate">{pos}</span>
+                          <span className="font-mono font-semibold text-sm truncate">{formatarApelido(pos)}</span>
                           {pos === posicaoBipada && (
                             <Badge variant="default" className="text-[10px] h-5">bipado</Badge>
                           )}

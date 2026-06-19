@@ -2,14 +2,14 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { getOperador, clearOperador } from "@/lib/operador-session";
 import { Button } from "@/components/ui/button";
-import { LogOut, PackageOpen, ScanLine, ChevronRight, Settings } from "lucide-react";
+import { LogOut, PackageOpen, ScanLine, ChevronRight, Settings, PackageSearch } from "lucide-react";
 
 export const Route = createFileRoute("/hub")({
   component: Hub,
 });
 
 type Tool = {
-  to: "/inventarios" | "/conferencia";
+  to: "/inventarios" | "/conferencia" | "/busca-produto";
   titulo: string;
   descricao: string;
   Icon: typeof PackageOpen;
@@ -30,6 +30,13 @@ const tools: Tool[] = [
     descricao: "Bipe uma posição e veja, em tempo real, o que o WMS aponta",
     Icon: ScanLine,
     cor: "rgba(255, 184, 0, 0.18)",
+  },
+  {
+    to: "/busca-produto",
+    titulo: "Busca por Produto",
+    descricao: "Bipe o SKU ou EAN e veja todas as posições do produto",
+    Icon: PackageSearch,
+    cor: "rgba(99, 102, 241, 0.18)",
   },
 ];
 

@@ -166,14 +166,13 @@ export const consultarPosicaoWms = createServerFn({ method: "POST" })
       }
     }
 
-    // Ordena: posição bipada primeiro; depois ÍMPAR antes de PAR (operação
-    // costuma percorrer ímpar→par); dentro de cada paridade, por prédio/andar/vão/lado.
+    // Ordena: posição bipada primeiro; depois por andar → vão (varredura
+    // natural de baixo para cima dentro do prédio).
     const ordem = (pos: string) => {
-      if (pos === alvo) return [-1, 0, 0, 0, 0, 0];
+      if (pos === alvo) return [-1, 0, 0];
       const p = parseEndereco(pos);
-      if (!p) return [2, 0, 0, 0, 0, 0];
-      const paridade = p.predio % 2 === 1 ? 0 : 1; // ímpar primeiro
-      return [0, paridade, p.predio, parseInt(p.andar, 10), parseInt(p.vao, 10), parseInt(p.lado, 10)];
+      if (!p) return [2, 0, 0];
+      return [0, parseInt(p.andar, 10), parseInt(p.vao, 10)];
     };
     const cmp = (a: string, b: string) => {
       const oa = ordem(a);
@@ -198,7 +197,7 @@ export const consultarPosicaoWms = createServerFn({ method: "POST" })
     return {
       posicao: alvo,
       modo,
-      predio: ruaAlvo ? { rua: ruaAlvo } : null,
+      predio: chavePredioAlvo ? { chave: chavePredioAlvo } : null,
       consultado_em: new Date().toISOString(),
       estoque_carregado_em: new Date(carregadoEm).toISOString(),
       do_cache: doCache,

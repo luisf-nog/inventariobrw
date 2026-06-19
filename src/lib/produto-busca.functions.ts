@@ -178,7 +178,10 @@ export const sugerirProdutosWms = createServerFn({ method: "POST" })
       const skuUp = sku.toUpperCase();
       const descUp = descricao.toUpperCase();
       const bateSku = skuUp.includes(termo);
-      const bateDesc = termo.length >= 2 && descUp.includes(termo);
+      // Descrição: só casa se o termo for um prefixo de palavra (evita "GT" casar com "tuGTon")
+      const bateDesc =
+        termo.length >= 3 &&
+        new RegExp(`\\b${termo.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`).test(descUp);
       const bateEan = termoDigits.length >= 3 && ean.includes(termoDigits);
       if (!bateSku && !bateDesc && !bateEan) continue;
       const ex = mapa.get(sku);

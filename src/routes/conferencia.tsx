@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { getOperador, clearOperador } from "@/lib/operador-session";
-import { consultarPosicaoWms, type ItemPosicaoWms } from "@/lib/conferencia.functions";
+import { consultarPosicaoWms, formatarApelido, type ItemPosicaoWms } from "@/lib/conferencia.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -320,7 +320,7 @@ function ConferenciaPosicao() {
                 <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
                   {modoPredio ? "Prédio bipado a partir de" : "Posição"}
                 </p>
-                <h2 className="text-2xl font-bold tracking-tight font-mono">{posicaoBipada}</h2>
+                <h2 className="text-2xl font-bold tracking-tight font-mono">{formatarApelido(posicaoBipada)}</h2>
                 {consultadoEm && (
                   <p className="text-[11px] text-muted-foreground mt-1">
                     Consultado às {new Date(consultadoEm).toLocaleTimeString("pt-BR")}
@@ -369,7 +369,7 @@ function ConferenciaPosicao() {
                       <div className="flex items-center justify-between gap-2 px-1">
                         <div className="flex items-center gap-2 min-w-0">
                           <MapPin className={`h-4 w-4 shrink-0 ${pos === posicaoBipada ? "text-primary" : "text-muted-foreground"}`} />
-                          <span className="font-mono font-semibold text-sm truncate">{pos}</span>
+                          <span className="font-mono font-semibold text-sm truncate">{formatarApelido(pos)}</span>
                           {pos === posicaoBipada && (
                             <Badge variant="default" className="text-[10px] h-5">bipado</Badge>
                           )}
@@ -381,7 +381,7 @@ function ConferenciaPosicao() {
                     )}
                     {itensDaPos.length === 0 ? (
                       <div className="rounded-lg border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
-                        WMS não retornou itens para {pos}
+                        WMS não retornou itens para {formatarApelido(pos)}
                       </div>
                     ) : (
                       itensDaPos.map((linha) => (
@@ -395,7 +395,7 @@ function ConferenciaPosicao() {
                     )}
                     <details className="rounded-lg border border-dashed border-border p-3">
                       <summary className="text-[11px] font-semibold text-muted-foreground cursor-pointer">
-                        + Adicionar item não listado em {pos}
+                        + Adicionar item não listado em {formatarApelido(pos)}
                       </summary>
                       <div className="mt-3">
                         <ItemExtraForm onSalvar={(sku, q, o) => salvarItemNovo(pos, sku, q, o)} />
@@ -421,7 +421,7 @@ function ConferenciaPosicao() {
                           <p className="font-mono font-semibold truncate">
                             {h.sku}
                             {posicoesAtivas.length > 1 && (
-                              <span className="text-muted-foreground font-normal"> · {h.codigo_posicao}</span>
+                              <span className="text-muted-foreground font-normal"> · {formatarApelido(h.codigo_posicao)}</span>
                             )}
                           </p>
                           {h.descricao && <p className="text-muted-foreground truncate">{h.descricao}</p>}

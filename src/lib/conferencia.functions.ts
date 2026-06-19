@@ -99,21 +99,31 @@ export type PosicaoComItens = {
   itens: ItemPosicaoWms[];
 };
 
-// Endereços têm 12 dígitos: LL-RRRR-PP-AA-VV
-//   LL = lado, RRRR = rua, PP = prédio, AA = andar, VV = vão
-// "Prédio" = mesmos 8 primeiros dígitos (lado + rua + prédio). Os
-// endereços do prédio variam apenas em andar e vão.
-function parseEndereco(code: string) {
-  const c = code.replace(/\D/g, "");
-  if (c.length !== 12) return null;
+// Endereços seguem o padrão do APELIDO do WMS: RRR-PPP-AA-VV
+//   RRR = rua (3 díg.), PPP = prédio (3 díg.), AA = andar (2), VV = vão (2)
+// O COD_ENDERECO traz os mesmos 10 dígitos sem hífen, às vezes com um zero
+// à esquerda. Aceitamos tanto "003-193-05-01" quanto "0031930501" quanto
+// "31930501" — normalizamos para 10 dígitos.
+// "Prédio" = mesmos 6 primeiros dígitos (rua + prédio); varia andar e vão.
+export function parseEndereco(code: string) {
+  const so = code.replace(/\D/g, "");
+  if (so.length < 10) return null;
+  const c = so.slice(-10); // descarta dígitos extras à esquerda (ex.: lado/depósito)
   return {
-    lado: c.slice(0, 2),
-    rua: c.slice(2, 6),
-    predio: parseInt(c.slice(6, 8), 10),
-    andar: c.slice(8, 10),
-    vao: c.slice(10, 12),
-    chavePredio: c.slice(0, 8),
+    rua: c.slice(0, 3),
+    predio: c.slice(3, 6),
+    andar: c.slice(6, 8),
+    vao: c.slice(8, 10),
+    chavePredio: c.slice(0, 6),
+    canon: c, // forma canônica 10 dígitos
+    apelido: `${c.slice(0, 3)}-${c.slice(3, 6)}-${c.slice(6, 8)}-${c.slice(8, 10)}`,
   };
+}
+
+export function formatarApelido(code: string | null | undefined): string {
+  if (!code) return "";
+  const p = parseEndereco(code);
+  return p ? p.apelido : code;
 }
 
 export const consultarPosicaoWms = createServerFn({ method: "POST" })
@@ -127,22 +137,25 @@ export const consultarPosicaoWms = createServerFn({ method: "POST" })
       .parse(input),
   )
   .handler(async ({ data }) => {
-    const alvo = data.codigoPosicao.trim().toUpperCase();
+    const refAlvo = parseEndereco(data.codigoPosicao);
+    // Canonicaliza para 10 dígitos. Se não casar com o padrão, mantém o input.
+    const alvo = refAlvo?.canon ?? data.codigoPosicao.trim().toUpperCase();
     const modo = data.modo ?? "posicao";
     const { rows, carregadoEm, doCache } = await obterEstoque(!!data.forcar);
 
-    const refAlvo = parseEndereco(alvo);
     const chavePredioAlvo = modo === "predio" ? refAlvo?.chavePredio ?? null : null;
 
     const porPosicao = new Map<string, Map<string, ItemPosicaoWms>>();
     for (const r of rows) {
-      const pos = String(r.COD_ENDERECO ?? "").trim().toUpperCase();
-      if (!pos) continue;
+      const posRaw = String(r.COD_ENDERECO ?? "").trim();
+      if (!posRaw) continue;
+      const pp = parseEndereco(posRaw);
+      const pos = pp?.canon ?? posRaw.toUpperCase();
       let bate = pos === alvo;
-      if (!bate && chavePredioAlvo) {
-        const p = parseEndereco(pos);
-        if (p && p.chavePredio === chavePredioAlvo) bate = true;
+      if (!bate && chavePredioAlvo && pp) {
+        if (pp.chavePredio === chavePredioAlvo) bate = true;
       }
+
       if (!bate) continue;
       const sku = String(r.COD_PROD_ERP ?? r.COD_PRODUTO ?? "").trim().toUpperCase();
       if (!sku) continue;

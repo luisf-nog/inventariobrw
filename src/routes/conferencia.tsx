@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { getOperador, clearOperador } from "@/lib/operador-session";
-import { consultarPosicaoWms, formatarApelido, type ItemPosicaoWms } from "@/lib/conferencia.functions";
+import { consultarPosicaoWms, formatarApelido, depositoDoCode, rotuloDeposito, type ItemPosicaoWms } from "@/lib/conferencia.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -320,7 +320,10 @@ function ConferenciaPosicao() {
                 <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
                   {modoPredio ? "Prédio bipado a partir de" : "Posição"}
                 </p>
-                <h2 className="text-2xl font-bold tracking-tight font-mono">{formatarApelido(posicaoBipada)}</h2>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-2xl font-bold tracking-tight font-mono">{formatarApelido(posicaoBipada)}</h2>
+                  <DepositoBadge code={posicaoBipada} />
+                </div>
                 {consultadoEm && (
                   <p className="text-[11px] text-muted-foreground mt-1">
                     Consultado às {new Date(consultadoEm).toLocaleTimeString("pt-BR")}
@@ -370,6 +373,8 @@ function ConferenciaPosicao() {
                         <div className="flex items-center gap-2 min-w-0">
                           <MapPin className={`h-4 w-4 shrink-0 ${pos === posicaoBipada ? "text-primary" : "text-muted-foreground"}`} />
                           <span className="font-mono font-semibold text-sm truncate">{formatarApelido(pos)}</span>
+                          <DepositoBadge code={pos} />
+
                           {pos === posicaoBipada && (
                             <Badge variant="default" className="text-[10px] h-5">bipado</Badge>
                           )}
@@ -611,5 +616,26 @@ function ItemExtraForm({
         className="sm:col-span-3 text-sm"
       />
     </div>
+  );
+}
+
+function DepositoBadge({ code }: { code: string | null }) {
+  const dep = depositoDoCode(code);
+  if (!dep) return null;
+  const extra = dep === "02";
+  const normal = dep === "01";
+  return (
+    <Badge
+      variant="outline"
+      className={
+        extra
+          ? "border-violet-500/40 text-violet-700 dark:text-violet-300 bg-violet-500/10"
+          : normal
+            ? "border-sky-500/40 text-sky-700 dark:text-sky-300 bg-sky-500/10"
+            : ""
+      }
+    >
+      {dep} · {rotuloDeposito(dep)}
+    </Badge>
   );
 }

@@ -13,6 +13,7 @@ const WMS_TIMEOUT_MS = 25_000;
 
 type WmsRow = {
   COD_ENDERECO?: string;
+  COD_DEPOSITO?: string | number;
   APELIDO?: string;
   COD_PROD_ERP?: string;
   COD_PRODUTO?: string;
@@ -99,24 +100,45 @@ export type PosicaoComItens = {
   itens: ItemPosicaoWms[];
 };
 
-// Endereços seguem o padrão do APELIDO do WMS: RRR-PPP-AA-VV
-//   RRR = rua (3 díg.), PPP = prédio (3 díg.), AA = andar (2), VV = vão (2)
-// O COD_ENDERECO traz os mesmos 10 dígitos sem hífen, às vezes com um zero
-// à esquerda. Aceitamos tanto "003-193-05-01" quanto "0031930501" quanto
-// "31930501" — normalizamos para 10 dígitos.
-// "Prédio" = mesmos 6 primeiros dígitos (rua + prédio); varia andar e vão.
-export function parseEndereco(code: string) {
+// Endereço completo = DD + RRR-PPP-AA-VV (12 dígitos):
+//   DD  = depósito (01 = Normal, 02 = Extradimensional)
+//   RRR = rua  PPP = prédio  AA = andar  VV = vão
+// O COD_ENDERECO do WMS traz só os 10 últimos dígitos; o depósito vem na
+// coluna COD_DEPOSITO. Quando o operador bipa o código completo (12 díg.) ou
+// só o endereço (10 díg.), aceitamos os dois — se faltar o depósito,
+// assumimos "01" (Normal).
+// "Prédio" = mesmos 8 primeiros dígitos da forma canônica (depósito + rua + prédio).
+export const DEPOSITOS: Record<string, string> = {
+  "01": "Normal",
+  "02": "Extradimensional",
+};
+
+export function rotuloDeposito(dep: string | null | undefined): string {
+  if (!dep) return "—";
+  return DEPOSITOS[dep] ?? `Depósito ${dep}`;
+}
+
+export function parseEndereco(code: string, depositoExterno?: string | number | null) {
   const so = code.replace(/\D/g, "");
   if (so.length < 10) return null;
-  const c = so.slice(-10); // descarta dígitos extras à esquerda (ex.: lado/depósito)
+  const enderecoDigits = so.slice(-10);
+  let deposito: string | null = null;
+  if (so.length >= 12) {
+    deposito = so.slice(-12, -10);
+  } else if (depositoExterno != null && String(depositoExterno).trim() !== "") {
+    deposito = String(depositoExterno).replace(/\D/g, "").padStart(2, "0").slice(-2);
+  }
+  const depCanon = deposito ?? "01"; // default Normal
   return {
-    rua: c.slice(0, 3),
-    predio: c.slice(3, 6),
-    andar: c.slice(6, 8),
-    vao: c.slice(8, 10),
-    chavePredio: c.slice(0, 6),
-    canon: c, // forma canônica 10 dígitos
-    apelido: `${c.slice(0, 3)}-${c.slice(3, 6)}-${c.slice(6, 8)}-${c.slice(8, 10)}`,
+    deposito: depCanon,
+    depositoRotulo: rotuloDeposito(depCanon),
+    rua: enderecoDigits.slice(0, 3),
+    predio: enderecoDigits.slice(3, 6),
+    andar: enderecoDigits.slice(6, 8),
+    vao: enderecoDigits.slice(8, 10),
+    chavePredio: depCanon + enderecoDigits.slice(0, 6), // 8 dígitos
+    canon: depCanon + enderecoDigits, // 12 dígitos
+    apelido: `${enderecoDigits.slice(0, 3)}-${enderecoDigits.slice(3, 6)}-${enderecoDigits.slice(6, 8)}-${enderecoDigits.slice(8, 10)}`,
   };
 }
 
@@ -124,6 +146,19 @@ export function formatarApelido(code: string | null | undefined): string {
   if (!code) return "";
   const p = parseEndereco(code);
   return p ? p.apelido : code;
+}
+
+export function formatarApelidoCompleto(code: string | null | undefined): string {
+  if (!code) return "";
+  const p = parseEndereco(code);
+  if (!p) return code;
+  return `${p.deposito}-${p.apelido}`;
+}
+
+export function depositoDoCode(code: string | null | undefined): string | null {
+  if (!code) return null;
+  const p = parseEndereco(code);
+  return p?.deposito ?? null;
 }
 
 export const consultarPosicaoWms = createServerFn({ method: "POST" })
@@ -138,7 +173,6 @@ export const consultarPosicaoWms = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const refAlvo = parseEndereco(data.codigoPosicao);
-    // Canonicaliza para 10 dígitos. Se não casar com o padrão, mantém o input.
     const alvo = refAlvo?.canon ?? data.codigoPosicao.trim().toUpperCase();
     const modo = data.modo ?? "posicao";
     const { rows, carregadoEm, doCache } = await obterEstoque(!!data.forcar);
@@ -149,13 +183,12 @@ export const consultarPosicaoWms = createServerFn({ method: "POST" })
     for (const r of rows) {
       const posRaw = String(r.COD_ENDERECO ?? "").trim();
       if (!posRaw) continue;
-      const pp = parseEndereco(posRaw);
+      const pp = parseEndereco(posRaw, r.COD_DEPOSITO);
       const pos = pp?.canon ?? posRaw.toUpperCase();
       let bate = pos === alvo;
-      if (!bate && chavePredioAlvo && pp) {
-        if (pp.chavePredio === chavePredioAlvo) bate = true;
+      if (!bate && chavePredioAlvo && pp && pp.chavePredio === chavePredioAlvo) {
+        bate = true;
       }
-
       if (!bate) continue;
       const sku = String(r.COD_PROD_ERP ?? r.COD_PRODUTO ?? "").trim().toUpperCase();
       if (!sku) continue;
@@ -179,8 +212,7 @@ export const consultarPosicaoWms = createServerFn({ method: "POST" })
       }
     }
 
-    // Ordena: posição bipada primeiro; depois por andar → vão (varredura
-    // natural de baixo para cima dentro do prédio).
+    // Ordena: posição bipada primeiro; depois por andar → vão.
     const ordem = (pos: string) => {
       if (pos === alvo) return [-1, 0, 0];
       const p = parseEndereco(pos);
@@ -209,6 +241,8 @@ export const consultarPosicaoWms = createServerFn({ method: "POST" })
 
     return {
       posicao: alvo,
+      deposito: refAlvo?.deposito ?? null,
+      deposito_rotulo: refAlvo?.depositoRotulo ?? null,
       modo,
       predio: chavePredioAlvo ? { chave: chavePredioAlvo } : null,
       consultado_em: new Date().toISOString(),

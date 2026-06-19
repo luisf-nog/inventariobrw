@@ -36,6 +36,7 @@ type Resultado = {
 function BuscaProduto() {
   const navigate = useNavigate();
   const buscar = useServerFn(buscarProdutoWms);
+  const sugerir = useServerFn(sugerirProdutosWms);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const [op, setOp] = useState<{ id: string; nome: string } | null>(null);
@@ -43,6 +44,10 @@ function BuscaProduto() {
   const [carregando, setCarregando] = useState(false);
   const [resultado, setResultado] = useState<Resultado | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  const [sugestoes, setSugestoes] = useState<SugestaoProduto[]>([]);
+  const [mostrarSug, setMostrarSug] = useState(false);
+  const [destacado, setDestacado] = useState(0);
+  const sugReqId = useRef(0);
 
   useEffect(() => {
     const o = getOperador();
@@ -51,9 +56,32 @@ function BuscaProduto() {
     inputRef.current?.focus();
   }, [navigate]);
 
+  useEffect(() => {
+    const termo = codigo.trim();
+    if (termo.length < 2) {
+      setSugestoes([]);
+      setMostrarSug(false);
+      return;
+    }
+    const id = ++sugReqId.current;
+    const t = setTimeout(async () => {
+      try {
+        const r = await sugerir({ data: { termo, limite: 15 } });
+        if (id !== sugReqId.current) return;
+        setSugestoes(r.sugestoes);
+        setMostrarSug(true);
+        setDestacado(0);
+      } catch {
+        // silencioso para typeahead
+      }
+    }, 180);
+    return () => clearTimeout(t);
+  }, [codigo, sugerir]);
+
   async function executar(c: string, forcar = false) {
     const code = c.trim();
     if (!code) return;
+    setMostrarSug(false);
     setCarregando(true);
     setErro(null);
     try {
@@ -69,11 +97,36 @@ function BuscaProduto() {
     }
   }
 
+  function escolher(s: SugestaoProduto) {
+    setCodigo("");
+    setMostrarSug(false);
+    setSugestoes([]);
+    executar(s.sku);
+  }
+
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (mostrarSug && sugestoes[destacado]) {
+      escolher(sugestoes[destacado]);
+      return;
+    }
     executar(codigo);
     setCodigo("");
   }
+
+  function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (!mostrarSug || sugestoes.length === 0) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setDestacado((d) => Math.min(d + 1, sugestoes.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setDestacado((d) => Math.max(d - 1, 0));
+    } else if (e.key === "Escape") {
+      setMostrarSug(false);
+    }
+  }
+
 
   return (
     <div className="min-h-screen bg-background text-foreground">

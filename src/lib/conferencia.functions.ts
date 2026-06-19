@@ -101,10 +101,8 @@ export type PosicaoComItens = {
 
 // Endereços têm 12 dígitos: LL-RRRR-PP-AA-VV
 //   LL = lado, RRRR = rua, PP = prédio, AA = andar, VV = vão
-// "Prédio" no operacional = a rua inteira: todos os endereços que
-// compartilham os dígitos de rua (3-6), independente de lado/prédio/andar/vão.
-// Operadores costumam separar mentalmente entre PAR e ÍMPAR pelo dígito
-// do prédio (PP) — usamos isso só para ordenar a exibição.
+// "Prédio" = mesmos 8 primeiros dígitos (lado + rua + prédio). Os
+// endereços do prédio variam apenas em andar e vão.
 function parseEndereco(code: string) {
   const c = code.replace(/\D/g, "");
   if (c.length !== 12) return null;
@@ -114,6 +112,7 @@ function parseEndereco(code: string) {
     predio: parseInt(c.slice(6, 8), 10),
     andar: c.slice(8, 10),
     vao: c.slice(10, 12),
+    chavePredio: c.slice(0, 8),
   };
 }
 
@@ -133,7 +132,7 @@ export const consultarPosicaoWms = createServerFn({ method: "POST" })
     const { rows, carregadoEm, doCache } = await obterEstoque(!!data.forcar);
 
     const refAlvo = parseEndereco(alvo);
-    const ruaAlvo = modo === "predio" ? refAlvo?.rua ?? null : null;
+    const chavePredioAlvo = modo === "predio" ? refAlvo?.chavePredio ?? null : null;
 
     const porPosicao = new Map<string, Map<string, ItemPosicaoWms>>();
     for (const r of rows) {

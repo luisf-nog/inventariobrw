@@ -421,7 +421,7 @@ function ConferenciaPosicao() {
                           <p className="font-mono font-semibold truncate">
                             {h.sku}
                             {posicoesAtivas.length > 1 && (
-                              <span className="text-muted-foreground font-normal"> · {h.codigo_posicao}</span>
+                              <span className="text-muted-foreground font-normal"> · {formatarApelido(h.codigo_posicao)}</span>
                             )}
                           </p>
                           {h.descricao && <p className="text-muted-foreground truncate">{h.descricao}</p>}

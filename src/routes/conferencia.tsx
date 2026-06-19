@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { getOperador, clearOperador } from "@/lib/operador-session";
-import { consultarPosicaoWms, type ItemPosicaoWms } from "@/lib/conferencia.functions";
+import { consultarPosicaoWms, formatarApelido, type ItemPosicaoWms } from "@/lib/conferencia.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { getOperador } from "@/lib/operador-session";
-import { buscarProdutoWms, type PosicaoProduto } from "@/lib/produto-busca.functions";
+import { buscarProdutoWms, sugerirProdutosWms, type PosicaoProduto, type SugestaoProduto } from "@/lib/produto-busca.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";

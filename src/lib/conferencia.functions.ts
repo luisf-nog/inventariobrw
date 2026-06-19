@@ -139,9 +139,9 @@ export const consultarPosicaoWms = createServerFn({ method: "POST" })
       const pos = String(r.COD_ENDERECO ?? "").trim().toUpperCase();
       if (!pos) continue;
       let bate = pos === alvo;
-      if (!bate && ruaAlvo) {
+      if (!bate && chavePredioAlvo) {
         const p = parseEndereco(pos);
-        if (p && p.rua === ruaAlvo) bate = true;
+        if (p && p.chavePredio === chavePredioAlvo) bate = true;
       }
       if (!bate) continue;
       const sku = String(r.COD_PROD_ERP ?? r.COD_PRODUTO ?? "").trim().toUpperCase();

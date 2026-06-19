@@ -94,33 +94,87 @@ async function obterEstoque(
   }
 }
 
+export type PosicaoComItens = {
+  codigo: string;
+  itens: ItemPosicaoWms[];
+};
+
+// Endereços têm 12 dígitos: LL-RRRR-PP-AA-VV
+//   LL = lado, RRRR = rua, PP = prédio, AA = andar, VV = vão
+// Um "prédio físico" agrupa 2 endereços que compartilham rua+andar+vão e
+// cujos PP são consecutivos (ímpar + próximo par): {01,02}, {03,04}, …
+// O lado pode diferir entre as faces (ruas extradimensionais invertem o
+// lado), por isso ignoramos LL no matching.
+function parseEndereco(code: string) {
+  const c = code.replace(/\D/g, "");
+  if (c.length !== 12) return null;
+  return {
+    lado: c.slice(0, 2),
+    rua: c.slice(2, 6),
+    predio: parseInt(c.slice(6, 8), 10),
+    andar: c.slice(8, 10),
+    vao: c.slice(10, 12),
+  };
+}
+
+function chavesDoPredio(code: string) {
+  const p = parseEndereco(code);
+  if (!p || !Number.isFinite(p.predio) || p.predio < 1) return null;
+  const base = p.predio % 2 === 1 ? p.predio : p.predio - 1; // ímpar do par
+  return {
+    rua: p.rua,
+    andar: p.andar,
+    vao: p.vao,
+    predios: [base, base + 1] as [number, number],
+  };
+}
+
 export const consultarPosicaoWms = createServerFn({ method: "POST" })
   .inputValidator((input) =>
     z
       .object({
         codigoPosicao: z.string().min(1).max(64),
         forcar: z.boolean().optional(),
+        modo: z.enum(["posicao", "predio"]).optional(),
       })
       .parse(input),
   )
   .handler(async ({ data }) => {
     const alvo = data.codigoPosicao.trim().toUpperCase();
+    const modo = data.modo ?? "posicao";
     const { rows, carregadoEm, doCache } = await obterEstoque(!!data.forcar);
 
-    const agregado = new Map<string, ItemPosicaoWms>();
+    const pred = modo === "predio" ? chavesDoPredio(alvo) : null;
+    const matchPredio = (pos: string) => {
+      if (!pred) return false;
+      const p = parseEndereco(pos);
+      if (!p) return false;
+      return (
+        p.rua === pred.rua &&
+        p.andar === pred.andar &&
+        p.vao === pred.vao &&
+        (p.predio === pred.predios[0] || p.predio === pred.predios[1])
+      );
+    };
+
+    const porPosicao = new Map<string, Map<string, ItemPosicaoWms>>();
     for (const r of rows) {
       const pos = String(r.COD_ENDERECO ?? "").trim().toUpperCase();
-      if (pos !== alvo) continue;
+      if (!pos) continue;
+      const bate = pos === alvo || (modo === "predio" && matchPredio(pos));
+      if (!bate) continue;
       const sku = String(r.COD_PROD_ERP ?? r.COD_PRODUTO ?? "").trim().toUpperCase();
       if (!sku) continue;
       const lote = r.NUM_LOTE ? String(r.NUM_LOTE).trim() : "";
       const k = `${sku}|${lote}`;
       const qtd = Number(r.QTDE_UNIDADES ?? 0);
-      const ex = agregado.get(k);
+      let agg = porPosicao.get(pos);
+      if (!agg) { agg = new Map(); porPosicao.set(pos, agg); }
+      const ex = agg.get(k);
       if (ex) {
         ex.qtde += qtd;
       } else {
-        agregado.set(k, {
+        agg.set(k, {
           sku,
           descricao: r.DESCR_PRODUTO ?? null,
           lote: lote || null,
@@ -131,13 +185,28 @@ export const consultarPosicaoWms = createServerFn({ method: "POST" })
       }
     }
 
+    const posicoes: PosicaoComItens[] = Array.from(porPosicao.entries())
+      .map(([codigo, m]) => ({
+        codigo,
+        itens: Array.from(m.values()).sort((a, b) => a.sku.localeCompare(b.sku)),
+      }))
+      .sort((a, b) => {
+        if (a.codigo === alvo) return -1;
+        if (b.codigo === alvo) return 1;
+        return a.codigo.localeCompare(b.codigo);
+      });
+
+    if (!posicoes.find((p) => p.codigo === alvo)) {
+      posicoes.unshift({ codigo: alvo, itens: [] });
+    }
+
     return {
       posicao: alvo,
+      modo,
+      predio: pred,
       consultado_em: new Date().toISOString(),
       estoque_carregado_em: new Date(carregadoEm).toISOString(),
       do_cache: doCache,
-      itens: Array.from(agregado.values()).sort((a, b) =>
-        a.sku.localeCompare(b.sku),
-      ),
+      posicoes,
     };
   });

@@ -179,6 +179,18 @@ export const consultarPosicaoWms = createServerFn({ method: "POST" })
 
     const chavePredioAlvo = modo === "predio" ? refAlvo?.chavePredio ?? null : null;
 
+    // Para o modo "prédio" precisamos descobrir o "tamanho" do prédio
+    // (quantos andares e vãos existem) para preencher as posições vazias —
+    // o WMS só devolve posições com estoque, então sem isso o operador não
+    // conseguiria sinalizar uma vaga que aparece vazia no sistema mas tem
+    // produto físico.
+    let maxAndar = 0;
+    let maxVao = 0;
+    if (refAlvo) {
+      maxAndar = parseInt(refAlvo.andar, 10) || 0;
+      maxVao = parseInt(refAlvo.vao, 10) || 0;
+    }
+
     const porPosicao = new Map<string, Map<string, ItemPosicaoWms>>();
     for (const r of rows) {
       const posRaw = String(r.COD_ENDERECO ?? "").trim();
@@ -190,6 +202,12 @@ export const consultarPosicaoWms = createServerFn({ method: "POST" })
         bate = true;
       }
       if (!bate) continue;
+      if (pp) {
+        const a = parseInt(pp.andar, 10);
+        const v = parseInt(pp.vao, 10);
+        if (a > maxAndar) maxAndar = a;
+        if (v > maxVao) maxVao = v;
+      }
       const sku = String(r.COD_PROD_ERP ?? r.COD_PRODUTO ?? "").trim().toUpperCase();
       if (!sku) continue;
       const lote = r.NUM_LOTE ? String(r.NUM_LOTE).trim() : "";
@@ -209,6 +227,21 @@ export const consultarPosicaoWms = createServerFn({ method: "POST" })
           ean: r.CODIGO_BARRAS ?? null,
           dt_validade: r.DT_VALIDADE ?? null,
         });
+      }
+    }
+
+    // Garante que toda a grade do prédio apareça, mesmo posições vazias.
+    if (chavePredioAlvo && refAlvo) {
+      // mínimo razoável: pelo menos a posição bipada existe
+      if (maxAndar < 1) maxAndar = 1;
+      if (maxVao < 1) maxVao = 1;
+      const dep = chavePredioAlvo.slice(0, 2);
+      const ruaPredio = chavePredioAlvo.slice(2, 8); // 6 dígitos
+      for (let a = 1; a <= maxAndar; a++) {
+        for (let v = 1; v <= maxVao; v++) {
+          const codigo = dep + ruaPredio + String(a).padStart(2, "0") + String(v).padStart(2, "0");
+          if (!porPosicao.has(codigo)) porPosicao.set(codigo, new Map());
+        }
       }
     }
 
@@ -238,6 +271,7 @@ export const consultarPosicaoWms = createServerFn({ method: "POST" })
     if (!posicoes.find((p) => p.codigo === alvo)) {
       posicoes.unshift({ codigo: alvo, itens: [] });
     }
+
 
     return {
       posicao: alvo,

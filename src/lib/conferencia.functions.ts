@@ -13,6 +13,7 @@ const WMS_TIMEOUT_MS = 25_000;
 
 type WmsRow = {
   COD_ENDERECO?: string;
+  COD_DEPOSITO?: string | number;
   APELIDO?: string;
   COD_PROD_ERP?: string;
   COD_PRODUTO?: string;

@@ -618,3 +618,24 @@ function ItemExtraForm({
     </div>
   );
 }
+
+function DepositoBadge({ code }: { code: string | null }) {
+  const dep = depositoDoCode(code);
+  if (!dep) return null;
+  const extra = dep === "02";
+  const normal = dep === "01";
+  return (
+    <Badge
+      variant="outline"
+      className={
+        extra
+          ? "border-violet-500/40 text-violet-700 dark:text-violet-300 bg-violet-500/10"
+          : normal
+            ? "border-sky-500/40 text-sky-700 dark:text-sky-300 bg-sky-500/10"
+            : ""
+      }
+    >
+      {dep} · {rotuloDeposito(dep)}
+    </Badge>
+  );
+}

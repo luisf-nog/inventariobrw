@@ -101,10 +101,10 @@ export type PosicaoComItens = {
 
 // Endereços têm 12 dígitos: LL-RRRR-PP-AA-VV
 //   LL = lado, RRRR = rua, PP = prédio, AA = andar, VV = vão
-// Um "prédio físico" agrupa 2 endereços que compartilham rua+andar+vão e
-// cujos PP são consecutivos (ímpar + próximo par): {01,02}, {03,04}, …
-// O lado pode diferir entre as faces (ruas extradimensionais invertem o
-// lado), por isso ignoramos LL no matching.
+// "Prédio" no operacional = a rua inteira: todos os endereços que
+// compartilham os dígitos de rua (3-6), independente de lado/prédio/andar/vão.
+// Operadores costumam separar mentalmente entre PAR e ÍMPAR pelo dígito
+// do prédio (PP) — usamos isso só para ordenar a exibição.
 function parseEndereco(code: string) {
   const c = code.replace(/\D/g, "");
   if (c.length !== 12) return null;
@@ -114,18 +114,6 @@ function parseEndereco(code: string) {
     predio: parseInt(c.slice(6, 8), 10),
     andar: c.slice(8, 10),
     vao: c.slice(10, 12),
-  };
-}
-
-function chavesDoPredio(code: string) {
-  const p = parseEndereco(code);
-  if (!p || !Number.isFinite(p.predio) || p.predio < 1) return null;
-  const base = p.predio % 2 === 1 ? p.predio : p.predio - 1; // ímpar do par
-  return {
-    rua: p.rua,
-    andar: p.andar,
-    vao: p.vao,
-    predios: [base, base + 1] as [number, number],
   };
 }
 
@@ -144,24 +132,18 @@ export const consultarPosicaoWms = createServerFn({ method: "POST" })
     const modo = data.modo ?? "posicao";
     const { rows, carregadoEm, doCache } = await obterEstoque(!!data.forcar);
 
-    const pred = modo === "predio" ? chavesDoPredio(alvo) : null;
-    const matchPredio = (pos: string) => {
-      if (!pred) return false;
-      const p = parseEndereco(pos);
-      if (!p) return false;
-      return (
-        p.rua === pred.rua &&
-        p.andar === pred.andar &&
-        p.vao === pred.vao &&
-        (p.predio === pred.predios[0] || p.predio === pred.predios[1])
-      );
-    };
+    const refAlvo = parseEndereco(alvo);
+    const ruaAlvo = modo === "predio" ? refAlvo?.rua ?? null : null;
 
     const porPosicao = new Map<string, Map<string, ItemPosicaoWms>>();
     for (const r of rows) {
       const pos = String(r.COD_ENDERECO ?? "").trim().toUpperCase();
       if (!pos) continue;
-      const bate = pos === alvo || (modo === "predio" && matchPredio(pos));
+      let bate = pos === alvo;
+      if (!bate && ruaAlvo) {
+        const p = parseEndereco(pos);
+        if (p && p.rua === ruaAlvo) bate = true;
+      }
       if (!bate) continue;
       const sku = String(r.COD_PROD_ERP ?? r.COD_PRODUTO ?? "").trim().toUpperCase();
       if (!sku) continue;
@@ -185,16 +167,30 @@ export const consultarPosicaoWms = createServerFn({ method: "POST" })
       }
     }
 
+    // Ordena: posição bipada primeiro; depois ÍMPAR antes de PAR (operação
+    // costuma percorrer ímpar→par); dentro de cada paridade, por prédio/andar/vão/lado.
+    const ordem = (pos: string) => {
+      if (pos === alvo) return [-1, 0, 0, 0, 0, 0];
+      const p = parseEndereco(pos);
+      if (!p) return [2, 0, 0, 0, 0, 0];
+      const paridade = p.predio % 2 === 1 ? 0 : 1; // ímpar primeiro
+      return [0, paridade, p.predio, parseInt(p.andar, 10), parseInt(p.vao, 10), parseInt(p.lado, 10)];
+    };
+    const cmp = (a: string, b: string) => {
+      const oa = ordem(a);
+      const ob = ordem(b);
+      for (let i = 0; i < oa.length; i++) {
+        if (oa[i] !== ob[i]) return oa[i] - ob[i];
+      }
+      return a.localeCompare(b);
+    };
+
     const posicoes: PosicaoComItens[] = Array.from(porPosicao.entries())
       .map(([codigo, m]) => ({
         codigo,
         itens: Array.from(m.values()).sort((a, b) => a.sku.localeCompare(b.sku)),
       }))
-      .sort((a, b) => {
-        if (a.codigo === alvo) return -1;
-        if (b.codigo === alvo) return 1;
-        return a.codigo.localeCompare(b.codigo);
-      });
+      .sort((a, b) => cmp(a.codigo, b.codigo));
 
     if (!posicoes.find((p) => p.codigo === alvo)) {
       posicoes.unshift({ codigo: alvo, itens: [] });
@@ -203,7 +199,7 @@ export const consultarPosicaoWms = createServerFn({ method: "POST" })
     return {
       posicao: alvo,
       modo,
-      predio: pred,
+      predio: ruaAlvo ? { rua: ruaAlvo } : null,
       consultado_em: new Date().toISOString(),
       estoque_carregado_em: new Date(carregadoEm).toISOString(),
       do_cache: doCache,

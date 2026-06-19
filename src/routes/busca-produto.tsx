@@ -152,21 +152,49 @@ function BuscaProduto() {
           </p>
         </div>
 
-        <form onSubmit={onSubmit} className="flex gap-2">
-          <Input
-            ref={inputRef}
-            value={codigo}
-            onChange={(e) => setCodigo(e.target.value)}
-            placeholder="SKU ou EAN do produto"
-            inputMode="text"
-            autoComplete="off"
-            className="font-mono"
-            disabled={carregando}
-          />
+        <form onSubmit={onSubmit} className="relative flex gap-2">
+          <div className="relative flex-1">
+            <Input
+              ref={inputRef}
+              value={codigo}
+              onChange={(e) => setCodigo(e.target.value)}
+              onKeyDown={onKeyDown}
+              onFocus={() => sugestoes.length > 0 && setMostrarSug(true)}
+              onBlur={() => setTimeout(() => setMostrarSug(false), 150)}
+              placeholder="SKU, descrição ou EAN"
+              inputMode="text"
+              autoComplete="off"
+              className="font-mono"
+              disabled={carregando}
+            />
+            {mostrarSug && sugestoes.length > 0 && (
+              <ul className="absolute z-20 top-full mt-1 left-0 right-0 max-h-72 overflow-auto bg-popover border border-border rounded-lg shadow-lg">
+                {sugestoes.map((s, i) => (
+                  <li
+                    key={s.sku}
+                    onMouseDown={(e) => { e.preventDefault(); escolher(s); }}
+                    onMouseEnter={() => setDestacado(i)}
+                    className={`px-3 py-2 cursor-pointer text-sm border-b border-border/40 last:border-0 ${i === destacado ? "bg-accent" : ""}`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono font-semibold text-foreground">{s.sku}</span>
+                      <span className="text-[10px] text-muted-foreground shrink-0">
+                        {s.posicoes} pos{s.posicoes === 1 ? "" : "."}
+                      </span>
+                    </div>
+                    {s.descricao && (
+                      <p className="text-xs text-muted-foreground truncate">{s.descricao}</p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
           <Button type="submit" disabled={carregando || !codigo.trim()}>
             {carregando ? <Loader2 className="h-4 w-4 animate-spin" /> : "Buscar"}
           </Button>
         </form>
+
 
         {erro && (
           <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm flex gap-2">

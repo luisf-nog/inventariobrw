@@ -320,7 +320,7 @@ function ConferenciaPosicao() {
                 <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
                   {modoPredio ? "Prédio bipado a partir de" : "Posição"}
                 </p>
-                <h2 className="text-2xl font-bold tracking-tight font-mono">{posicaoBipada}</h2>
+                <h2 className="text-2xl font-bold tracking-tight font-mono">{formatarApelido(posicaoBipada)}</h2>
                 {consultadoEm && (
                   <p className="text-[11px] text-muted-foreground mt-1">
                     Consultado às {new Date(consultadoEm).toLocaleTimeString("pt-BR")}

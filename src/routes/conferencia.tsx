@@ -381,7 +381,7 @@ function ConferenciaPosicao() {
                     )}
                     {itensDaPos.length === 0 ? (
                       <div className="rounded-lg border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
-                        WMS não retornou itens para {pos}
+                        WMS não retornou itens para {formatarApelido(pos)}
                       </div>
                     ) : (
                       itensDaPos.map((linha) => (

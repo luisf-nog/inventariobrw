@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as InventariosRouteImport } from './routes/inventarios'
 import { Route as HubRouteImport } from './routes/hub'
 import { Route as ConferenciaRouteImport } from './routes/conferencia'
+import { Route as BuscaProdutoRouteImport } from './routes/busca-produto'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
@@ -34,6 +35,11 @@ const HubRoute = HubRouteImport.update({
 const ConferenciaRoute = ConferenciaRouteImport.update({
   id: '/conferencia',
   path: '/conferencia',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BuscaProdutoRoute = BuscaProdutoRouteImport.update({
+  id: '/busca-produto',
+  path: '/busca-produto',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminRoute = AdminRouteImport.update({
@@ -80,6 +86,7 @@ const InventarioIdContagemRoute = InventarioIdContagemRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
+  '/busca-produto': typeof BuscaProdutoRoute
   '/conferencia': typeof ConferenciaRoute
   '/hub': typeof HubRoute
   '/inventarios': typeof InventariosRoute
@@ -92,6 +99,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/busca-produto': typeof BuscaProdutoRoute
   '/conferencia': typeof ConferenciaRoute
   '/hub': typeof HubRoute
   '/inventarios': typeof InventariosRoute
@@ -106,6 +114,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
+  '/busca-produto': typeof BuscaProdutoRoute
   '/conferencia': typeof ConferenciaRoute
   '/hub': typeof HubRoute
   '/inventarios': typeof InventariosRoute
@@ -121,6 +130,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/admin'
+    | '/busca-produto'
     | '/conferencia'
     | '/hub'
     | '/inventarios'
@@ -133,6 +143,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/busca-produto'
     | '/conferencia'
     | '/hub'
     | '/inventarios'
@@ -146,6 +157,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/admin'
+    | '/busca-produto'
     | '/conferencia'
     | '/hub'
     | '/inventarios'
@@ -160,6 +172,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRouteWithChildren
+  BuscaProdutoRoute: typeof BuscaProdutoRoute
   ConferenciaRoute: typeof ConferenciaRoute
   HubRoute: typeof HubRoute
   InventariosRoute: typeof InventariosRoute
@@ -188,6 +201,13 @@ declare module '@tanstack/react-router' {
       path: '/conferencia'
       fullPath: '/conferencia'
       preLoaderRoute: typeof ConferenciaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/busca-produto': {
+      id: '/busca-produto'
+      path: '/busca-produto'
+      fullPath: '/busca-produto'
+      preLoaderRoute: typeof BuscaProdutoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin': {
@@ -268,6 +288,7 @@ const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRouteWithChildren,
+  BuscaProdutoRoute: BuscaProdutoRoute,
   ConferenciaRoute: ConferenciaRoute,
   HubRoute: HubRoute,
   InventariosRoute: InventariosRoute,

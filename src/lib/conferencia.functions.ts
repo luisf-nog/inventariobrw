@@ -285,3 +285,143 @@ export const consultarPosicaoWms = createServerFn({ method: "POST" })
       posicoes,
     };
   });
+
+// =====================================================================
+// Mapa de vazias por rua — operador bipa qualquer posição e o sistema
+// devolve a rua inteira (todos os prédios) com a grade andar × vão
+// indicando o que o WMS aponta como vazio, para validação física.
+// =====================================================================
+
+export type VagaRua = {
+  andar: number;
+  vao: number;
+  codigo: string;
+  apelido: string;
+  vazia: boolean;
+  qtdItens: number;
+};
+
+export type PredioRua = {
+  predio: string;
+  maxAndar: number;
+  maxVao: number;
+  totalVagas: number;
+  vazias: number;
+  posicoes: VagaRua[];
+};
+
+export const mapaVaziasRuaWms = createServerFn({ method: "POST" })
+  .inputValidator((input) =>
+    z
+      .object({
+        codigoPosicao: z.string().min(1).max(64),
+        forcar: z.boolean().optional(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data }) => {
+    const ref = parseEndereco(data.codigoPosicao);
+    if (!ref) {
+      throw new Error("Código de posição inválido. Bipe uma posição da rua.");
+    }
+    const { rows, carregadoEm, doCache } = await obterEstoque(!!data.forcar);
+
+    const depAlvo = ref.deposito;
+    const ruaAlvo = ref.rua;
+
+    type Predio = {
+      maxAndar: number;
+      maxVao: number;
+      ocupadas: Map<string, Set<string>>;
+    };
+    const predios = new Map<string, Predio>();
+
+    function ensure(predio: string): Predio {
+      let p = predios.get(predio);
+      if (!p) {
+        p = { maxAndar: 0, maxVao: 0, ocupadas: new Map() };
+        predios.set(predio, p);
+      }
+      return p;
+    }
+
+    for (const r of rows) {
+      const posRaw = String(r.COD_ENDERECO ?? "").trim();
+      if (!posRaw) continue;
+      const pp = parseEndereco(posRaw, r.COD_DEPOSITO);
+      if (!pp) continue;
+      if (pp.deposito !== depAlvo) continue;
+      if (pp.rua !== ruaAlvo) continue;
+      const a = parseInt(pp.andar, 10);
+      const v = parseInt(pp.vao, 10);
+      if (!a || !v) continue;
+      const pred = ensure(pp.predio);
+      if (a > pred.maxAndar) pred.maxAndar = a;
+      if (v > pred.maxVao) pred.maxVao = v;
+      const sku = String(r.COD_PROD_ERP ?? r.COD_PRODUTO ?? "").trim().toUpperCase();
+      const qtd = Number(r.QTDE_UNIDADES ?? 0);
+      if (!sku || qtd <= 0) continue;
+      const key = `${pp.andar}-${pp.vao}`;
+      let set = pred.ocupadas.get(key);
+      if (!set) { set = new Set(); pred.ocupadas.set(key, set); }
+      set.add(sku);
+    }
+
+    ensure(ref.predio);
+    const predioRef = predios.get(ref.predio)!;
+    const aRef = parseInt(ref.andar, 10);
+    const vRef = parseInt(ref.vao, 10);
+    if (aRef > predioRef.maxAndar) predioRef.maxAndar = aRef;
+    if (vRef > predioRef.maxVao) predioRef.maxVao = vRef;
+
+    const lista: PredioRua[] = [];
+    let totalVagas = 0;
+    let totalVazias = 0;
+
+    for (const [predio, p] of Array.from(predios.entries()).sort((a, b) =>
+      a[0].localeCompare(b[0]),
+    )) {
+      const posicoes: VagaRua[] = [];
+      for (let a = 1; a <= p.maxAndar; a++) {
+        for (let v = 1; v <= p.maxVao; v++) {
+          const andarStr = String(a).padStart(2, "0");
+          const vaoStr = String(v).padStart(2, "0");
+          const codigo = depAlvo + ruaAlvo + predio + andarStr + vaoStr;
+          const set = p.ocupadas.get(`${andarStr}-${vaoStr}`);
+          const qtdItens = set ? set.size : 0;
+          const vazia = qtdItens === 0;
+          if (vazia) totalVazias++;
+          totalVagas++;
+          posicoes.push({
+            andar: a,
+            vao: v,
+            codigo,
+            apelido: `${ruaAlvo}-${predio}-${andarStr}-${vaoStr}`,
+            vazia,
+            qtdItens,
+          });
+        }
+      }
+      lista.push({
+        predio,
+        maxAndar: p.maxAndar,
+        maxVao: p.maxVao,
+        totalVagas: p.maxAndar * p.maxVao,
+        vazias: posicoes.filter((x) => x.vazia).length,
+        posicoes,
+      });
+    }
+
+    return {
+      deposito: depAlvo,
+      deposito_rotulo: ref.depositoRotulo,
+      rua: ruaAlvo,
+      bipada: { predio: ref.predio, andar: ref.andar, vao: ref.vao, codigo: ref.canon, apelido: ref.apelido },
+      total_vagas: totalVagas,
+      total_vazias: totalVazias,
+      predios: lista,
+      consultado_em: new Date().toISOString(),
+      estoque_carregado_em: new Date(carregadoEm).toISOString(),
+      do_cache: doCache,
+    };
+  });

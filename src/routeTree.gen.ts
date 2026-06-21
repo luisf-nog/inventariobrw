@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as VaziasRuaRouteImport } from './routes/vazias-rua'
 import { Route as InventariosRouteImport } from './routes/inventarios'
 import { Route as HubRouteImport } from './routes/hub'
 import { Route as ConferenciaRouteImport } from './routes/conferencia'
@@ -22,6 +23,11 @@ import { Route as AdminConferenciasRouteImport } from './routes/admin.conferenci
 import { Route as InventarioIdResumoRouteImport } from './routes/inventario.$id.resumo'
 import { Route as InventarioIdContagemRouteImport } from './routes/inventario.$id.contagem'
 
+const VaziasRuaRoute = VaziasRuaRouteImport.update({
+  id: '/vazias-rua',
+  path: '/vazias-rua',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const InventariosRoute = InventariosRouteImport.update({
   id: '/inventarios',
   path: '/inventarios',
@@ -90,6 +96,7 @@ export interface FileRoutesByFullPath {
   '/conferencia': typeof ConferenciaRoute
   '/hub': typeof HubRoute
   '/inventarios': typeof InventariosRoute
+  '/vazias-rua': typeof VaziasRuaRoute
   '/admin/conferencias': typeof AdminConferenciasRoute
   '/admin/operadores': typeof AdminOperadoresRoute
   '/admin/produtos': typeof AdminProdutosRoute
@@ -103,6 +110,7 @@ export interface FileRoutesByTo {
   '/conferencia': typeof ConferenciaRoute
   '/hub': typeof HubRoute
   '/inventarios': typeof InventariosRoute
+  '/vazias-rua': typeof VaziasRuaRoute
   '/admin/conferencias': typeof AdminConferenciasRoute
   '/admin/operadores': typeof AdminOperadoresRoute
   '/admin/produtos': typeof AdminProdutosRoute
@@ -118,6 +126,7 @@ export interface FileRoutesById {
   '/conferencia': typeof ConferenciaRoute
   '/hub': typeof HubRoute
   '/inventarios': typeof InventariosRoute
+  '/vazias-rua': typeof VaziasRuaRoute
   '/admin/conferencias': typeof AdminConferenciasRoute
   '/admin/operadores': typeof AdminOperadoresRoute
   '/admin/produtos': typeof AdminProdutosRoute
@@ -134,6 +143,7 @@ export interface FileRouteTypes {
     | '/conferencia'
     | '/hub'
     | '/inventarios'
+    | '/vazias-rua'
     | '/admin/conferencias'
     | '/admin/operadores'
     | '/admin/produtos'
@@ -147,6 +157,7 @@ export interface FileRouteTypes {
     | '/conferencia'
     | '/hub'
     | '/inventarios'
+    | '/vazias-rua'
     | '/admin/conferencias'
     | '/admin/operadores'
     | '/admin/produtos'
@@ -161,6 +172,7 @@ export interface FileRouteTypes {
     | '/conferencia'
     | '/hub'
     | '/inventarios'
+    | '/vazias-rua'
     | '/admin/conferencias'
     | '/admin/operadores'
     | '/admin/produtos'
@@ -176,12 +188,20 @@ export interface RootRouteChildren {
   ConferenciaRoute: typeof ConferenciaRoute
   HubRoute: typeof HubRoute
   InventariosRoute: typeof InventariosRoute
+  VaziasRuaRoute: typeof VaziasRuaRoute
   InventarioIdContagemRoute: typeof InventarioIdContagemRoute
   InventarioIdResumoRoute: typeof InventarioIdResumoRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/vazias-rua': {
+      id: '/vazias-rua'
+      path: '/vazias-rua'
+      fullPath: '/vazias-rua'
+      preLoaderRoute: typeof VaziasRuaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/inventarios': {
       id: '/inventarios'
       path: '/inventarios'
@@ -292,6 +312,7 @@ const rootRouteChildren: RootRouteChildren = {
   ConferenciaRoute: ConferenciaRoute,
   HubRoute: HubRoute,
   InventariosRoute: InventariosRoute,
+  VaziasRuaRoute: VaziasRuaRoute,
   InventarioIdContagemRoute: InventarioIdContagemRoute,
   InventarioIdResumoRoute: InventarioIdResumoRoute,
 }

@@ -2,14 +2,14 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { getOperador, clearOperador } from "@/lib/operador-session";
 import { Button } from "@/components/ui/button";
-import { LogOut, PackageOpen, ScanLine, ChevronRight, Settings, PackageSearch } from "lucide-react";
+import { LogOut, PackageOpen, ScanLine, ChevronRight, Settings, PackageSearch, MapPinned } from "lucide-react";
 
 export const Route = createFileRoute("/hub")({
   component: Hub,
 });
 
 type Tool = {
-  to: "/inventarios" | "/conferencia" | "/busca-produto";
+  to: "/inventarios" | "/conferencia" | "/busca-produto" | "/vazias-rua";
   titulo: string;
   descricao: string;
   Icon: typeof PackageOpen;
@@ -37,6 +37,13 @@ const tools: Tool[] = [
     descricao: "Bipe o SKU ou EAN e veja todas as posições do produto",
     Icon: PackageSearch,
     cor: "rgba(99, 102, 241, 0.18)",
+  },
+  {
+    to: "/vazias-rua",
+    titulo: "Mapa de Vazias por Rua",
+    descricao: "Bipe uma posição e valide no físico as vagas que o WMS aponta como vazias",
+    Icon: MapPinned,
+    cor: "rgba(244, 114, 182, 0.18)",
   },
 ];
 

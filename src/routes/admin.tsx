@@ -94,7 +94,7 @@ function AdminLayout() {
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b border-border">
-        <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between gap-3">
+        <div className="max-w-none mx-auto px-4 h-14 flex items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Supervisor</p>
             <p className="text-sm font-semibold truncate leading-tight">{user.email}</p>
@@ -103,7 +103,7 @@ function AdminLayout() {
             <LogOut className="h-4 w-4" /> Sair
           </Button>
         </div>
-        <nav className="max-w-5xl mx-auto px-4 flex gap-1 border-t border-border/50">
+        <nav className="max-w-none mx-auto px-4 flex gap-1 border-t border-border/50">
           {[
             { to: "/admin" as const, label: "Inventários", exact: true },
             { to: "/admin/conferencias" as const, label: "Conferências", exact: false },
@@ -122,7 +122,7 @@ function AdminLayout() {
         </nav>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 py-6">
+      <main className="max-w-none mx-auto px-4 py-6">
         <Outlet />
       </main>
     </div>
